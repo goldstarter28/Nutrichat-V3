@@ -19,6 +19,8 @@
     { key: 'sodium', aliases: ['sodio', 'sodium'], units: ['mg', 'g'] }
   ];
   const NUMBER_UNIT = /(\d+(?:[.,]\d+)?|[.,]\d+)\s*(kcal|kj|mg|g)\b/ig;
+  const ORDERED_ALIASES = SPECS.flatMap(spec => spec.aliases.map(alias => ({ spec, alias })))
+    .sort((a, b) => b.alias.length - a.alias.length);
 
   function clean(value) { return String(value == null ? '' : value).trim(); }
   function norm(value) {
@@ -42,11 +44,12 @@
     const n = Number(s);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
-  function identifyNutrient(label) {
-    const n = norm(label);
-    const ordered = SPECS.flatMap(spec => spec.aliases.map(alias => ({ spec, alias })))
-      .sort((a, b) => norm(b.alias).length - norm(a.alias).length);
-    for (const item of ordered) if (n === norm(item.alias) || n.startsWith(`${norm(item.alias)} `)) return item.spec;
+  function nutrientPrefix(text) {
+    for (const item of ORDERED_ALIASES) {
+      const escaped = item.alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+      const match = clean(text).match(new RegExp(`^\\s*${escaped}(?=\\s|[:\\-]|$)\\s*[:\\-]?\\s*`, 'i'));
+      if (match) return { spec: item.spec, rest: clean(text).slice(match[0].length) };
+    }
     return null;
   }
   function parseMeasurements(text) {
@@ -77,13 +80,13 @@
     return kinds.includes('per100g') || kinds.includes('per100ml') || kinds.includes('portion') ? kinds : null;
   }
   function parseNutrientLine(line, basis, columnKinds) {
-    let label = line, valueCells = null;
     const split = cells(line);
-    if (split && split.length >= 2) { label = split[0]; valueCells = split.slice(1); }
-    const spec = identifyNutrient(label);
-    if (!spec) return null;
-    if (valueCells && columnKinds) {
-      const matches = [];
+    const label = split && split.length >= 2 ? split[0] : line;
+    const identified = nutrientPrefix(label);
+    if (!identified) return null;
+    const spec = identified.spec;
+    if (split && split.length >= 2 && columnKinds) {
+      const valueCells = split.slice(1), matches = [];
       valueCells.forEach((cell, index) => {
         for (const value of parseMeasurements(cell)) matches.push({ ...value, column: columnKinds[index + 1] || 'unknown' });
       });
@@ -95,7 +98,7 @@
       }
       return { key: spec.key, status: 'ambiguous', raw: clean(line), reason: 'La riga non contiene un valore associabile con certezza alla colonna per 100 g.' };
     }
-    const measurements = parseMeasurements(line.slice(label.length));
+    const measurements = parseMeasurements(identified.rest);
     if (!measurements.length) return { key: spec.key, status: 'unparsed', raw: clean(line), reason: 'Valore o unità non riconosciuti.' };
     if (spec.key === 'kcal') {
       const kcal = measurements.find(x => x.unit === 'kcal');
@@ -146,14 +149,10 @@
     for (const [key, list] of grouped) {
       if (list.length === 1) { nutrients.push(list[0]); continue; }
       const signatures = new Set(list.map(x => x.status === 'candidate' ? `${x.amount}|${x.unit}|${x.basis}` : `${x.status}|${x.raw}`));
-      if (signatures.size === 1 && list.every(x => x.status === 'candidate')) {
-        nutrients.push(list[0]);
-        continue;
-      }
+      if (signatures.size === 1 && list.every(x => x.status === 'candidate')) { nutrients.push(list[0]); continue; }
       const reason = 'Nutriente ripetuto o discordante: verificare manualmente i valori prima dell’importazione.';
       const issue = { key, rows: list.map(x => ({ ...x, status: 'ambiguous', reason })), reason };
-      ambiguities.push(issue);
-      nutrients.push(...issue.rows);
+      ambiguities.push(issue); nutrients.push(...issue.rows);
     }
     const explicitBasis = lines.map(line => detectBasis(line)).find(x => x.kind !== 'unknown');
     const basis = explicitBasis || globalBasis;
