@@ -25,10 +25,6 @@
     return clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9µ]+/g, ' ').trim();
   }
-  function hasPhrase(text, phrase) {
-    const n = ` ${norm(text)} `, p = ` ${norm(phrase)} `;
-    return n.includes(p);
-  }
   function detectBasis(text) {
     const n = norm(text);
     const g = /\b(per|in)\s*100\s*g\b/.test(n);
@@ -48,7 +44,6 @@
   }
   function identifyNutrient(label) {
     const n = norm(label);
-    // Longest phrases first; “di cui saturi” is a common shortened label.
     const ordered = SPECS.flatMap(spec => spec.aliases.map(alias => ({ spec, alias })))
       .sort((a, b) => norm(b.alias).length - norm(a.alias).length);
     for (const item of ordered) if (n === norm(item.alias) || n.startsWith(`${norm(item.alias)} `)) return item.spec;
@@ -65,8 +60,6 @@
     return out;
   }
   function cells(line) {
-    // Preserve columns only where there is an explicit table delimiter. OCR whitespace
-    // is not enough evidence to infer which value belongs to which heading.
     if (line.includes('|')) return line.split('|').map(clean);
     if (line.includes('\t')) return line.split('\t').map(clean);
     return null;
@@ -81,25 +74,22 @@
       if (/\bporzione\b|\bserving\b/.test(n)) return 'portion';
       return 'unknown';
     });
-    if (!kinds.includes('per100g') && !kinds.includes('per100ml') && !kinds.includes('portion')) return null;
-    return kinds;
+    return kinds.includes('per100g') || kinds.includes('per100ml') || kinds.includes('portion') ? kinds : null;
   }
   function parseNutrientLine(line, basis, columnKinds) {
-    let label = line;
-    let valueCells = null;
+    let label = line, valueCells = null;
     const split = cells(line);
     if (split && split.length >= 2) { label = split[0]; valueCells = split.slice(1); }
     const spec = identifyNutrient(label);
     if (!spec) return null;
     if (valueCells && columnKinds) {
-      const values = valueCells.map(parseMeasurements);
       const matches = [];
-      values.forEach((list, index) => {
-        for (const value of list) matches.push({ ...value, column: columnKinds[index + 1] || 'unknown' });
+      valueCells.forEach((cell, index) => {
+        for (const value of parseMeasurements(cell)) matches.push({ ...value, column: columnKinds[index + 1] || 'unknown' });
       });
       const gValues = matches.filter(x => x.column === 'per100g');
-      const value = spec.key === 'kcal' ? gValues.find(x => x.unit === 'kcal') : gValues[0];
-      if (gValues.length && value && (spec.key !== 'kcal' || value.unit === 'kcal')) {
+      const value = spec.key === 'kcal' ? gValues.find(x => x.unit === 'kcal') : gValues.length === 1 ? gValues[0] : null;
+      if (value && (spec.key !== 'kcal' || value.unit === 'kcal')) {
         if (!spec.units.includes(value.unit)) return { key: spec.key, status: 'unparsed', raw: clean(line), reason: 'Unità incompatibile.' };
         return { key: spec.key, status: 'candidate', amount: value.amount, unit: value.unit, raw: clean(line), basis: 'per100g' };
       }
@@ -119,19 +109,16 @@
     return { key: spec.key, status: 'candidate', amount: value.amount, unit: value.unit, raw: clean(line), basis: 'per100g' };
   }
   function isNutritionHeading(line) {
-    const n = norm(line);
-    return /^(valori nutrizionali|dichiarazione nutrizionale|nutrition facts|nutrition information|informazioni nutrizionali)\b/.test(n);
+    return /^(valori nutrizionali|dichiarazione nutrizionale|nutrition facts|nutrition information|informazioni nutrizionali)\b/.test(norm(line));
   }
   function parseLabelText(text) {
     const lines = clean(text).split(/\r?\n/).map(clean).filter(Boolean);
-    const allText = lines.join('\n');
-    const globalBasis = detectBasis(allText);
+    const allText = lines.join('\n'), globalBasis = detectBasis(allText);
     const ingredients = [], rows = [], unrecognized = [];
     let section = 'other', tableColumns = null, activeBasis = globalBasis;
     for (const line of lines) {
       const n = norm(line);
-      const ingredientHead = /^(ingredienti|ingredients?|composition)\b/.test(n);
-      if (ingredientHead) {
+      if (/^(ingredienti|ingredients?|composition)\b/.test(n)) {
         section = 'ingredients';
         const rest = line.replace(/^\s*(ingredienti|ingredients?|composition)\s*:?\s*/i, '').trim();
         if (rest) ingredients.push(rest);
@@ -148,40 +135,35 @@
       const row = parseNutrientLine(line, activeBasis, tableColumns);
       if (row) { section = 'nutrition'; rows.push(row); continue; }
       if (section === 'ingredients') ingredients.push(line);
-      else if (section === 'nutrition') unrecognized.push(line);
       else unrecognized.push(line);
     }
-    // Conflicting duplicate nutrient rows must remain visible as an ambiguity; never silently pick one.
     const grouped = new Map();
     for (const row of rows) {
       if (!grouped.has(row.key)) grouped.set(row.key, []);
       grouped.get(row.key).push(row);
     }
-    const nutrients = [];
-    const ambiguities = [];
+    const nutrients = [], ambiguities = [];
     for (const [key, list] of grouped) {
-      const usable = list.filter(x => x.status === 'candidate');
-      const distinct = new Set(usable.map(x => `${x.amount}|${x.unit}|${x.basis}`));
-      if (list.length > 1 && distinct.size > 1) {
-        const issue = { key, rows: list.map(x => ({ ...x, status: 'ambiguous' })), reason: 'Nutriente ripetuto con valori differenti: scegliere manualmente il dato corretto.' };
-        ambiguities.push(issue); nutrients.push(...issue.rows);
-      } else if (list.length > 1 && distinct.size === 1 && usable.length) {
-        nutrients.push(usable[0]);
-      } else nutrients.push(...list);
+      if (list.length === 1) { nutrients.push(list[0]); continue; }
+      const signatures = new Set(list.map(x => x.status === 'candidate' ? `${x.amount}|${x.unit}|${x.basis}` : `${x.status}|${x.raw}`));
+      if (signatures.size === 1 && list.every(x => x.status === 'candidate')) {
+        nutrients.push(list[0]);
+        continue;
+      }
+      const reason = 'Nutriente ripetuto o discordante: verificare manualmente i valori prima dell’importazione.';
+      const issue = { key, rows: list.map(x => ({ ...x, status: 'ambiguous', reason })), reason };
+      ambiguities.push(issue);
+      nutrients.push(...issue.rows);
     }
     const explicitBasis = lines.map(line => detectBasis(line)).find(x => x.kind !== 'unknown');
     const basis = explicitBasis || globalBasis;
     return {
       rawText: allText,
       ingredientsText: ingredients.join('\n').replace(/\s*[,;]\s*/g, ', ').trim(),
-      basis,
-      nutrients,
-      ambiguities,
-      unrecognized,
+      basis, nutrients, ambiguities, unrecognized,
       warnings: basis.importable ? [] : [basis.reason]
     };
   }
-  // Pure proposal function. Only confirmed per-100-g candidates can be applied.
   function reconcile(existing, parsed, selectedKeys, explicitOverwriteKeys = []) {
     const source = existing || {}, selected = new Set(selectedKeys || []), overwrite = new Set(explicitOverwriteKeys || []);
     const changes = {}, conflicts = [], skipped = [];
@@ -191,8 +173,7 @@
         continue;
       }
       if (!selected.has(row.key)) continue;
-      const current = source[row.key];
-      const hasCurrent = current !== '' && current !== null && current !== undefined;
+      const current = source[row.key], hasCurrent = current !== '' && current !== null && current !== undefined;
       if (hasCurrent && !overwrite.has(row.key)) { conflicts.push({ key: row.key, current, proposed: row.amount, unit: row.unit }); continue; }
       changes[row.key] = row.amount;
     }
