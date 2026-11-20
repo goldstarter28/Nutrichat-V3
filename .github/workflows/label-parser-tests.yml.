@@ -1,9 +1,9 @@
+
 name: Label parser tests
 
 on:
   push:
     branches:
-      - main
       - feature/local-label-camera-ocr
     paths:
       - 'label-import.js'
@@ -25,7 +25,6 @@ jobs:
   node-tests:
     name: Node.js parser tests
     runs-on: ubuntu-latest
-
     timeout-minutes: 5
 
     steps:
@@ -39,5 +38,3 @@ jobs:
 
       - name: Run label parser tests
         run: node --test tests/label-import.test.js
-
-##trigger 
