@@ -1313,6 +1313,59 @@ async function enrichDraft(){
   }
 }
 
+function editCatalogNutrient(name, unit, value) {
+  if (!foodDraft) return;
+
+  const next = structuredClone(foodDraft);
+  next.nutrients = [...(next.nutrients || [])];
+  next.nutrientStatus = { ...(next.nutrientStatus || {}) };
+
+  const index = next.nutrients.findIndex(
+    n => norm(n.name) === norm(name)
+  );
+
+  if (value.trim() === '') {
+    next.nutrients = next.nutrients.filter(
+      n => norm(n.name) !== norm(name)
+    );
+
+    next.nutrientStatus[name] = {
+      status: 'nd',
+      reason: 'N/D: quantità non disponibile'
+    };
+  } else {
+    const previous = index >= 0
+      ? next.nutrients[index]
+      : emptyNutrient();
+
+    const nutrient = {
+      ...previous,
+      name,
+      unit,
+      amount: value,
+      source: 'Manuale',
+      evidence: 'Inserimento manuale',
+      aiEstimate: false,
+      reliability: 'manuale'
+    };
+
+    if (index >= 0) {
+      next.nutrients[index] = nutrient;
+    } else {
+      next.nutrients.push(nutrient);
+    }
+
+    next.nutrientStatus[name] = {
+      status: Number.isFinite(Number(value)) && Number(value) >= 0
+        ? 'numeric'
+        : 'nd',
+      reason: 'Valore inserito manualmente'
+    };
+  }
+
+  setFoodDraft(next);
+}
+
   function toggleAiRequest(name){const a=[...(foodDraft.aiRequested||[])],i=a.indexOf(name);if(i>=0)a.splice(i,1);else a.push(name);setFoodDraft({...foodDraft,aiRequested:a});}
   function ingredientCandidates(ingredient,ambiguity='none'){
     const ing=typeof ingredient==='string'?{name:ingredient}:ingredient||{};
@@ -1635,11 +1688,68 @@ async function enrichDraft(){
       h('div',{className:'formGrid'},h('label',null,'Nome rapido',h('input',{value:foodDraft.name,onChange:e=>setFoodDraft({...foodDraft,name:e.target.value})})),h('label',null,'Marca (opzionale)',h('input',{value:foodDraft.brand||'',onChange:e=>setFoodDraft({...foodDraft,brand:e.target.value})})),h('label',null,'Valori riferiti a (g)',h('input',{type:'number',value:foodDraft.servingGrams,onChange:e=>setFoodDraft({...foodDraft,servingGrams:e.target.value})}))),
       foodDraft.officialName&&foodDraft.officialName!==foodDraft.name&&h('p',{className:'officialName'},h('b',null,'Voce ufficiale: '),foodDraft.officialName),
       h('label',null,'Alias di ricerca (separati da virgola)',h('input',{value:(foodDraft.aliases||[]).join(', '),onChange:e=>setFoodDraft({...foodDraft,aliases:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)})})),
-      h('div',{className:'cardTitle aiTitle'},h('h3',null,'Etichetta / macro'),h('button',{className:'ghost',disabled:aiBusy==='draft',onClick:enrichDraft},aiBusy==='draft'?'Completamento…':'Completa macro / N/D selezionati')),
+      h('div',{className:'cardTitle aiTitle'},h('h3',null,'Etichetta / macro'),h('button',{className:'ghost',disabled:aiBusy==='draft',onClick:enrichDraft},aiBusy==='draft'?'Completamento…':'Completa tutti i nutrienti mancanti')),
       aiMsg&&h('p',{className:'errorText'},aiMsg),
       h('div',{className:'formGrid'},Object.entries(MACROS).map(([k,l])=>h('label',{key:k},l,h('input',{type:'number',step:'any',value:foodDraft.label?.[k]??'',onChange:e=>setFoodDraft({...foodDraft,label:{...foodDraft.label,[k]:e.target.value}})})))),
-      draftNdRows.length?h('div',{className:'ndPanel'},h('div',{className:'cardTitle'},h('div',null,h('h3',null,'Campi N/D'),h('p',null,'N/D significa dato non disponibile, non zero. Puoi selezionare tutte le voci desiderate: l’app le completa in blocchi controllati. I nutrienti ad alto rischio mostrano un errore esplicito invece di una falsa stima.')),h('span',{className:'coverageTag'},`${(foodDraft.aiRequested||[]).length} selezionati`)),h('div',{className:'ndList'},draftNdRows.map(([name,st])=>h('label',{className:`ndItem ${st?.status==='blocked_high_risk'||st?.status==='ai_error'?'ndProblem':''}`,key:name},h('input',{type:'checkbox',checked:(foodDraft.aiRequested||[]).includes(name),onChange:()=>toggleAiRequest(name)}),h('span',null,h('b',null,name),h('small',null,st?.reason||'Dato non disponibile')),h('strong',null,st?.status==='blocked_high_risk'?'ALTO RISCHIO':st?.status==='ai_error'?'ERRORE':'N/D'))))):null,
-      h('h3',null,'Ingredienti completi'),h('label',null,'Lista come in etichetta',h('textarea',{rows:4,value:foodDraft.ingredients||'',onChange:e=>setFoodDraft({...foodDraft,ingredients:e.target.value})})),
+      
+h('details', { className: 'ndPanel' },
+  h('summary', null,
+    `Catalogo micronutrienti (${draftCatalogRows.length})`
+  ),
+
+  h('p', { className: 'muted tiny' },
+    'Tutti i micronutrienti disponibili nel catalogo. ' +
+    'N/D significa dato non disponibile, non zero. ' +
+    'I valori manuali vengono conservati durante il completamento AI.'
+  ),
+
+  [...new Set(draftCatalogRows.map(row => row.group))]
+    .map(group =>
+      h('details', { key: group },
+        h('summary', null, group),
+
+        h('div', { className: 'ndList' },
+          draftCatalogRows
+            .filter(row => row.group === group)
+            .map(row =>
+              h('div', {
+                className: 'ndItem',
+                key: row.name
+              },
+
+                h('span', null,
+                  h('b', null, row.name),
+                  h('small', null,
+                    row.nutrient
+                      ? (row.nutrient.source || 'Valore presente')
+                      : (row.status.reason || 'N/D')
+                  )
+                ),
+
+                h('input', {
+                  type: 'number',
+                  step: 'any',
+                  min: 0,
+                  placeholder: 'N/D',
+                  style: { width: '110px' },
+                  value: row.nutrient?.amount ?? '',
+                  onChange: e => editCatalogNutrient(
+                    row.name,
+                    row.nutrient?.unit || row.unit,
+                    e.target.value
+                  )
+                }),
+
+                h('small', null,
+                  row.nutrient?.unit || row.unit
+                )
+              )
+            )
+        )
+      )
+    )
+),
+,h('label',null,'Lista come in etichetta',h('textarea',{rows:4,value:foodDraft.ingredients||'',onChange:e=>setFoodDraft({...foodDraft,ingredients:e.target.value})})),
       parseAdditives(foodDraft.ingredients).length>0&&h('div',{className:'chips'},parseAdditives(foodDraft.ingredients).map(a=>h('span',{key:a},a))),
       h('div',{className:'cardTitle'},h('div',null,h('h3',null,'Nutrienti specifici / forme'),h('p',null,'Quantità riferite alla base indicata sopra.')),h('button',{className:'ghost',onClick:addNutrient},'+ Aggiungi')),
       (foodDraft.nutrients||[]).map((n,i)=>h('div',{className:'nutrientAdvanced',key:n.id},h('div',{className:'nutrientMain'},h('input',{placeholder:'Magnesio / EPA / Leucina',value:n.name,onChange:e=>editNutrient(i,{name:e.target.value})}),h('input',{placeholder:'forma / nota',value:n.form||'',onChange:e=>editNutrient(i,{form:e.target.value})}),h('input',{type:'number',step:'any',placeholder:'quantità',value:n.amount,onChange:e=>editNutrient(i,{amount:e.target.value})}),h('select',{value:n.unit,onChange:e=>editNutrient(i,{unit:e.target.value})},h('option',null,'mg'),h('option',null,'µg'),h('option',null,'g')),h('button',{className:'ghost danger',onClick:()=>setFoodDraft({...foodDraft,nutrients:foodDraft.nutrients.filter(x=>x.id!==n.id)})},'×')),h('div',{className:'bioEdit'},h('label',null,'Quantità elementare (opz.)',h('input',{type:'number',step:'any',value:n.elementalAmount??'',onChange:e=>editNutrient(i,{elementalAmount:e.target.value})})),h('label',null,'Assorbimento minimo %',h('input',{type:'number',min:0,max:100,step:'any',value:n.bio?.min??'',onChange:e=>editNutrient(i,{bio:{...(n.bio||{}),mode:'range',min:e.target.value}})})),h('label',null,'Assorbimento massimo %',h('input',{type:'number',min:0,max:100,step:'any',value:n.bio?.max??'',onChange:e=>editNutrient(i,{bio:{...(n.bio||{}),mode:'range',max:e.target.value}})})),h('label',null,'Fonte stima',h('input',{value:n.bio?.source??'',onChange:e=>editNutrient(i,{bio:{...(n.bio||{}),source:e.target.value}})})),h('label',null,'Fonte composizione',h('input',{value:n.source||'',onChange:e=>editNutrient(i,{source:e.target.value})}))))),
