@@ -84,6 +84,7 @@ test('confirmed application adds selected values and provenance without overwrit
   assert.equal(next.label.fat, 2);
   assert.equal(existing.label.protein, 12);
   assert.equal(next.labelImport.fields['label.protein'].raw, 'Proteine 8 g');
+  assert.equal(next.labelImport.rawText, parsed.rawText);
 });
 
 test('unselected fields and ambiguous fields are never applied', () => {
@@ -103,4 +104,20 @@ test('legacy food records retain their existing fields and accept V3 provenance 
   assert.equal(next.label.kcal, 0);
   assert.equal(next.label.protein, 3);
   assert.equal(next.labelImport.version, 3);
+});
+
+test('energy in kJ is review-only and is never mislabelled as kcal', () => {
+  const parsed = parseLabel('Valori nutrizionali per 100 g\nEnergia 1000 kJ');
+  const energy = parsed.nutrients.find(row => row.key === 'kcal');
+  assert.equal(energy.status, 'review');
+  assert.equal(energy.unit, 'kj');
+  assert.equal(makeProposal({}, parsed).find(row => row.path === 'label.kcal').status, 'review');
+});
+
+test('full original label text is retained as provenance when an accepted field is applied', () => {
+  const text = 'Nome prodotto: Bevanda\nMarca: X\nIngredienti: acqua, avena\nValori nutrizionali per 100 g\nProteine 3 g';
+  const parsed = parseLabel(text);
+  const next = applyProposal({}, makeProposal({}, parsed), { confirmed: true, selectedPaths: ['label.protein'] });
+  assert.equal(next.labelImport.rawText, text);
+  assert.equal(next.labelImport.fields['label.protein'].raw, 'Proteine 3 g');
 });

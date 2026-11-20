@@ -14,11 +14,6 @@
     { key: 'name', pattern: /^(?:nome\s+prodotto|prodotto|product\s+name|product)\s*:\s*(.*)$/i },
     { key: 'brand', pattern: /^(?:marca|brand|marchio)\s*:\s*(.*)$/i }
   ];
-  const NUTRIENT_LABELS = {
-    kcal: 'Calorie (kcal)', protein: 'Proteine (g)', carbs: 'Carboidrati (g)',
-    sugar: 'Zuccheri (g)', fat: 'Grassi (g)', saturatedFat: 'Saturi (g)',
-    fiber: 'Fibre (g)', salt: 'Sale (g)'
-  };
 
   function clean(value) { return String(value == null ? '' : value).trim(); }
   function norm(value) {
@@ -29,6 +24,7 @@
   function field(value, raw, status, reason = '') {
     return { value, raw, provenance: 'testo etichetta inserito localmente', status, reason };
   }
+
   function parseLabel(text) {
     if (!baseParser || typeof baseParser.parseLabelText !== 'function') {
       throw new Error('Il parser NutriTrace delle etichette non è disponibile.');
@@ -49,17 +45,19 @@
       }
     }
 
-    const hasIngredientHeading = lines.some(line => /^(?:ingredienti|ingredients?|composition)\s*:?/i.test(line));
+    const ingredientHeading = /^(?:ingredienti|ingredients?|composition)\s*:?/i;
+    const nutritionHeading = /^(?:valori nutrizionali|dichiarazione nutrizionale|nutrition facts|nutrition information|informazioni nutrizionali)\b/i;
+    const hasIngredientHeading = lines.some(line => ingredientHeading.test(line));
     const ingredientText = parsed.ingredientsText;
     const trimmedIngredient = clean(ingredientText);
     const incompleteIngredients = !trimmedIngredient || /[,;:]\s*$|(?:\.\.\.|…)\s*$/.test(trimmedIngredient);
+    const headingIndex = lines.findIndex(line => ingredientHeading.test(line));
+    const nutritionIndex = lines.findIndex(line => nutritionHeading.test(line) || (/\|/.test(line) && /(?:100\s*g|100\s*ml|porzione|serving)/i.test(line)));
+    const ingredientRaw = hasIngredientHeading
+      ? lines.filter((line, index) => index === headingIndex || (index > headingIndex && (nutritionIndex < 0 || index < nutritionIndex))).join('\n')
+      : '';
     const ingredients = hasIngredientHeading
-      ? field(trimmedIngredient, lines.filter((line, index) => {
-          if (/^(?:ingredienti|ingredients?|composition)\s*:?/i.test(line)) return true;
-          const headingIndex = lines.findIndex(item => /^(?:ingredienti|ingredients?|composition)\s*:?/i.test(item));
-          const nutritionIndex = lines.findIndex(item => /^(?:valori nutrizionali|dichiarazione nutrizionale|nutrition facts|nutrition information|informazioni nutrizionali)\b/i.test(item) || /\|.*(?:100\s*g|100\s*ml|porzione|serving)/i.test(item));
-          return index > headingIndex && (nutritionIndex < 0 || index < nutritionIndex);
-        }).join('\n'), incompleteIngredients ? 'incomplete' : 'candidate', incompleteIngredients ? 'Lista assente o terminata in modo incompleto; non considerarla completa.' : 'La completezza della lista non è verificabile dal testo.')
+      ? field(trimmedIngredient, ingredientRaw, incompleteIngredients ? 'incomplete' : 'candidate', incompleteIngredients ? 'Lista assente o terminata in modo incompleto; non considerarla completa.' : 'La completezza della lista non è verificabile dal testo.')
       : field('', '', 'missing', 'Intestazione ingredienti non individuata.');
 
     const nutrientRows = parsed.nutrients.map(row => ({ ...row }));
@@ -68,6 +66,11 @@
       if (!byKey.has(row.key)) byKey.set(row.key, []);
       byKey.get(row.key).push(row);
       if (row.status !== 'candidate') continue;
+      if (row.key === 'kcal' && row.unit !== 'kcal') {
+        row.status = 'review';
+        row.reason = `Valore energetico espresso in ${row.unit}; non convertirlo o registrarlo come kcal senza una scelta esplicita.`;
+        continue;
+      }
       const limit = row.key === 'kcal' ? 1000 : 100;
       if (!Number.isFinite(row.amount) || row.amount < 0 || row.amount > limit) {
         row.status = 'invalid';
@@ -127,7 +130,7 @@
           : food[item.path];
       const hasCurrent = Array.isArray(current) ? current.length > 0 : present(current);
       const actionable = item.status === 'candidate';
-      return { ...item, current, action: !actionable ? 'review' : hasCurrent ? 'conflict' : 'add' };
+      return { ...item, sourceText: parsed.rawText, current, action: !actionable ? 'review' : hasCurrent ? 'conflict' : 'add' };
     });
   }
 
@@ -160,7 +163,7 @@
         next.nutrients.push({ id: `label-import-${proposal.nutrientKey}`, name: proposal.nutrientKey, form: 'dichiarato in etichetta', amount: proposal.value, unit: proposal.unit, source: 'Etichetta', evidence: proposal.raw });
       }
       provenance[proposal.path] = { raw: proposal.raw, provenance: proposal.provenance, status: proposal.status, unit: proposal.unit || null, basis: proposal.basis || null };
-      rawText = rawText || (proposals.find(item => item.raw)?.raw || '');
+      rawText = rawText || proposal.sourceText || proposal.raw || '';
     }
     if (Object.keys(provenance).length) next.labelImport = { version: 3, rawText, fields: provenance };
     return next;

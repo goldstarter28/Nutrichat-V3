@@ -139,3 +139,6 @@ test('only selected fields are proposed and cancelling is a no-op', () => {
   parseLabelText('Ingredienti: farina\nValori nutrizionali per 100 g\nProteine 4 g');
   assert.deepEqual(existing, snapshot);
 });
+
+// This workflow invokes only this file, so load the V3 unit suite here as well.
+require('./label-import-v3.test.js');
