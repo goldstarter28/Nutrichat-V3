@@ -1,0 +1,16 @@
+name: Actions diagnostic check
+
+on:
+  push:
+    branches:
+      - feature/local-label-camera-ocr
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify GitHub Actions
+        run: echo "GitHub Actions is working"
