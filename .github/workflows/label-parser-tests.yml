@@ -8,6 +8,7 @@ on:
       - 'ingredient-auto-audit.js'
       - 'ingredient-reconstruction.js'
       - 'api/**'
+      - 'hydration-widget.js'
     paths:
       - 'label-import.js'
       - 'label-import-v3.js'
@@ -22,7 +23,8 @@ on:
       - 'ingredient-auto-audit.js'
       - 'ingredient-reconstruction.js'
       - 'api/**'
-
+      - 'hydration-widget.js'
+      
   pull_request:
     paths:
       - 'label-import.js'
@@ -38,6 +40,7 @@ on:
       - 'ingredient-auto-audit.js'
       - 'ingredient-reconstruction.js'
       - 'api/**'
+      - 'hydration-widget.js'
 
   workflow_dispatch:
 
@@ -67,6 +70,7 @@ jobs:
           node --check label-import-ui.js
           
           node --check app.js
+          node --check hydration-widget.js
           node --check ingredient-reconstruction.js
           node --check sw.js
           node --check ingredient-auto-audit.js
