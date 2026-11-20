@@ -17,6 +17,20 @@ test('save plan accepts explicit name and selected fields', () => {
   assert.deepEqual(plan.overwrite, ['label.protein']);
 });
 
+test('save plan accepts nutrients for an existing named food', () => {
+  const parsed = { product: { name: null } };
+  const plan = buildSavePlan(parsed, ['label.protein'], [], 'Prodotto manuale');
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plan.selected, ['label.protein']);
+});
+
+test('save plan refuses nutrient-only import into an unnamed new food', () => {
+  const parsed = { product: { name: null } };
+  const plan = buildSavePlan(parsed, ['label.protein'], [], '');
+  assert.equal(plan.ok, false);
+  assert.match(plan.reason, /senza nome/i);
+});
+
 test('save plan refuses empty selection', () => {
   const parsed = { product: { name: { status: 'candidate', value: 'Bevanda' } } };
   assert.equal(buildSavePlan(parsed, [], []).ok, false);

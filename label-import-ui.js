@@ -70,19 +70,16 @@
     review.querySelector('#label-import-v3-cancel').addEventListener('click', () => { review.innerHTML = ''; });
     review.querySelector('#label-import-v3-confirm').addEventListener('click', () => {
       const selected = [...review.querySelectorAll('input[name="labelImportField"]:checked')].map(input => input.value);
-      const explicitName = parsed.product?.name?.status === 'candidate' ? clean(parsed.product.name.value) : '';
-      if (selected.includes('name') && !explicitName) { review.innerHTML = '<p class="labelImportWarning">Il nome prodotto non è stato estratto con certezza. Nessun dato è stato modificato.</p>'; return; }
       const overwritePaths = [];
       for (const input of review.querySelectorAll('input[name="labelImportField"]:checked')) {
         const item = proposals.find(p => p.path === input.value);
-        if (item?.action === 'conflict') {
-          if (confirm(`Confermi la sostituzione esplicita di “${labelForProposal(item)}”?`)) overwritePaths.push(item.path);
-        }
+        if (item?.action === 'conflict' && confirm(`Confermi la sostituzione esplicita di “${labelForProposal(item)}”?`)) overwritePaths.push(item.path);
       }
       if (!selected.length) { review.innerHTML = '<p class="labelImportWarning">Nessun campo selezionato. Nessun dato è stato modificato.</p>'; return; }
       const base = findExistingFood(parsed) || existing;
-      const next = window.NutriTraceLabelImportV3.applyProposal(base, proposals, { confirmed: true, selectedPaths: selected, overwritePaths });
-      if (selected.includes('name') && !clean(next.name)) { review.innerHTML = '<p class="labelImportWarning">Nome prodotto mancante: nessun dato è stato salvato.</p>'; return; }
+      const plan = window.NutriTraceLabelImportUiState?.buildSavePlan(parsed, selected, overwritePaths, base.name);
+      if (!plan?.ok) { review.innerHTML = `<p class="labelImportWarning">${escape(plan?.reason || 'Nessun dato salvato.')}</p>`; return; }
+      const next = window.NutriTraceLabelImportV3.applyProposal(base, proposals, { confirmed: true, selectedPaths: plan.selected, overwritePaths: plan.overwrite });
       next.label = { ...(base.label || {}), ...(next.label || {}) };
       next.ingredients = next.ingredients || '';
       next.sources = [...(next.sources || []), { id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-source`, name: 'Etichetta locale', reference: 'Importazione testo locale · nessun OCR esterno', quality: 'primaria' }].filter((source, index, arr) => arr.findIndex(x => x.reference === source.reference) === index);
