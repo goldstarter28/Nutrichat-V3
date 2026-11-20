@@ -1589,8 +1589,13 @@ function editCatalogNutrient(name, unit, value) {
     h('header',{className:'hero'},h('div',null,h('div',{className:'eyebrow'},'DIARIO NUTRIZIONALE PERSONALE · V2.3 DATA + SEARCH'),h('h1',null,'NutriTrace'),h('p',null,'Diario per data, Master Food DB multi-fonte, N/D espliciti e AI usata come interprete e ricerca assistita.')),h('div',{className:'privacy'},'● Local-first · Master DB primario · AI tracciata')),
     h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','analisi','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
 
-    tab==='oggi'&&h('section',null,
+    
+tab==='oggi'&&h('section',null,
       dateNavigator,
+      h(window.NutriTraceHydrationWidget,{
+        key:selectedDate,
+        date:selectedDate
+      }),
       h('div',{className:'grid5'},[['kcal','Energia','kcal'],['protein','Proteine','g'],['carbs','Carboidrati','g'],['fat','Grassi','g'],['fiber','Fibre','g']].map(([id,n,u],i)=>{const g=goals.find(x=>x.id===id),cov=macroCoverage(dayLogs,foods,id);return h('article',{className:`metric ${i===0?'primary':''}`,key:id},h('span',null,n),h(Progress,{value:totals[id],goal:effectiveTarget(g||{},profile.weight),unit:u,kind:g?.kind}),dayLogs.length&&cov<.999?h('small',{className:'metricCoverage'},`totale parziale · dati ${fmt(cov*100,0)}%`):null);})),
       h('article',{className:'card quickDiary'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,selectedDate===deviceToday?'Cosa hai mangiato oggi?':`Aggiungi al ${shortDate(selectedDate)}`),h('p',null,'Il Master DB è la fonte primaria. Ogni voce resta associata al giorno selezionato.'))),
         h('div',{className:'quickInputs'},h('label',null,'Alimento',h('input',{value:quickQuery,placeholder:'es. banana, 2 uova, cetriolo, salmone cotto…',onChange:e=>setQuickQuery(e.target.value)})),h('label',null,ui('search.gramsLabel','Grammi (facoltativi)'),h('input',{type:'number',min:'1',step:'any',value:grams,placeholder:ui('search.gramsPlaceholder','automatici per porzioni standard'),onChange:e=>setGrams(e.target.value)}))),
