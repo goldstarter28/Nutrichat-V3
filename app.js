@@ -974,9 +974,16 @@ async function aiEnrich(food, requestedNames=[]){
 function mergeAiFood(food, ai){
   const next=structuredClone(food); next.label={...next.label}; next.nutrientStatus={...(next.nutrientStatus||{})};
   for(const k of Object.keys(MACROS))if(isMissing(next.label[k])&&ai.label&&!isMissing(ai.label[k]))next.label[k]=ai.label[k];
-  const existing=new Set((next.nutrients||[]).map(n=>norm(n.name)));next.nutrients=[...(next.nutrients||[])];
+  next.nutrients=[...(next.nutrients||[])];
   for(const n of ai.nutrients||[]){
     const display=AI_ID_TO_DISPLAY[n.id],spec=display&&AI_NUTRIENT_SPECS[display];if(!display||!spec)continue;
+      const hasValue=next.nutrients.some(row=>
+  norm(row.name)===norm(display) &&
+  !isMissing(row.amount) &&
+  Number.isFinite(Number(row.amount)) &&
+  Number(row.amount)>=0
+);
+if(hasValue)continue;
     if(n.status==='blocked_high_risk'){
       next.nutrientStatus[display]={status:'blocked_high_risk',reason:n.note||`Errore ${display}: nutriente ad alto rischio; stima AI disabilitata.`,canonicalId:n.id};continue;
     }
@@ -986,9 +993,11 @@ function mergeAiFood(food, ai){
     if(n.status!=='estimated'||!Number.isFinite(Number(n.value))){
       next.nutrientStatus[display]={status:'nd_ai',reason:n.note||'AI: dato non sufficientemente affidabile',canonicalId:n.id};continue;
     }
-    if(existing.has(norm(display)))continue;
+    next.nutrients=next.nutrients.filter(
+  row=>norm(row.name)!==norm(display)
+);
     next.nutrients.push({id:newId(),name:display,form:'stima AI controllata',amount:Number(n.value),unit:spec.unit,source:'AI · stima',evidence:`stima AI · confidenza ${n.confidence||'media'}${n.note?` · ${n.note}`:''}`,canonicalId:n.id,reliability:'ai_estimate',aiEstimate:true,grade:'AI',bio:{mode:'none',min:'',max:'',source:''}});
-    next.nutrientStatus[display]={status:'ai_estimate',reliability:n.confidence||'media',canonicalId:n.id};existing.add(norm(display));
+    next.nutrientStatus[display]={status:'ai_estimate',reliability:n.confidence||'media',canonicalId:n.id};
   }
   if((ai.nutrients||[]).length||Object.values(ai.label||{}).some(v=>v!==null&&v!==undefined)){
     const ref=ai.note||'Valori stimati; non equivalenti a dati analitici o di etichetta.';
@@ -1175,7 +1184,27 @@ function Home(){
   const includedMasterSources=masterSources.filter(x=>x.inclusion_status==='included'||!x.inclusion_status);
   const validationOnlySources=masterSources.filter(x=>x.inclusion_status==='validation_only');
   const missingMasterSources=masterSources.filter(x=>x.inclusion_status==='missing_input');
-  const draftNdRows=foodDraft?Object.entries(foodDraft.nutrientStatus||{}).filter(([,x])=>!['numeric','ai_estimate'].includes(x?.status)):[];
+  
+const draftCatalogRows=foodDraft
+  ? MICRO_CATALOG.map(spec=>{
+      const nutrient=(foodDraft.nutrients||[]).find(n=>
+        norm(n.name)===norm(spec.name) &&
+        !isMissing(n.amount) &&
+        Number.isFinite(Number(n.amount)) &&
+        Number(n.amount)>=0
+      );
+      const status=foodDraft.nutrientStatus?.[spec.name]||{
+        status:'nd',
+        reason:'N/D: nessun valore disponibile'
+      };
+      return {...spec,nutrient,missing:!nutrient,status};
+    })
+  :[];
+
+const draftNdRows=draftCatalogRows.filter(
+  row=>row.missing&&AI_NUTRIENT_SPECS[row.name]
+);
+
   const ui=(path,fallback)=>cfgGet(appConfig?.ui,path,fallback);
 
   function valueForGoal(g,ag){ const v=goalValueFromAggregate(g,ag); if(v===0&&g.name==='Sodio'&&ag.salt>0)return convert(ag.salt/2.5,'g',g.unit); return v; }
@@ -1209,27 +1238,81 @@ function Home(){
   }
   async function searchFoods(){ if(!query.trim()) return; setSearching(true); setSearchError(''); try{ const master=searchMasterIndex(query,masterIndex,30); const local=searchLocalDataset(query,datasets,12).map(f=>({...f,resultType:'local'})); setResults([...master,...local].slice(0,40)); if(!master.length&&!local.length) setSearchError(ui('search.notFound','Nessun risultato nel Master DB o nei database personali.')); } finally{ setSearching(false); } }
   async function createWithAI(name){ setAiBusy('search'); setAiMsg(''); try{ let f={...emptyFood(),name:name.trim(),aliases:[name.trim()]}; const ai=await aiEnrich(f,SAFE_AI_DEFAULT); f=mergeAiFood(f,ai); for(const x of MICRO_CATALOG) if(!f.nutrientStatus[x.name])f.nutrientStatus[x.name]={status:'nd',reason:'N/D: non stimato in assenza di una fonte strutturata'}; setFoodDraft(f); setTab('alimenti'); }catch(e){ setAiMsg(e.message); }finally{ setAiBusy(''); } }
-  async function enrichDraft(){
-    if(!foodDraft?.name)return;setAiBusy('draft');setAiMsg('');
-    const selected=[...new Set(foodDraft.aiRequested||[])],batches=[];for(let i=0;i<selected.length;i+=10)batches.push(selected.slice(i,i+10));
-    // Even with no micro selected, run one request so missing macros can be completed.
-    if(!batches.length)batches.push([]);
-    let next=structuredClone(foodDraft),failures=[];
-    try{
-      for(let bi=0;bi<batches.length;bi++){
-        const batch=batches[bi];setAiMsg(batches.length>1?`Completamento AI: blocco ${bi+1}/${batches.length}…`: 'Completamento AI…');
-        try{next=mergeAiFood(next,await aiEnrich(next,batch));}
-        catch(e){
-          failures.push(...batch);
-          next.nutrientStatus={...(next.nutrientStatus||{})};
-          for(const name of batch){const spec=AI_NUTRIENT_SPECS[name];next.nutrientStatus[name]={status:'ai_error',reason:`Errore ${name}: ${e.message}`,canonicalId:spec?.id||''};}
-          if(!batch.length)throw e;
-        }
-      }
-      next.aiRequested=failures;setFoodDraft(next);
-      setAiMsg(failures.length?`Completamento parziale: ${failures.length} nutrienti non completati. Puoi ritentare solo quelli rimasti selezionati.`:'Completamento terminato. Le stime AI restano escluse dal calcolo delle carenze.');
-    }catch(e){setAiMsg(e.message)}finally{setAiBusy('')}
+  
+async function enrichDraft(){
+  if(!foodDraft?.name?.trim())return;
+
+  setAiBusy('draft');
+  setAiMsg('');
+
+  const selected=MICRO_CATALOG
+    .filter(spec=>AI_NUTRIENT_SPECS[spec.name])
+    .filter(spec=>!(foodDraft.nutrients||[]).some(n=>
+      norm(n.name)===norm(spec.name) &&
+      !isMissing(n.amount) &&
+      Number.isFinite(Number(n.amount)) &&
+      Number(n.amount)>=0
+    ))
+    .map(spec=>spec.name);
+
+  const batches=[];
+  for(let i=0;i<selected.length;i+=10){
+    batches.push(selected.slice(i,i+10));
   }
+
+  if(!batches.length)batches.push([]);
+
+  let next=structuredClone(foodDraft);
+  let failures=[];
+
+  try{
+    for(let bi=0;bi<batches.length;bi++){
+      const batch=batches[bi];
+
+      setAiMsg(
+        `Completamento AI: blocco ${bi+1}/${batches.length}…`
+      );
+
+      try{
+        next=mergeAiFood(
+          next,
+          await aiEnrich(next,batch)
+        );
+        setFoodDraft(structuredClone(next));
+      }catch(e){
+        failures.push(...batch);
+        next.nutrientStatus={
+          ...(next.nutrientStatus||{})
+        };
+
+        for(const name of batch){
+          const spec=AI_NUTRIENT_SPECS[name];
+          next.nutrientStatus[name]={
+            status:'ai_error',
+            reason:`Errore ${name}: ${e.message}`,
+            canonicalId:spec?.id||''
+          };
+        }
+
+        if(!batch.length)throw e;
+      }
+    }
+
+    next.aiRequested=failures;
+    setFoodDraft(next);
+
+    setAiMsg(failures.length
+      ?`Completamento parziale: ${failures.length} nutrienti non elaborati per errore.`
+      :'Completamento terminato. Le stime AI restano escluse dai calcoli delle carenze.'
+    );
+  }catch(e){
+    setFoodDraft(next);
+    setAiMsg(e.message);
+  }finally{
+    setAiBusy('');
+  }
+}
+
   function toggleAiRequest(name){const a=[...(foodDraft.aiRequested||[])],i=a.indexOf(name);if(i>=0)a.splice(i,1);else a.push(name);setFoodDraft({...foodDraft,aiRequested:a});}
   function ingredientCandidates(ingredient,ambiguity='none'){
     const ing=typeof ingredient==='string'?{name:ingredient}:ingredient||{};
