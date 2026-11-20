@@ -935,11 +935,42 @@ async function parseFoodEntry(text,context='diary'){
 }
 
 async function aiEnrich(food, requestedNames=[]){
-  const requested=[...new Set(requestedNames)].map(name=>AI_NUTRIENT_SPECS[name]?{name,id:AI_NUTRIENT_SPECS[name].id,unit:AI_NUTRIENT_SPECS[name].unit,advanced:Boolean(AI_NUTRIENT_SPECS[name].advanced)}:null).filter(Boolean).slice(0,12);
-  const r=await fetch('/api/nutrition-enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({food:{name:food.name,brand:food.brand||'',servingGrams:Number(food.servingGrams)||100,label:food.label||{},nutrients:food.nutrients||[]},requested,allowAdvanced:requested.some(x=>x.advanced)})});
-  let d={}; try{ d=await r.json(); }catch{}
+  const requested=[...new Set(requestedNames)]
+    .map(name=>AI_NUTRIENT_SPECS[name]?{
+      name,
+      id:AI_NUTRIENT_SPECS[name].id,
+      unit:AI_NUTRIENT_SPECS[name].unit,
+      advanced:Boolean(AI_NUTRIENT_SPECS[name].advanced)
+    }:null)
+    .filter(Boolean)
+    .slice(0,12);
+
+  const r=await fetch('/api/nutrition-enrich',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      food:{
+        name:food.name,
+        brand:food.brand||'',
+        servingGrams:Number(food.servingGrams)||100,
+        label:food.label||{},
+        ingredients:food.ingredients||'',
+        nutrients:food.nutrients||[]
+      },
+      requested,
+      allowAdvanced:requested.some(x=>x.advanced)
+    })
+  });
+
+  let d={};
+  try{
+    d=await r.json();
+  }catch{}
+
   if(!r.ok) throw new Error(d.error||`AI ${r.status}`);
   return d;
+}
+
 }
 function mergeAiFood(food, ai){
   const next=structuredClone(food); next.label={...next.label}; next.nutrientStatus={...(next.nutrientStatus||{})};
