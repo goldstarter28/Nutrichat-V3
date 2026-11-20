@@ -971,7 +971,6 @@ async function aiEnrich(food, requestedNames=[]){
   return d;
 }
 
-}
 function mergeAiFood(food, ai){
   const next=structuredClone(food); next.label={...next.label}; next.nutrientStatus={...(next.nutrientStatus||{})};
   for(const k of Object.keys(MACROS))if(isMissing(next.label[k])&&ai.label&&!isMissing(ai.label[k]))next.label[k]=ai.label[k];
