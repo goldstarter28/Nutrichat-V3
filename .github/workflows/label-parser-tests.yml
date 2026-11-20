@@ -56,8 +56,11 @@ jobs:
           node --check label-import-v3.js
           node --check label-import-ui-state.js
           node --check label-import-ui.js
+          
           node --check app.js
+          node --check ingredient-reconstruction.js
           node --check sw.js
+
 
       - name: Run all Node.js tests
         run: node --test tests/*.test.js
