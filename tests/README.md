@@ -1,9 +1,9 @@
-# NutriTrace V3 test note
+# NutriTrace label parser tests
 
-The label parsing and reconciliation module has no runtime dependency and can be tested using Node.js built-in test runner:
+Run the dependency-free Node.js test suite with:
 
 ```sh
 node --test tests/label-import.test.js
 ```
 
-Tests cover ingredient sectioning, nutrient label variants, explicit dual-column tables, ambiguous multi-value rows, kcal/kJ handling, conflicting duplicates, conservative g/ml and portion rules, and non-destructive reconciliation. OCR character accuracy and mobile performance require a separate benchmark on a representative, consented image set; no such corpus is committed to this repository.
+Coverage includes ingredient sectioning, Italian and English nutrient aliases, explicit multi-column tables, ambiguous values, malformed rows and units, identical and conflicting duplicate nutrients, kcal/kJ handling, conservative per-100-ml and serving rules, missing nutrients, and non-destructive reconciliation. OCR character accuracy and mobile performance require separate benchmarks against a representative, consented image set; no such corpus is committed to this repository.

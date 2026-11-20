@@ -10,8 +10,8 @@ test('parses ingredients across lines and abbreviated saturated-fat naming', () 
   assert.equal(parsed.nutrients.find(x => x.key === 'saturatedFat').amount, 1.2);
 });
 
-test('parses alternate saturated fat descriptions', () => {
-  for (const row of ['di cui acidi grassi saturi 2 g', 'acidi grassi saturi 2 g', 'saturi 2 g']) {
+test('parses alternate saturated fat descriptions without confusing total fat', () => {
+  for (const row of ['di cui acidi grassi saturi 2 g', 'acidi grassi saturi 2 g', 'saturi 2 g', 'grassi saturi 2 g']) {
     const parsed = parseLabelText(`Valori nutrizionali per 100 g\n${row}`);
     assert.equal(parsed.nutrients[0].key, 'saturatedFat');
     assert.equal(parsed.nutrients[0].amount, 2);
@@ -22,10 +22,17 @@ test('a per-100-g and per-serving table imports only the explicitly identified p
   const parsed = parseLabelText('Valori nutrizionali | per 100 g | per porzione 30 g\nProteine | 10 g | 3 g\nGrassi | 4 g | 1,2 g');
   assert.equal(parsed.nutrients.find(x => x.key === 'protein').amount, 10);
   assert.equal(parsed.nutrients.find(x => x.key === 'protein').status, 'candidate');
+  assert.equal(parsed.nutrients.find(x => x.key === 'fat').amount, 4);
 });
 
 test('multiple values without explicit column separators remain ambiguous', () => {
   const parsed = parseLabelText('Valori nutrizionali per 100 g e per porzione\nProteine 10 g 3 g');
+  assert.equal(parsed.nutrients[0].status, 'ambiguous');
+  assert.deepEqual(reconcile({}, parsed, ['protein']).changes, {});
+});
+
+test('a table with no per-100-g column cannot silently select another column', () => {
+  const parsed = parseLabelText('Valori nutrizionali | per 100 ml | per porzione\nProteine | 3 g | 1 g');
   assert.equal(parsed.nutrients[0].status, 'ambiguous');
   assert.deepEqual(reconcile({}, parsed, ['protein']).changes, {});
 });
@@ -51,6 +58,22 @@ test('conflicting duplicate nutrient rows are preserved as ambiguity, not silent
   assert.ok(parsed.nutrients.every(x => x.status === 'ambiguous'));
   assert.equal(parsed.ambiguities[0].key, 'protein');
   assert.deepEqual(reconcile({}, parsed, ['protein']).changes, {});
+});
+
+test('identical duplicate nutrient rows collapse to one candidate', () => {
+  const parsed = parseLabelText('Valori nutrizionali per 100 g\nProtein 8 g\nProteine 8 g');
+  assert.equal(parsed.ambiguities.length, 0);
+  assert.equal(parsed.nutrients.length, 1);
+  assert.equal(parsed.nutrients[0].key, 'protein');
+  assert.equal(parsed.nutrients[0].status, 'candidate');
+  assert.equal(parsed.nutrients[0].amount, 8);
+});
+
+test('repeated malformed nutrient rows remain ambiguous instead of being accepted', () => {
+  const parsed = parseLabelText('Valori nutrizionali per 100 g\nProteine: non disponibile\nProteine: valore illeggibile');
+  assert.equal(parsed.nutrients.length, 2);
+  assert.ok(parsed.nutrients.every(x => x.status === 'ambiguous'));
+  assert.equal(parsed.ambiguities[0].key, 'protein');
 });
 
 test('separates ingredient lines from nutrition table lines', () => {
@@ -79,6 +102,33 @@ test('unknown and portion bases are not importable', () => {
   const portion = parseLabelText('Valori nutrizionali per porzione\nProteine 5 g');
   assert.equal(portion.nutrients[0].status, 'review');
   assert.deepEqual(reconcile({}, portion, ['protein']).changes, {});
+});
+
+test('malformed rows and incompatible units are reported without importing a value', () => {
+  const parsed = parseLabelText('Valori nutrizionali per 100 g\nProteine: non disponibile\nGrassi: 2 mg\nFibre: -- g');
+  assert.equal(parsed.nutrients.length, 3);
+  assert.ok(parsed.nutrients.every(x => x.status === 'unparsed'));
+  assert.deepEqual(reconcile({}, parsed, ['protein', 'fat', 'fiber']).changes, {});
+});
+
+test('nutrient aliases must match as whole labels, not prefixes of unrelated words', () => {
+  const parsed = parseLabelText('Valori nutrizionali per 100 g\nProteinaceous 5 g');
+  assert.equal(parsed.nutrients.length, 0);
+  assert.ok(parsed.unrecognized.includes('Proteinaceous 5 g'));
+});
+
+test('accepts CRLF input and preserves original text after trimming outer whitespace', () => {
+  const parsed = parseLabelText('  Valori nutrizionali per 100 g\r\nProteine 5 g  ');
+  assert.equal(parsed.rawText, 'Valori nutrizionali per 100 g\nProteine 5 g');
+  assert.equal(parsed.nutrients[0].amount, 5);
+});
+
+test('empty and malformed input shapes are handled without throwing', () => {
+  for (const input of ['', null, undefined, 42, {}]) {
+    assert.doesNotThrow(() => parseLabelText(input));
+  }
+  assert.equal(parseLabelText('').nutrients.length, 0);
+  assert.equal(parseLabelText(null).basis.kind, 'unknown');
 });
 
 test('only selected fields are proposed and cancelling is a no-op', () => {
