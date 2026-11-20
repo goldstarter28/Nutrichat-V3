@@ -1063,7 +1063,10 @@ function CandidatePreviewModal({food,onClose}){
 function Home(){
   const [foods,setFoods]=useState([]), [logs,setLogs]=useState([]), [goals,setGoals]=useState(buildDefaultGoals()), [profile,setProfile]=useState(structuredClone(DEFAULT_PROFILE));
   const [tab,setTab]=useState('oggi'), [foodDraft,setFoodDraft]=useState(null), [grams,setGrams]=useState(''), [loaded,setLoaded]=useState(false);
-  const [query,setQuery]=useState(''), [results,setResults]=useState([]), [searchError,setSearchError]=useState(''), [searching,setSearching]=useState(false);
+  const [query,setQuery]=useState(''), [results,setResults]=useState([]), [searchError,setSearchError]=useState(''), [searching,setSearching]=useState(false);    
+  const [importName,setImportName]=useState('');
+  const [importBrand,setImportBrand]=useState('');
+  const [importIngredients,setImportIngredients]=useState('');
   const [quickQuery,setQuickQuery]=useState(''), [datasetMsg,setDatasetMsg]=useState(''), [datasets,setDatasets]=useState({}), [datasetMeta,setDatasetMeta]=useState([]), [newDatasetName,setNewDatasetName]=useState('CREA Italia'), [newDatasetFile,setNewDatasetFile]=useState(null);
   const [aiBusy,setAiBusy]=useState(''), [aiMsg,setAiMsg]=useState('');
   const [deviceToday,setDeviceToday]=useState(dateKey()), [selectedDate,setSelectedDate]=useState(dateKey());
@@ -1239,15 +1242,15 @@ const draftNdRows=draftCatalogRows.filter(
   async function searchFoods(){ if(!query.trim()) return; setSearching(true); setSearchError(''); try{ const master=searchMasterIndex(query,masterIndex,30); const local=searchLocalDataset(query,datasets,12).map(f=>({...f,resultType:'local'})); setResults([...master,...local].slice(0,40)); if(!master.length&&!local.length) setSearchError(ui('search.notFound','Nessun risultato nel Master DB o nei database personali.')); } finally{ setSearching(false); } }
   async function createWithAI(name){ setAiBusy('search'); setAiMsg(''); try{ let f={...emptyFood(),name:name.trim(),aliases:[name.trim()]}; const ai=await aiEnrich(f,SAFE_AI_DEFAULT); f=mergeAiFood(f,ai); for(const x of MICRO_CATALOG) if(!f.nutrientStatus[x.name])f.nutrientStatus[x.name]={status:'nd',reason:'N/D: non stimato in assenza di una fonte strutturata'}; setFoodDraft(f); setTab('alimenti'); }catch(e){ setAiMsg(e.message); }finally{ setAiBusy(''); } }
   
-async function enrichDraft(){
-  if(!foodDraft?.name?.trim())return;
+async function enrichDraft(initialFood=foodDraft){
+  if(!initialFood?.name?.trim())return;
 
   setAiBusy('draft');
   setAiMsg('');
 
   const selected=MICRO_CATALOG
     .filter(spec=>AI_NUTRIENT_SPECS[spec.name])
-    .filter(spec=>!(foodDraft.nutrients||[]).some(n=>
+    .filter(spec=>!(initialFood.nutrients||[]).some(n=>
       norm(n.name)===norm(spec.name) &&
       !isMissing(n.amount) &&
       Number.isFinite(Number(n.amount)) &&
@@ -1262,8 +1265,9 @@ async function enrichDraft(){
 
   if(!batches.length)batches.push([]);
 
-  let next=structuredClone(foodDraft);
+  let next=structuredClone(initialFood);
   let failures=[];
+  setFoodDraft(next);
 
   try{
     for(let bi=0;bi<batches.length;bi++){
@@ -1311,6 +1315,44 @@ async function enrichDraft(){
   }finally{
     setAiBusy('');
   }
+}
+
+async function createFromIngredientList(){
+  const name=importName.trim();
+  const ingredients=importIngredients.trim();
+
+  if(!name||!ingredients){
+    setSearchError(
+      'Inserisci nome alimento e lista ingredienti.'
+    );
+    return;
+  }
+
+  const duplicate=foods.find(food=>
+    norm(food.name)===norm(name) &&
+    norm(food.brand||'')===norm(importBrand)
+  );
+
+  if(duplicate){
+    setSearchError(
+      'Esiste già un alimento con questo nome e marca. ' +
+      'Aprilo dall’Archivio e completa i nutrienti dalla sua scheda.'
+    );
+    return;
+  }
+
+  setSearchError('');
+
+  const draft={
+    ...emptyFood(),
+    name,
+    brand:importBrand.trim(),
+    ingredients,
+    aliases:[name]
+  };
+
+  setFoodDraft(draft);
+  await enrichDraft(draft);
 }
 
 function editCatalogNutrient(name, unit, value) {
@@ -1582,6 +1624,72 @@ function editCatalogNutrient(name, unit, value) {
       h('article',{className:'card'},
         h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),masterManifest&&h('small',null,`${includedMasterSources.length} sorgenti nazionali derivate · ${validationOnlySources.length} solo validazione`)),
         h('div',{className:'searchBox'},h('input',{value:query,placeholder:'Cerca un alimento…',onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&searchFoods()}),h('button',{className:'cta',onClick:searchFoods,disabled:searching},searching?'Ricerca…':ui('search.dbButton','Cerca')),h('button',{className:'ghost',onClick:searchFoodsWithAI,disabled:aiBusy==='search-ai'||!query.trim()},aiBusy==='search-ai'?ui('search.aiWorking','Ricerca AI…'):ui('search.aiButton','Ricerca con AI'))),
+       
+h('div',{className:'inlineActions'},
+  h('button',{
+    className:'ghost',
+    onClick:()=>{
+      setFoodDraft({
+        ...emptyFood(),
+        name:query.trim(),
+        aliases:query.trim()?[query.trim()]:[]
+      });
+    }
+  },'Crea manualmente')
+),
+
+h('div',{className:'card labelImportCard'},
+  h('h3',null,'Crea alimento dagli ingredienti'),
+
+  h('p',{className:'muted tiny'},
+    'Non serve la tabella nutrizionale. ' +
+    'Le quantità non dichiarate restano sconosciute. ' +
+    'I nutrienti AI sono stimati, non misurati.'
+  ),
+
+  h('label',null,
+    'Nome alimento',
+    h('input',{
+      value:importName,
+      placeholder:'Es. Biscotti integrali al cacao',
+      onChange:e=>setImportName(e.target.value)
+    })
+  ),
+
+  h('label',null,
+    'Marca (facoltativa)',
+    h('input',{
+      value:importBrand,
+      onChange:e=>setImportBrand(e.target.value)
+    })
+  ),
+
+  h('label',null,
+    'Ingredienti e percentuali (se presenti)',
+    h('textarea',{
+      rows:4,
+      value:importIngredients,
+      placeholder:
+        'Es. farina integrale 58%, olio 14%, ' +
+        'avena 8%, cacao, sale',
+      onChange:e=>setImportIngredients(e.target.value)
+    })
+  ),
+
+  h('button',{
+    className:'cta',
+    disabled:
+      aiBusy==='draft' ||
+      !importName.trim() ||
+      !importIngredients.trim(),
+    onClick:createFromIngredientList
+  },
+    aiBusy==='draft'
+      ?'Analisi in corso…'
+      :'Analizza e completa nutrienti'
+  )
+),
+
         datasetMeta.length?h('div',{className:'sourceBadges'},datasetMeta.map(m=>h('span',{className:'online',key:m.id},`${m.name} · ${datasets[m.id]?.length||0}`))):h('p',{className:'muted tiny'},'Nessun database personale aggiuntivo: il Master DB integrato resta disponibile.'),
         searchError&&h('p',{className:'errorText'},searchError),
         results.map(r=>h('div',{className:'searchResult',key:r.resultType==='master'?`m:${r.id}`:(r.localId||r.sourceId||r.id)},h('div',null,h('b',null,r.name),h('small',null,r.resultType==='master'?`NutriTrace Master DB · ${r.sc||1} ${Number(r.sc||1)===1?'fonte':'fonti'} · ${(r.sources||[]).join(', ')}`:`${SOURCE_META[r.source]?.name||'Database locale'}${r.brand?` · ${r.brand}`:''}`)),h('button',{className:'ghost',onClick:()=>openResult(r,query)},r.resultType==='master'?'Apri Master':'Apri / importa'))),
@@ -1688,7 +1796,7 @@ function editCatalogNutrient(name, unit, value) {
       h('div',{className:'formGrid'},h('label',null,'Nome rapido',h('input',{value:foodDraft.name,onChange:e=>setFoodDraft({...foodDraft,name:e.target.value})})),h('label',null,'Marca (opzionale)',h('input',{value:foodDraft.brand||'',onChange:e=>setFoodDraft({...foodDraft,brand:e.target.value})})),h('label',null,'Valori riferiti a (g)',h('input',{type:'number',value:foodDraft.servingGrams,onChange:e=>setFoodDraft({...foodDraft,servingGrams:e.target.value})}))),
       foodDraft.officialName&&foodDraft.officialName!==foodDraft.name&&h('p',{className:'officialName'},h('b',null,'Voce ufficiale: '),foodDraft.officialName),
       h('label',null,'Alias di ricerca (separati da virgola)',h('input',{value:(foodDraft.aliases||[]).join(', '),onChange:e=>setFoodDraft({...foodDraft,aliases:e.target.value.split(',').map(x=>x.trim()).filter(Boolean)})})),
-      h('div',{className:'cardTitle aiTitle'},h('h3',null,'Etichetta / macro'),h('button',{className:'ghost',disabled:aiBusy==='draft',onClick:enrichDraft},aiBusy==='draft'?'Completamento…':'Completa tutti i nutrienti mancanti')),
+      h('div',{className:'cardTitle aiTitle'},h('h3',null,'Etichetta / macro'),h('button',{className:'ghost',disabled:aiBusy==='draft',onClick:()=>enrichDraft()},aiBusy==='draft'?'Completamento…':'Completa tutti i nutrienti mancanti')),
       aiMsg&&h('p',{className:'errorText'},aiMsg),
       h('div',{className:'formGrid'},Object.entries(MACROS).map(([k,l])=>h('label',{key:k},l,h('input',{type:'number',step:'any',value:foodDraft.label?.[k]??'',onChange:e=>setFoodDraft({...foodDraft,label:{...foodDraft.label,[k]:e.target.value}})})))),
       
