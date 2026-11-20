@@ -2,6 +2,10 @@
 (function () {
   function clean(value) { return String(value == null ? '' : value).trim(); }
   function norm(value) { return clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+  function escape(value) {
+    if (window.NutriTraceLabelImportUiState) return window.NutriTraceLabelImportUiState.escapeHtml(value);
+    return clean(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
   function labelForProposal(item) {
     if (item.path === 'name') return 'Nome prodotto';
     if (item.path === 'brand') return 'Marca';
@@ -11,9 +15,9 @@
     return item.nutrientKey || item.path;
   }
   function formatValue(item) {
-    if (item.path === 'name' || item.path === 'brand' || item.path === 'ingredients') return clean(item.value);
-    if (item.status !== 'candidate' && item.status !== 'review') return clean(item.reason || item.status);
-    return `${item.value ?? ''}${item.unit ? ` ${item.unit}` : ''}`;
+    if (item.path === 'name' || item.path === 'brand' || item.path === 'ingredients') return escape(item.value);
+    if (item.status !== 'candidate' && item.status !== 'review') return escape(item.reason || item.status);
+    return escape(`${item.value ?? ''}${item.unit ? ` ${item.unit}` : ''}`);
   }
   function findExistingFood(parsed) {
     let foods = [];
@@ -25,7 +29,6 @@
   function compatibleEmptyFood() {
     return { id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`), name: '', brand: '', officialName: '', servingGrams: 100, label: { kcal: '', protein: '', carbs: '', sugar: '', fat: '', saturatedFat: '', fiber: '', salt: '' }, ingredients: '', additives: [], nutrients: [], nutrientStatus: {}, sources: [], notes: '', mergeMeta: null, masterId: null, masterVersion: null, aiRequested: [] };
   }
-
   function mountWhenAlimentiActive() {
     const observer = new MutationObserver(() => {
       const nav = document.querySelector('.tabs');
@@ -44,7 +47,6 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
-
   function analyze(card) {
     const text = card.querySelector('#label-import-v3-text').value;
     const review = card.querySelector('#label-import-v3-review');
@@ -54,38 +56,35 @@
     const existing = findExistingFood(parsed) || compatibleEmptyFood();
     const proposals = window.NutriTraceLabelImportV3.makeProposal(existing, parsed);
     let html = '';
-    if (parsed.warnings?.length) html += `<div class="labelImportWarning">${parsed.warnings.map(clean).join('<br>')}</div>`;
+    if (parsed.warnings?.length) html += `<div class="labelImportWarning">${parsed.warnings.map(escape).join('<br>')}</div>`;
     html += '<div class="labelImportReview">';
     for (const item of proposals) {
       const reviewOnly = item.action !== 'add' && item.action !== 'conflict';
       const conflict = item.action === 'conflict';
       const cls = reviewOnly ? 'review' : conflict ? 'conflict' : 'add';
-      const detail = item.reason || (conflict ? `Valore esistente: ${formatValue({ ...item, value: item.current, unit: item.unit })}` : item.status);
-      html += `<label class="labelImportRow ${cls}"><span><b>${labelForProposal(item)}</b><br><small>${detail}</small></span><span>${formatValue(item)}</span><span>${reviewOnly ? '<small>Da verificare</small>' : `<input type="checkbox" name="labelImportField" value="${item.path}" ${conflict ? '' : 'checked'}>`}</span></label>`;
+      const detail = item.reason ? escape(item.reason) : (conflict ? `Valore esistente: ${formatValue({ ...item, value: item.current, unit: item.unit })}` : escape(item.status));
+      html += `<label class="labelImportRow ${cls}"><span><b>${escape(labelForProposal(item))}</b><br><small>${detail}</small></span><span>${formatValue(item)}</span><span>${reviewOnly ? '<small>Da verificare</small>' : `<input type="checkbox" name="labelImportField" value="${escape(item.path)}" ${conflict ? '' : 'checked'}>`}</span></label>`;
     }
-    html += '</div>';
-    html += '<div class="labelImportActions"><button type="button" class="ghost" id="label-import-v3-cancel">Annulla</button><button type="button" class="cta" id="label-import-v3-confirm">Applica solo i campi selezionati</button></div>';
-    html += '<p class="labelImportMeta">Dopo la conferma, i dati selezionati vengono salvati nell’archivio senza sostituire campi esistenti salvo scelta esplicita.</p>';
+    html += '</div><div class="labelImportActions"><button type="button" class="ghost" id="label-import-v3-cancel">Annulla</button><button type="button" class="cta" id="label-import-v3-confirm">Applica solo i campi selezionati</button></div><p class="labelImportMeta">Dopo la conferma, i dati selezionati vengono salvati nell’archivio senza sostituire campi esistenti salvo scelta esplicita.</p>';
     review.innerHTML = html;
     review.querySelector('#label-import-v3-cancel').addEventListener('click', () => { review.innerHTML = ''; });
     review.querySelector('#label-import-v3-confirm').addEventListener('click', () => {
       const selected = [...review.querySelectorAll('input[name="labelImportField"]:checked')].map(input => input.value);
-      const overwrite = [...review.querySelectorAll('input[name="labelImportField"]:checked')].filter(input => {
-        const item = proposals.find(p => p.path === input.value);
-        return item && item.action === 'conflict' && !confirm(`Sostituire il valore esistente di “${labelForProposal(item)}”?`);
-      });
+      const explicitName = parsed.product?.name?.status === 'candidate' ? clean(parsed.product.name.value) : '';
+      if (selected.includes('name') && !explicitName) { review.innerHTML = '<p class="labelImportWarning">Il nome prodotto non è stato estratto con certezza. Nessun dato è stato modificato.</p>'; return; }
       const overwritePaths = [];
       for (const input of review.querySelectorAll('input[name="labelImportField"]:checked')) {
         const item = proposals.find(p => p.path === input.value);
-        if (item?.action === 'conflict' && confirm(`Confermi la sostituzione esplicita di “${labelForProposal(item)}”?`)) overwritePaths.push(item.path);
+        if (item?.action === 'conflict') {
+          if (confirm(`Confermi la sostituzione esplicita di “${labelForProposal(item)}”?`)) overwritePaths.push(item.path);
+        }
       }
       if (!selected.length) { review.innerHTML = '<p class="labelImportWarning">Nessun campo selezionato. Nessun dato è stato modificato.</p>'; return; }
-      const base = existing.id && findExistingFood(parsed) ? existing : compatibleEmptyFood();
-      let next = window.NutriTraceLabelImportV3.applyProposal(base, proposals, { confirmed: true, selectedPaths: selected, overwritePaths });
+      const base = findExistingFood(parsed) || existing;
+      const next = window.NutriTraceLabelImportV3.applyProposal(base, proposals, { confirmed: true, selectedPaths: selected, overwritePaths });
+      if (selected.includes('name') && !clean(next.name)) { review.innerHTML = '<p class="labelImportWarning">Nome prodotto mancante: nessun dato è stato salvato.</p>'; return; }
       next.label = { ...(base.label || {}), ...(next.label || {}) };
       next.ingredients = next.ingredients || '';
-      if (!next.name) next.name = parsed.product?.name?.value || 'Alimento da etichetta';
-      if (!next.brand) next.brand = parsed.product?.brand?.value || '';
       next.sources = [...(next.sources || []), { id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-source`, name: 'Etichetta locale', reference: 'Importazione testo locale · nessun OCR esterno', quality: 'primaria' }].filter((source, index, arr) => arr.findIndex(x => x.reference === source.reference) === index);
       let foods = [];
       try { foods = JSON.parse(localStorage.getItem('nutritrace_foods') || '[]'); } catch { foods = []; }
@@ -93,11 +92,10 @@
       if (matchIndex >= 0) foods[matchIndex] = next;
       else if (!foods.some(food => norm(food.name) === norm(next.name) && norm(food.brand || '') === norm(next.brand || ''))) foods.push(next);
       localStorage.setItem('nutritrace_foods', JSON.stringify(foods));
-      review.innerHTML = '<p class="labelImportWarning">Importazione confermata e salvata nell’archivio. Ricarica la scheda se i dati non sono già visibili.</p>';
+      review.innerHTML = '<p class="labelImportWarning">Importazione confermata e salvata nell’archivio.</p>';
       location.reload();
     });
   }
-
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountWhenAlimentiActive);
   else mountWhenAlimentiActive();
 })();
