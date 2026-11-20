@@ -1302,8 +1302,43 @@ async function enrichDraft(initialFood=foodDraft){
       }
     }
 
-    next.aiRequested=failures;
-    setFoodDraft(next);
+    
+next.aiRequested=failures;
+
+try {
+  if (
+    window.NutriTraceIngredientAutoAudit &&
+    masterIndex.length
+  ) {
+    next.aiAudit =
+      await window.NutriTraceIngredientAutoAudit.audit({
+        food: next,
+        index: masterIndex,
+        search: searchMasterIndex,
+        loadDetail: loadMasterDetail,
+        catalog: masterNutrientCatalog(masterManifest),
+        microSpecs: MASTER_MICRO_SPECS,
+        reconstruction:
+          window.NutriTraceIngredientReconstruction
+      });
+  } else {
+    next.aiAudit = {
+      status: 'master_unavailable',
+      warnings: []
+    };
+  }
+} catch (error) {
+  next.aiAudit = {
+    status: 'audit_error',
+    warnings: [{
+      code: 'AUDIT_ERROR',
+      message: String(error?.message || error)
+    }]
+  };
+}
+
+setFoodDraft(next);
+
 
     setAiMsg(failures.length
       ?`Completamento parziale: ${failures.length} nutrienti non elaborati per errore.`
