@@ -9,6 +9,8 @@ on:
       - 'ingredient-reconstruction.js'
       - 'api/**'
       - 'hydration-widget.js'
+      - 'food-camera.js'
+      - 'api/analyze-food-image.js'
     paths:
       - 'label-import.js'
       - 'label-import-v3.js'
@@ -24,6 +26,8 @@ on:
       - 'ingredient-reconstruction.js'
       - 'api/**'
       - 'hydration-widget.js'
+      - 'food-camera.js'
+      - 'api/analyze-food-image.js'
       
   pull_request:
     paths:
@@ -41,6 +45,8 @@ on:
       - 'ingredient-reconstruction.js'
       - 'api/**'
       - 'hydration-widget.js'
+      - 'food-camera.js'
+      - 'api/analyze-food-image.js'
 
   workflow_dispatch:
 
@@ -70,6 +76,8 @@ jobs:
           node --check label-import-ui.js
           
           node --check app.js
+          node --check food-camera.js
+          node --check api/analyze-food-image.js
           node --check hydration-widget.js
           node --check ingredient-reconstruction.js
           node --check sw.js
