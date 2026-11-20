@@ -1,12 +1,14 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-label-import-v1';
+const CACHE = 'nutritrace-v3-auto-audit-v1';
 
 const CORE = [
   './',
   './index.html',
   './app.js',
+  './ingredient-reconstruction.js',
+  './ingredient-auto-audit.js',
   './style.css',
   './label-import.js',
   './label-import-v3.js',
