@@ -1352,6 +1352,99 @@ setFoodDraft(next);
   }
 }
 
+async function importPhotoLabel(photo) {
+  if (!photo?.name?.trim()) {
+    throw new Error('Nome prodotto mancante.');
+  }
+
+  const existing = foods.find(food =>
+    norm(food.name) === norm(photo.name) &&
+    norm(food.brand || '') === norm(photo.brand || '')
+  );
+
+  if (existing) {
+    throw new Error(
+      'Questo prodotto esiste già nell’archivio. ' +
+      'Aprilo per modificarlo senza creare duplicati.'
+    );
+  }
+
+  const label = emptyLabel();
+
+  if (photo.basis === 'per_100g') {
+    for (const key of Object.keys(MACROS)) {
+      const value = photo.label?.[key];
+
+      if (
+        value !== null &&
+        value !== undefined &&
+        value !== '' &&
+        Number.isFinite(Number(value)) &&
+        Number(value) >= 0
+      ) {
+        label[key] = Number(value);
+      }
+    }
+  }
+
+  const draft = {
+    ...emptyFood(),
+    name:photo.name.trim(),
+    brand:photo.brand || '',
+    ingredients:photo.ingredients || '',
+    label,
+    aliases:[photo.name.trim()],
+    notes:
+      'Importazione da fotografia. ' +
+      'Valori della tabella verificati in anteprima ' +
+      'dall’utente prima del salvataggio.',
+    sources:[{
+      id:newId(),
+      name:'Etichetta fotografata',
+      reference:'Trascrizione AI Vision verificata in anteprima',
+      quality:'primaria'
+    }]
+  };
+
+  setTab('ricerca');
+  setFoodDraft(draft);
+
+  // Existing AI enrichment preserves populated macro fields.
+  // Run it only when ingredient context is available.
+  if (draft.ingredients.trim()) {
+    await enrichDraft(draft);
+  }
+}
+
+async function importPhotoDish(description) {
+  const text = String(description || '').trim();
+
+  if (!text) {
+    throw new Error('Descrizione del piatto mancante.');
+  }
+
+  setRecipeText(text);
+  setRecipeReview(null);
+  setRecipeMsg('');
+  setTab('oggi');
+  setRecipeBusy('parse');
+
+  try {
+    const review = await interpretText(text,'recipe');
+
+    setRecipeReview(review);
+
+    if (review.errors?.length) {
+      setRecipeMsg(review.errors.join(' · '));
+    }
+
+  } catch (error) {
+    setRecipeMsg(error.message || 'Interpretazione non riuscita.');
+  } finally {
+    setRecipeBusy('');
+  }
+}
+
 async function createFromIngredientList(){
   const name=importName.trim();
   const ingredients=importIngredients.trim();
@@ -1661,7 +1754,12 @@ tab==='oggi'&&h('section',null,
 
     tab==='ricerca'&&h('section',null,
       h('div',{className:'sectionHead'},h('div',null,h('h2',null,'Ricerca alimenti'),h('p',null,'Runtime Food DB auditato a 14 fonti prima, archivio personale e database aggiunti da te come fonti complementari.'))),
-      h('article',{className:'card'},
+     
+h(window.NutriTraceFoodCamera,{
+  onLabel:importPhotoLabel,
+  onDish:importPhotoDish
+}),
+ h('article',{className:'card'},
         h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),masterManifest&&h('small',null,`${includedMasterSources.length} sorgenti nazionali derivate · ${validationOnlySources.length} solo validazione`)),
         h('div',{className:'searchBox'},h('input',{value:query,placeholder:'Cerca un alimento…',onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&searchFoods()}),h('button',{className:'cta',onClick:searchFoods,disabled:searching},searching?'Ricerca…':ui('search.dbButton','Cerca')),h('button',{className:'ghost',onClick:searchFoodsWithAI,disabled:aiBusy==='search-ai'||!query.trim()},aiBusy==='search-ai'?ui('search.aiWorking','Ricerca AI…'):ui('search.aiButton','Ricerca con AI'))),
        
