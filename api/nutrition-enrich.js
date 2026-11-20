@@ -78,7 +78,14 @@ module.exports=async function handler(req,res){
   const ingredientContext =
     buildIngredientContext(food.ingredients);
   const prompt={
-    food:{name,brand:clean(food.brand,120),reference_basis_g:basis,known_label:known,known_nutrients:existing},
+    food: {
+      name,
+      brand: clean(food.brand, 120),
+      reference_basis_g: basis,
+      known_label: known,
+      known_nutrients: existing,
+      ingredient_context: ingredientContext
+    },
     requested_missing_nutrients:requested.map(x=>({id:x.id,name:x.name,required_unit:x.unit})),
     output_contract:{label:MACRO_KEYS,nutrients:'array of {id,status,value,confidence,note}; status estimated|not_available; confidence high|medium|low'}
   };
