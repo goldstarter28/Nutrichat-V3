@@ -1,12 +1,13 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-auto-audit-v1';
+const CACHE = 'nutritrace-v3-hydration-v1';
 
 const CORE = [
   './',
   './index.html',
   './app.js',
+  './hydration-widget.js',
   './ingredient-reconstruction.js',
   './ingredient-auto-audit.js',
   './style.css',
@@ -31,7 +32,7 @@ const VENDOR = [
   'https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js'
 ];
 
-const APP_ASSET = /\/(?:app\.js|style\.css|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
+const APP_ASSET = /\/(?:app\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|style\.css|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
