@@ -65,7 +65,8 @@
     if (snapshot.targetFood !== JSON.stringify(isNew ? null : base)) return { ok: false, stale: true, reason: 'La scheda selezionata è cambiata dopo l’anteprima. Rianalizza prima di salvare.' };
     const plan = buildSavePlan(parsed, selectedPaths, overwritePaths, base?.name || '', target);
     if (!plan.ok) return { ok: false, reason: plan.reason };
-    const expectedProposals = v3.makeProposal(base, parsed);
+    const proposalBase = isNew ? {} : base;
+    const expectedProposals = v3.makeProposal(proposalBase, parsed);
     if (snapshot.proposals !== JSON.stringify(expectedProposals) || JSON.stringify(proposals) !== snapshot.proposals) {
       return { ok: false, stale: true, reason: 'Le proposte visualizzate non corrispondono più ai dati correnti. Rianalizza prima di salvare.' };
     }
