@@ -1,5 +1,7 @@
 'use strict';
-
+const {
+  buildIngredientContext
+} = require('./ingredient-context.js');
 const OPENROUTER_URL='https://openrouter.ai/api/v1/chat/completions';
 const MACRO_KEYS=['kcal','protein','carbs','sugar','fat','saturatedFat','fiber','salt'];
 
@@ -73,6 +75,8 @@ module.exports=async function handler(req,res){
     const item={id,unit,name:display};if(HARD_BLOCKED.has(id))blocked.push(item);else requested.push(item);
   }
   const existing=(Array.isArray(food.nutrients)?food.nutrients:[]).slice(0,160).map(n=>({id:clean(n.canonicalId||'',80),name:clean(n.name,100),amount:finiteOrNull(n.amount),unit:clean(n.unit,12),source:clean(n.source,100)})).filter(x=>x.amount!==null);
+  const ingredientContext =
+    buildIngredientContext(food.ingredients);
   const prompt={
     food:{name,brand:clean(food.brand,120),reference_basis_g:basis,known_label:known,known_nutrients:existing},
     requested_missing_nutrients:requested.map(x=>({id:x.id,name:x.name,required_unit:x.unit})),
