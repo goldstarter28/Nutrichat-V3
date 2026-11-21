@@ -2042,11 +2042,12 @@ async function commitRecipe() {
       }
 
       const log = {
-        id: newId(),
-        date: selectedDate,
-        foodId: food.id,
-        grams
-      };
+  id: newId(),
+  date: selectedDate,
+  foodId: food.id,
+  grams,
+  mealId: activeMealId
+};
 
       if (isRecipe) {
         log.recipeGroupId = groupId;
