@@ -1720,8 +1720,33 @@ function editCatalogNutrient(name, unit, value) {
           if(!f){if(!row)throw new Error(`Corrispondenza Master non trovata: ${ing.name}`);const detail=await loadMasterDetail(row);f=masterToFood(row,detail,masterManifest,ing.name);created.push(f);}
         }
         if(!f)throw new Error(`Alimento non risolto: ${ing.name}`);
-        newLogs.push({id:newId(),date:selectedDate,foodId:f.id,grams:Number(ing.grams)*factor,...(isRecipe?{recipeGroupId:groupId,recipeName:recipeReview.recipe_name||'Ricetta',recipeIngredient:ing.name}:{}),...(ing.portion_assumption?{portionAssumption:ing.portion_assumption}:{})});
-      }
+        
+newLogs.push({
+  id:newId(),
+  date:selectedDate,
+  foodId:f.id,
+  grams:Number(ing.grams)*factor,
+
+  ...(isRecipe ? {
+    recipeGroupId:groupId,
+    recipeName:recipeReview.recipe_name||'Ricetta',
+    recipeIngredient:ing.name
+  } : {}),
+
+  ...(ing.portion_assumption ? {
+    portionAssumption:ing.portion_assumption
+  } : {}),
+
+  ...(ing.visualPortionSource ? {
+    portionOrigin:ing.visualPortionSource,
+    portionConfidence:ing.visualPortionConfidence||'none',
+    portionEstimatedMinGrams:ing.visualPortionMinGrams??null,
+    portionEstimatedMaxGrams:ing.visualPortionMaxGrams??null,
+    portionEstimatedByAI:
+      ing.visualPortionSource==='ai_visual_estimate'
+  } : {})
+});
+
       if(created.length)setFoods(p=>[...p,...created.filter(f=>!p.some(x=>x.id===f.id||String(x.masterId||'')===String(f.masterId||'')))]);
       setLogs(p=>[...p,...newLogs]);setRecipeText('');setRecipeReview(null);
       setRecipeMsg(isRecipe?`Ricetta aggiunta: ${fmt(consumed)} g registrati nel giorno selezionato.`:newLogs.length>1?`Alimenti aggiunti: ${newLogs.length} voci registrate nel giorno selezionato.`:'Alimento aggiunto nel giorno selezionato.');
