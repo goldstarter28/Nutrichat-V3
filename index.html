@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="it">
-<head>
+<!-- NutriTrace V3 Vision preview deployment -->
+  <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#16352b" />
@@ -11,6 +12,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./label-import-ui.css" />
   <style>.hero p { display: none; }</style>
   <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
@@ -19,6 +21,13 @@
 </head>
 <body>
   <div id="root"><main><p>Avvio NutriTrace…</p></main></div>
-  <script src="./app.js"></script>
+  <script src="./label-import.js"></script>
+  <script src="./label-import-v3.js"></script>
+  <script src="./label-import-ui-state.js"></script>
+<script src="./ingredient-reconstruction.js"></script>
+<script src="./ingredient-auto-audit.js"></script>
+<script src="./hydration-widget.js"></script>
+<script src="./food-camera.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>
