@@ -1117,6 +1117,21 @@ function Home(){
   },[]);
   useEffect(()=>{let alive=true;loadAppConfig().then(c=>{if(alive)setAppConfig(c||DEFAULT_APP_CONFIG)});return()=>{alive=false};},[]);
   useEffect(()=>{const t=setTimeout(()=>setQuickSearchQuery(quickQuery),220);return()=>clearTimeout(t);},[quickQuery]);
+  useEffect(() => {
+  if (!loaded) return;
+
+  try {
+    localStorage.setItem(
+      'nutritrace_meals_v3',
+      JSON.stringify(meals)
+    );
+  } catch (error) {
+    console.error(
+      'Impossibile salvare la configurazione dei pasti',
+      error
+    );
+  }
+}, [meals, loaded]);
   useEffect(()=>{ let alive=true; loadMasterBundle().then(({manifest,index})=>{ if(!alive)return; setMasterManifest(manifest); setMasterIndex(index); setMasterStatus(`${Number(manifest.food_count||index.length).toLocaleString('it-IT')} alimenti · Runtime ${manifest.runtime_version||'v1'} auditato pronto`); }).catch(e=>alive&&setMasterStatus(`Master DB non disponibile: ${e.message}`)); return()=>{alive=false}; },[]);
   useEffect(()=>{ if(!loaded||!masterManifest||!masterIndex.length||masterMigrationDone)return; let alive=true; (async()=>{
     const byId=new Map(masterIndex.map(r=>[String(r.id),r])); const currentRevision=masterRevision(masterManifest); const stale=foods.filter(f=>f.mergeMeta?.importedFrom==='MASTER'&&f.masterId&&String(f.masterVersion||'')!==currentRevision);
