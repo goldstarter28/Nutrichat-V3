@@ -1,4 +1,4 @@
-08'ìconst { useEffect, useMemo, useState } = React;
+const { useEffect, useMemo, useState } = React;
 const SOURCE_META = {
     MASTER: { name: 'NutriTrace Master Food DB', version: 'v1', mode: 'bundled', official: true, scientific: true },
     CIQUAL: { name: 'ANSES-CIQUAL', version: '2025', mode: 'local', official: true, scientific: true },
