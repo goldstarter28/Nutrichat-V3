@@ -2180,7 +2180,29 @@ tab==='oggi'&&h('section',null,
     }
   },'+ Aggiungi pasto')
 ),
-      h(window.NutriTraceHydrationWidget,{
+     h('div',{
+  className:'card',
+  style:{marginBottom:'12px',padding:'12px'}
+},
+  h('label',null,
+    'Pasto a cui aggiungere gli alimenti',
+    h('select',{
+      value:activeMealId || '',
+      onChange:e=>
+        setSelectedMealId(e.target.value || null),
+      style:{width:'100%',marginTop:'8px'}
+    },
+      h('option',{value:''},'Non assegnato'),
+      ...meals.map(meal=>
+        h('option',{
+          key:meal.id,
+          value:meal.id
+        },meal.name)
+      )
+    )
+  )
+),
+                h(window.NutriTraceHydrationWidget,{
         key:selectedDate,
         date:selectedDate
       }),
