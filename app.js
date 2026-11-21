@@ -1062,6 +1062,20 @@ function CandidatePreviewModal({food,onClose}){
 
 function Home(){
   const [foods,setFoods]=useState([]), [logs,setLogs]=useState([]), [goals,setGoals]=useState(buildDefaultGoals()), [profile,setProfile]=useState(structuredClone(DEFAULT_PROFILE));
+  const [meals,setMeals] = useState(() => {
+  const config = window.NutriTraceMealConfig;
+
+  try {
+    const saved = localStorage.getItem('nutritrace_meals_v3');
+
+    return saved === null
+      ? config.defaults()
+      : config.normalize(JSON.parse(saved));
+  } catch (error) {
+    console.warn('Configurazione pasti non leggibile', error);
+    return config.defaults();
+  }
+});
   const [tab,setTab]=useState('oggi'), [foodDraft,setFoodDraft]=useState(null), [grams,setGrams]=useState(''), [loaded,setLoaded]=useState(false);
   const [query,setQuery]=useState(''), [results,setResults]=useState([]), [searchError,setSearchError]=useState(''), [searching,setSearching]=useState(false);    
   const [importName,setImportName]=useState('');
