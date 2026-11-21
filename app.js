@@ -2016,8 +2016,18 @@ photoReviewOpen && h('article',{
                 step:'any',
                 value:ing.grams ?? '',
                 onChange:e=>updateRecipeIngredient(i,{
-                  grams:e.target.value
-                })
+  grams:e.target.value,
+  gramsUserEdited:true,
+  visualPortionSource:
+    'user_confirmed_visual_estimate',
+  visualPortionConfidence:'none',
+  visualPortionMinGrams:null,
+  visualPortionMaxGrams:null,
+  portion_assumption:
+    'Peso fotografico modificato manualmente ' +
+    'durante la revisione. ' +
+    'Non costituisce una pesatura verificata.'
+})
               })
             ),
 
