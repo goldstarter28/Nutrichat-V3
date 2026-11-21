@@ -2073,6 +2073,108 @@ async function commitRecipe() {
     
 tab==='oggi'&&h('section',null,
       dateNavigator,
+                h('details',{className:'card',style:{marginBottom:'16px'}},
+  h('summary',null,'⚙️ Configura i pasti'),
+
+  h('p',{className:'muted tiny'},
+    'Aggiungi, rinomina, elimina o riordina i pasti. ' +
+    'La configurazione viene salvata automaticamente.'
+  ),
+
+  ...meals.map((meal,index)=>
+    h('div',{
+      key:meal.id,
+      style:{
+        display:'flex',
+        alignItems:'center',
+        gap:'8px',
+        flexWrap:'wrap',
+        marginBottom:'10px'
+      }
+    },
+      h('strong',{
+        style:{flex:'1',minWidth:'110px'}
+      },meal.name),
+
+      h('button',{
+        className:'ghost',
+        disabled:index===0,
+        onClick:()=>setMeals(current=>
+          window.NutriTraceMealConfig.move(
+            current,meal.id,-1
+          )
+        )
+      },'↑'),
+
+      h('button',{
+        className:'ghost',
+        disabled:index===meals.length-1,
+        onClick:()=>setMeals(current=>
+          window.NutriTraceMealConfig.move(
+            current,meal.id,1
+          )
+        )
+      },'↓'),
+
+      h('button',{
+        className:'ghost',
+        onClick:()=>{
+          const name=window.prompt(
+            'Nuovo nome del pasto:',
+            meal.name
+          );
+          if(name===null)return;
+          if(!name.trim()){
+            window.alert('Il nome non può essere vuoto.');
+            return;
+          }
+          setMeals(current=>
+            window.NutriTraceMealConfig.rename(
+              current,meal.id,name
+            )
+          );
+        }
+      },'Rinomina'),
+
+      h('button',{
+        className:'ghost danger',
+        onClick:()=>{
+          if(!window.confirm(
+            `Eliminare il pasto "${meal.name}"?`
+          ))return;
+          setMeals(current=>
+            window.NutriTraceMealConfig.remove(
+              current,meal.id
+            )
+          );
+        }
+      },'Elimina')
+    )
+  ),
+
+  h('button',{
+    className:'cta',
+    onClick:()=>{
+      const name=window.prompt(
+        'Nome del nuovo pasto:'
+      );
+      if(name===null)return;
+      if(!name.trim()){
+        window.alert('Inserisci un nome valido.');
+        return;
+      }
+      if(meals.length>=20){
+        window.alert('Massimo 20 pasti.');
+        return;
+      }
+      setMeals(current=>
+        window.NutriTraceMealConfig.add(
+          current,name
+        )
+      );
+    }
+  },'+ Aggiungi pasto')
+),
       h(window.NutriTraceHydrationWidget,{
         key:selectedDate,
         date:selectedDate
