@@ -1504,9 +1504,11 @@ async function importPhotoDish(photo) {
     });
 
     // The user's confirmation is the navigation trigger.
-    setRecipeText(text);
-    setRecipeReview(review);
-    setTab('oggi');
+    
+  setRecipeText(text);
+  setRecipeReview(review);
+  setPhotoReviewOpen(true);
+
 
     if(review.errors?.length) {
       setRecipeMsg(review.errors.join(' · '));
