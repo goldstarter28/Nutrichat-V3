@@ -1076,6 +1076,11 @@ function Home(){
     return config.defaults();
   }
 });
+    const [selectedMealId,setSelectedMealId] = useState(null);
+
+const activeMealId = meals.some(
+  meal => meal.id === selectedMealId
+) ? selectedMealId : null;
   const [tab,setTab]=useState('oggi'), [foodDraft,setFoodDraft]=useState(null), [grams,setGrams]=useState(''), [loaded,setLoaded]=useState(false);
   const [query,setQuery]=useState(''), [results,setResults]=useState([]), [searchError,setSearchError]=useState(''), [searching,setSearching]=useState(false);    
   const [importName,setImportName]=useState('');
