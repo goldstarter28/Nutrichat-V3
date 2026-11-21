@@ -1418,107 +1418,190 @@ async function importPhotoLabel(photo) {
 }
 
 
+
 async function importPhotoDish(photo) {
   const description = typeof photo === 'string'
     ? photo.trim()
     : String(photo?.description || '').trim();
 
   const portions = Array.isArray(photo?.portions)
-    ? photo.portions.filter(p=>String(p.name||'').trim())
+    ? photo.portions.filter(p =>
+        String(p?.name || '').trim()
+      )
     : [];
 
   if (!description && !portions.length) {
-    throw new Error('Nessun alimento riconoscibile.');
+    throw new Error(
+      'Nessun alimento riconoscibile nella fotografia.'
+    );
   }
-
-  // Build a structured, user-reviewed food entry.
-  // Estimated weights are explicitly retained as estimates.
-  const lines = portions.map(p=>{
-    const name=String(p.name||'').trim();
-    const grams=Number(p.estimatedGrams);
-
-    return Number.isFinite(grams) && grams>0
-      ? `${grams} g di ${name}`
-      : name;
-  });
-
-  const text = lines.length
-    ? lines.join(', ')
-    : description;
 
   setRecipeBusy('parse');
   setRecipeMsg('');
 
   try {
-    const review=await interpretText(text,'diary');
+    let review;
+    let text;
 
-    // Preserve the visual-estimate origin in the review.
-    // Never silently label a photo estimate as a measured weight.
-    const matched=new Set();
+    if (portions.length) {
+      // La fotografia è già stata interpretata.
+      // Non richiediamo una seconda analisi AI.
+      // Manteniamo un elemento per ogni porzione confermata.
 
-    review.ingredients=(review.ingredients||[]).map(ing=>{
-      const normalized=norm(ing.name||'');
-      const index=portions.findIndex((p,i)=>{
-        if(matched.has(i))return false;
-        const candidate=norm(p.name||'');
-        return candidate && normalized &&
-          (candidate===normalized ||
-           candidate.includes(normalized) ||
-           normalized.includes(candidate));
+      const ingredients = portions.map((p, index) => {
+        const name = String(p.name).trim();
+
+        const rawGrams = p.estimatedGrams;
+
+        const grams =
+          rawGrams !== null &&
+          rawGrams !== undefined &&
+          rawGrams !== '' &&
+          Number.isFinite(Number(rawGrams)) &&
+          Number(rawGrams) > 0 &&
+          Number(rawGrams) <= 10000
+            ? Number(rawGrams)
+            : null;
+
+        const source =
+          p.source === 'user_confirmed_visual_estimate'
+            ? 'user_confirmed_visual_estimate'
+            : p.source === 'manual'
+              ? 'manual'
+              : 'ai_visual_estimate';
+
+        const confidence = [
+          'high', 'medium', 'low', 'none'
+        ].includes(p.confidence)
+          ? p.confidence
+          : 'none';
+
+        const confidenceLabel = {
+          high: 'alta',
+          medium: 'media',
+          low: 'bassa',
+          none: 'non stimabile'
+        }[confidence];
+
+        const minGrams =
+          Number.isFinite(Number(p.minGrams)) &&
+          p.minGrams !== null &&
+          Number(p.minGrams) > 0
+            ? Number(p.minGrams)
+            : null;
+
+        const maxGrams =
+          Number.isFinite(Number(p.maxGrams)) &&
+          p.maxGrams !== null &&
+          Number(p.maxGrams) > 0
+            ? Number(p.maxGrams)
+            : null;
+
+        const validRange =
+          grams !== null &&
+          minGrams !== null &&
+          maxGrams !== null &&
+          minGrams <= grams &&
+          grams <= maxGrams;
+
+        const assumption =
+          source === 'manual'
+            ? 'Alimento aggiunto manualmente.'
+            : source === 'user_confirmed_visual_estimate'
+              ? 'Peso fotografico corretto dall’utente.'
+              : 'Peso stimato dall’AI tramite fotografia.';
+
+        // Ricerca deterministica nel database.
+        // Non alteriamo nome e peso confermati.
+        const candidates = ingredientCandidates(
+          { name },
+          'none'
+        );
+
+        return {
+          name,
+          raw: name,
+          grams: grams === null ? '' : grams,
+          gramsUserEdited:
+            source !== 'ai_visual_estimate',
+
+          ambiguity: 'none',
+          ambiguity_reason: '',
+          requires_weight_confirmation:
+            grams === null,
+
+          portion_assumption:
+            assumption +
+            ` Confidenza: ${confidenceLabel}.` +
+            (
+              validRange
+                ? ` Intervallo stimato: ` +
+                  `${minGrams}–${maxGrams} g.`
+                : ''
+            ),
+
+          visualPortionSource: source,
+          visualPortionConfidence: confidence,
+          visualPortionMinGrams:
+            validRange ? minGrams : null,
+          visualPortionMaxGrams:
+            validRange ? maxGrams : null,
+
+          photoPortionIndex: index,
+
+          ...candidates
+        };
       });
 
-      if(index<0)return ing;
+      review = {
+        mode:
+          ingredients.length > 1
+            ? 'multi'
+            : 'single',
 
-      matched.add(index);
-      const p=portions[index];
+        recipe_name:
+          description || 'Pasto fotografato',
 
-      const confidence={
-        high:'alta',
-        medium:'media',
-        low:'bassa',
-        none:'non stimabile'
-      }[p.confidence]||'non stimabile';
-
-      const grams=Number(p.estimatedGrams);
-      const valid=Number.isFinite(grams)&&grams>0;
-
-      return {
-        ...ing,
-        ...(valid?{grams}:{}),
-        portion_assumption:
-          `Peso da fotografia, stima ${
-            p.source==='user_confirmed_visual_estimate'
-              ? 'modificata dall’utente'
-              : 'AI'
-          }, confidenza ${confidence}`+
-          (
-            p.minGrams!=null && p.maxGrams!=null
-              ? `, intervallo ${p.minGrams}–${p.maxGrams} g`
-              : ''
-          ),
-        visualPortionSource:p.source||'ai_visual_estimate',
-        visualPortionConfidence:p.confidence,
-        visualPortionMinGrams:p.minGrams,
-        visualPortionMaxGrams:p.maxGrams
+        ingredients,
+        errors: [],
+        source: 'photo_vision_review'
       };
-    });
 
-    // The user's confirmation is the navigation trigger.
-    
-  setRecipeText(text);
-  setRecipeReview(review);
-  setPhotoReviewOpen(true);
+      text = ingredients
+        .map(ing =>
+          ing.grams !== ''
+            ? `${ing.grams} g di ${ing.name}`
+            : ing.name
+        )
+        .join(', ');
 
+    } else {
+      // Nessuna porzione identificata:
+      // conserviamo il vecchio flusso testuale,
+      // che può richiedere OpenRouter.
 
-    if(review.errors?.length) {
+      text = description;
+      review = await interpretText(text, 'diary');
+    }
+
+    // Nessun salvataggio nel diario in questa fase.
+    // L'utente deve ancora selezionare e confermare
+    // la corrispondenza database di ogni alimento.
+
+    setRecipeText(text);
+    setRecipeReview(review);
+    setPhotoReviewOpen(true);
+
+    if (review.errors?.length) {
       setRecipeMsg(review.errors.join(' · '));
     }
 
-  } catch(error) {
+  } catch (error) {
     throw new Error(
-      'Impossibile preparare il diario: '+
-      (error.message||'errore sconosciuto')
+      'Impossibile preparare il diario: ' +
+      (error?.message || 'errore sconosciuto')
     );
+
   } finally {
     setRecipeBusy('');
   }
