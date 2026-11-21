@@ -1783,61 +1783,232 @@ function editCatalogNutrient(name, unit, value) {
       if(!match.candidates.length)setRecipeMsg(`AI: “${weighted.name}” interpretato, ma nessuna corrispondenza DB affidabile.`);
     }catch(e){setRecipeMsg(e.message)}finally{setRecipeBusy('')}
   }
-  async function commitRecipe(){
-    if(!recipeReview)return;setRecipeBusy('commit');setRecipeMsg('');
-    try{
-      const bad=recipeReview.ingredients.filter(x=>!(Number(x.grams)>0)||!x.selectedKey||x.ambiguity==='needs_detail');
-      if(bad.length)throw new Error('Completa il peso e seleziona una corrispondenza database affidabile per ogni alimento evidenziato.');
-      const isRecipe=recipeReview.mode==='recipe';
-      const ingredientSum=recipeReview.ingredients.reduce((a,x)=>a+Number(x.grams),0);
-      let factor=1,consumed=ingredientSum,groupId=null;
-      if(isRecipe){
-        const yieldG=Number(recipeReview.yieldOverride)||ingredientSum;consumed=Number(recipeReview.consumed_grams)||yieldG;
-        if(!(yieldG>0)||!(consumed>0))throw new Error('Peso totale/porzione non valido.');
-        factor=consumed/yieldG;groupId=newId();
+  
+async function commitRecipe() {
+  if (!recipeReview) return;
+
+  setRecipeBusy('commit');
+  setRecipeMsg('');
+
+  try {
+    const ingredients = recipeReview.ingredients || [];
+
+    if (!ingredients.length) {
+      throw new Error('Nessun alimento da registrare.');
+    }
+
+    const bad = ingredients.filter(ing =>
+      !Number.isFinite(Number(ing.grams)) ||
+      Number(ing.grams) <= 0 ||
+      !ing.selectedKey ||
+      ing.ambiguity === 'needs_detail'
+    );
+
+    if (bad.length) {
+      throw new Error(
+        'Completa il peso e seleziona una ' +
+        'corrispondenza database affidabile ' +
+        'per ogni alimento.'
+      );
+    }
+
+    const isRecipe = recipeReview.mode === 'recipe';
+
+    const ingredientSum = ingredients.reduce(
+      (sum, ing) => sum + Number(ing.grams),
+      0
+    );
+
+    let factor = 1;
+    let consumed = ingredientSum;
+    let groupId = null;
+
+    if (isRecipe) {
+      const yieldG =
+        Number(recipeReview.yieldOverride) ||
+        ingredientSum;
+
+      consumed =
+        Number(recipeReview.consumed_grams) ||
+        yieldG;
+
+      if (!(yieldG > 0) || !(consumed > 0)) {
+        throw new Error(
+          'Peso totale o porzione non valido.'
+        );
       }
-      const created=[],newLogs=[];
-      for(const ing of recipeReview.ingredients){
-        let f;
-        if(ing.selectedKey.startsWith('p:'))f=foods.find(x=>x.id===ing.selectedKey.slice(2))||created.find(x=>x.id===ing.selectedKey.slice(2));
-        else {
-          const id=Number(ing.selectedKey.slice(2)),row=(ing.candidates||[]).find(x=>Number(x.id)===id)||masterIndex.find(x=>Number(x.id)===id);
-          f=foods.find(x=>String(x.masterId||'')===String(id))||created.find(x=>String(x.masterId||'')===String(id));
-          if(!f){if(!row)throw new Error(`Corrispondenza Master non trovata: ${ing.name}`);const detail=await loadMasterDetail(row);f=masterToFood(row,detail,masterManifest,ing.name);created.push(f);}
+
+      factor = consumed / yieldG;
+      groupId = newId();
+    }
+
+    const created = [];
+    const newLogs = [];
+
+    for (const ing of ingredients) {
+      let food = null;
+
+      if (ing.selectedKey.startsWith('p:')) {
+        const id = ing.selectedKey.slice(2);
+
+        food =
+          foods.find(f => f.id === id) ||
+          created.find(f => f.id === id);
+
+      } else if (ing.selectedKey.startsWith('m:')) {
+        const id = ing.selectedKey.slice(2);
+
+        const row =
+          (ing.candidates || []).find(
+            candidate => String(candidate.id) === id
+          ) ||
+          masterIndex.find(
+            candidate => String(candidate.id) === id
+          );
+
+        food =
+          foods.find(
+            f => f.masterId != null &&
+              String(f.masterId) === id
+          ) ||
+          created.find(
+            f => f.masterId != null &&
+              String(f.masterId) === id
+          );
+
+        if (!food) {
+          if (!row) {
+            throw new Error(
+              `Corrispondenza Master non trovata: ${ing.name}`
+            );
+          }
+
+          const detail = await loadMasterDetail(row);
+
+          if (!detail) {
+            throw new Error(
+              `Dettaglio Master non disponibile: ${ing.name}`
+            );
+          }
+
+          food = masterToFood(
+            row,
+            detail,
+            masterManifest,
+            ing.name
+          );
+
+          created.push(food);
         }
-        if(!f)throw new Error(`Alimento non risolto: ${ing.name}`);
-        
-newLogs.push({
-  id:newId(),
-  date:selectedDate,
-  foodId:f.id,
-  grams:Number(ing.grams)*factor,
 
-  ...(isRecipe ? {
-    recipeGroupId:groupId,
-    recipeName:recipeReview.recipe_name||'Ricetta',
-    recipeIngredient:ing.name
-  } : {}),
+      } else {
+        throw new Error(
+          `Tipo di corrispondenza non valido: ${ing.name}`
+        );
+      }
 
-  ...(ing.portion_assumption ? {
-    portionAssumption:ing.portion_assumption
-  } : {}),
+      if (!food) {
+        throw new Error(
+          `Alimento non risolto: ${ing.name}`
+        );
+      }
 
-  ...(ing.visualPortionSource ? {
-    portionOrigin:ing.visualPortionSource,
-    portionConfidence:ing.visualPortionConfidence||'none',
-    portionEstimatedMinGrams:ing.visualPortionMinGrams??null,
-    portionEstimatedMaxGrams:ing.visualPortionMaxGrams??null,
-    portionEstimatedByAI:
-      ing.visualPortionSource==='ai_visual_estimate'
-  } : {})
-});
+      const grams = Number(ing.grams) * factor;
 
-      if(created.length)setFoods(p=>[...p,...created.filter(f=>!p.some(x=>x.id===f.id||String(x.masterId||'')===String(f.masterId||'')))]);
-      setLogs(p=>[...p,...newLogs]);setRecipeText('');setRecipeReview(null);
-      setRecipeMsg(isRecipe?`Ricetta aggiunta: ${fmt(consumed)} g registrati nel giorno selezionato.`:newLogs.length>1?`Alimenti aggiunti: ${newLogs.length} voci registrate nel giorno selezionato.`:'Alimento aggiunto nel giorno selezionato.');
-    }catch(e){setRecipeMsg(e.message)}finally{setRecipeBusy('')}
+      if (!Number.isFinite(grams) || grams <= 0) {
+        throw new Error(
+          `Peso non valido: ${ing.name}`
+        );
+      }
+
+      const log = {
+        id: newId(),
+        date: selectedDate,
+        foodId: food.id,
+        grams
+      };
+
+      if (isRecipe) {
+        log.recipeGroupId = groupId;
+        log.recipeName =
+          recipeReview.recipe_name || 'Ricetta';
+        log.recipeIngredient = ing.name;
+      }
+
+      if (ing.portion_assumption) {
+        log.portionAssumption =
+          ing.portion_assumption;
+      }
+
+      if (ing.visualPortionSource) {
+        log.portionOrigin =
+          ing.visualPortionSource;
+
+        log.portionConfidence =
+          ing.visualPortionConfidence || 'none';
+
+        log.portionEstimatedMinGrams =
+          ing.visualPortionMinGrams ?? null;
+
+        log.portionEstimatedMaxGrams =
+          ing.visualPortionMaxGrams ?? null;
+
+        log.portionEstimatedByAI =
+          ing.visualPortionSource ===
+          'ai_visual_estimate';
+      }
+
+      newLogs.push(log);
+    }
+
+    // Il ciclo è terminato: tutti gli alimenti
+    // sono stati risolti correttamente.
+
+    if (created.length) {
+      setFoods(previous => [
+        ...previous,
+        ...created.filter(food =>
+          !previous.some(existing =>
+            existing.id === food.id ||
+            (
+              food.masterId != null &&
+              existing.masterId != null &&
+              String(existing.masterId) ===
+              String(food.masterId)
+            )
+          )
+        )
+      ]);
+    }
+
+    setLogs(previous => [
+      ...previous,
+      ...newLogs
+    ]);
+
+    setRecipeText('');
+    setRecipeReview(null);
+
+    setRecipeMsg(
+      isRecipe
+        ? `Ricetta aggiunta: ${fmt(consumed)} g ` +
+          'registrati nel giorno selezionato.'
+        : newLogs.length > 1
+          ? `Alimenti aggiunti: ${newLogs.length} ` +
+            'voci registrate nel giorno selezionato.'
+          : 'Alimento aggiunto nel giorno selezionato.'
+    );
+
+  } catch (error) {
+    setRecipeMsg(
+      error?.message || 'Salvataggio non riuscito.'
+    );
+
+  } finally {
+    setRecipeBusy('');
   }
+}
+
   async function downloadMasterOffline(){
     if(!masterManifest||!('caches' in window)){setMasterOfflineMsg('Cache offline non disponibile in questo browser.');return;}
     const count=Number(masterManifest.chunk_count||0),cache=await caches.open('nutrichat-v23-runtime');
