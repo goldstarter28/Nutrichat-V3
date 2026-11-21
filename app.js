@@ -2171,14 +2171,24 @@ photoReviewOpen && h('article',{
           },
 
             h('label',null,'Alimento',
-              h('input',{
-                value:ing.name || '',
-                onChange:e=>updateRecipeIngredient(i,{
-                  name:e.target.value,
-                  selectedKey:''
-                })
-              })
-            ),
+  h('input',{
+    value:ing.name || '',
+    onChange:e=>updateRecipeIngredient(i,{
+      name:e.target.value,
+      selectedKey:'',
+      candidates:[],
+      ambiguity:'none'
+    }),
+    onBlur:e=>{
+      const name=e.target.value.trim();
+      if(!name)return;
+      updateRecipeIngredient(i,{
+        ...ingredientCandidates({name},'none'),
+        name
+      });
+    }
+  })
+),
 
             h('label',null,'Quantità (g)',
               h('input',{
