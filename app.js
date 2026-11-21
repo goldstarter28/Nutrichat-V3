@@ -1276,16 +1276,84 @@ const draftNdRows=draftCatalogRows.filter(
     if(existing)fresh.id=existing.id;
     return fresh;
   }
-  async function quickAdd(r){
-    let useGrams=Number(grams); let portion=null;
-    if(!(useGrams>0)){portion=findPortionCatalog([quickQuery,r?.name],appConfig,'',countFromText(quickQuery)||1);if(portion)useGrams=portion.grams;}
-    if(!(useGrams>0)){setAiMsg('Peso non definito: indica i grammi oppure usa “Ricerca con AI” per una porzione naturale/standard.');return;}
-    if(r.resultType==='personal'){addFoodLog(r.id,useGrams,portion?{portionAssumption:portion.assumption}:{});setQuickQuery('');setGrams('');if(portion)setAiMsg(`Porzione standard applicata: ${portion.assumption}.`);return;}
-    if(r.resultType==='master'){
-      try{setRecipeBusy('quick');const existing=foods.find(f=>String(f.masterId||'')===String(r.id));const f=existing||await masterFoodFromResult(r,quickQuery||r.name);if(!existing)setFoods(p=>[...p,f]);setLogs(p=>[...p,{id:newId(),date:selectedDate,foodId:f.id,grams:useGrams,...(portion?{portionAssumption:portion.assumption}:{})}]);setQuickQuery('');setGrams('');if(portion)setAiMsg(`Porzione standard applicata: ${portion.assumption}.`);}catch(e){setAiMsg(e.message)}finally{setRecipeBusy('')};return;
-    }
-    const f=materializeImported(r,quickQuery||r.name); setFoods(p=>[...p,f]); setLogs(p=>[...p,{id:newId(),date:selectedDate,foodId:f.id,grams:useGrams,...(portion?{portionAssumption:portion.assumption}:{})}]); setQuickQuery('');setGrams('');if(portion)setAiMsg(`Porzione standard applicata: ${portion.assumption}.`);
+  async function quickAdd(r) {
+  let useGrams = Number(grams);
+  let portion = null;
+
+  if (!(useGrams > 0)) {
+    portion = findPortionCatalog(
+      [quickQuery, r?.name],
+      appConfig,
+      '',
+      countFromText(quickQuery) || 1
+    );
+
+    if (portion) useGrams = portion.grams;
   }
+
+  if (!Number.isFinite(useGrams) || useGrams <= 0) {
+    setAiMsg(
+      'Peso non definito: indica i grammi oppure ' +
+      'usa la ricerca AI per stimare la porzione.'
+    );
+    return;
+  }
+
+  const extra = portion
+    ? { portionAssumption: portion.assumption }
+    : {};
+
+  if (r.resultType === 'personal') {
+    addFoodLog(r.id, useGrams, extra);
+    setQuickQuery('');
+    setGrams('');
+    return;
+  }
+
+  try {
+    setRecipeBusy('quick');
+
+    let food;
+
+    if (r.resultType === 'master') {
+      food = foods.find(
+        f => String(f.masterId || '') === String(r.id)
+      );
+
+      if (!food) {
+        food = await masterFoodFromResult(
+          r,
+          quickQuery || r.name
+        );
+
+        setFoods(previous => [...previous, food]);
+      }
+    } else {
+      food = materializeImported(
+        r,
+        quickQuery || r.name
+      );
+
+      setFoods(previous => [...previous, food]);
+    }
+
+    addFoodLog(food.id, useGrams, extra);
+
+    setQuickQuery('');
+    setGrams('');
+
+    if (portion) {
+      setAiMsg(
+        `Porzione standard applicata: ${portion.assumption}.`
+      );
+    }
+
+  } catch (error) {
+    setAiMsg(error.message || 'Inserimento non riuscito.');
+  } finally {
+    setRecipeBusy('');
+  }
+}
   function materializeImported(f,alias=''){ const source=f.sourceInfo||f.source; const useAlias=alias.trim(); return {...emptyFood(),source:f.source||'',sourceId:f.sourceId||'',name:useAlias?alias.trim():f.name,officialName:f.officialName||f.name,aliases:[...new Set([...(f.aliases||[]),...(useAlias?[alias.trim()]:[])])],brand:f.brand||'',servingGrams:f.servingGrams||100,label:f.label||emptyFood().label,ingredients:f.ingredients||'',nutrients:f.nutrients||[],sources:[source],mergeMeta:{importedFrom:f.source||source?.name}}; }
   function openImported(f,alias=query){ const same=foods.find(z=>(z.sourceId&&z.sourceId===f.sourceId)||(norm(z.name)===norm(f.name)&&norm(z.brand||'')===norm(f.brand||''))); if(same) setFoodDraft({...structuredClone(same),mergeMeta:{mode:'review',candidate:f}}); else setFoodDraft(materializeImported(f,alias)); setTab('alimenti'); }
   async function openResult(r,alias=query){
