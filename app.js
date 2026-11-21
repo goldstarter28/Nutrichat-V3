@@ -1212,7 +1212,25 @@ const activeMealId = meals.some(
     for(const l of logs){
       const [ws,we]=weekBounds(l.date),mk=l.date.slice(0,7),yk=l.date.slice(0,4);
       if(!weekMap.has(ws))weekMap.set(ws,{from:ws,to:we,dates:new Set(),count:0});const w=weekMap.get(ws);w.dates.add(l.date);w.count++;
-      if(!monthMap.has(mk)){const [a,b]=monthBounds(`${mk}-01`);monthMap.set(mk,{from:a,to:b,dates:new Set(),count:0});}const m=monthMap.get(mk);m.dates.add(l.date);m.count++;
+      function addFoodLog(foodId, g = grams, extra = {}) {
+  const amount = Number(g);
+
+  if (!foodId || !Number.isFinite(amount) || amount <= 0) {
+    return;
+  }
+
+  setLogs(previous => [
+    ...previous,
+    {
+      id: newId(),
+      date: selectedDate,
+      foodId,
+      grams: amount,
+      ...extra,
+      mealId: activeMealId
+    }
+  ]);
+}
       if(!yearMap.has(yk))yearMap.set(yk,{from:`${yk}-01-01`,to:`${yk}-12-31`,dates:new Set(),count:0});const y=yearMap.get(yk);y.dates.add(l.date);y.count++;
     }
     const finish=map=>[...map.values()].map(x=>({...x,trackedDays:x.dates.size})).sort((a,b)=>b.from.localeCompare(a.from));
