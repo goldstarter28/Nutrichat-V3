@@ -1416,34 +1416,111 @@ async function importPhotoLabel(photo) {
   }
 }
 
-async function importPhotoDish(description) {
-  const text = String(description || '').trim();
 
-  if (!text) {
-    throw new Error('Descrizione del piatto mancante.');
+async function importPhotoDish(photo) {
+  const description = typeof photo === 'string'
+    ? photo.trim()
+    : String(photo?.description || '').trim();
+
+  const portions = Array.isArray(photo?.portions)
+    ? photo.portions.filter(p=>String(p.name||'').trim())
+    : [];
+
+  if (!description && !portions.length) {
+    throw new Error('Nessun alimento riconoscibile.');
   }
 
-  setRecipeText(text);
-  setRecipeReview(null);
-  setRecipeMsg('');
-  setTab('oggi');
+  // Build a structured, user-reviewed food entry.
+  // Estimated weights are explicitly retained as estimates.
+  const lines = portions.map(p=>{
+    const name=String(p.name||'').trim();
+    const grams=Number(p.estimatedGrams);
+
+    return Number.isFinite(grams) && grams>0
+      ? `${grams} g di ${name}`
+      : name;
+  });
+
+  const text = lines.length
+    ? lines.join(', ')
+    : description;
+
   setRecipeBusy('parse');
+  setRecipeMsg('');
 
   try {
-    const review = await interpretText(text,'recipe');
+    const review=await interpretText(text,'diary');
 
+    // Preserve the visual-estimate origin in the review.
+    // Never silently label a photo estimate as a measured weight.
+    const matched=new Set();
+
+    review.ingredients=(review.ingredients||[]).map(ing=>{
+      const normalized=norm(ing.name||'');
+      const index=portions.findIndex((p,i)=>{
+        if(matched.has(i))return false;
+        const candidate=norm(p.name||'');
+        return candidate && normalized &&
+          (candidate===normalized ||
+           candidate.includes(normalized) ||
+           normalized.includes(candidate));
+      });
+
+      if(index<0)return ing;
+
+      matched.add(index);
+      const p=portions[index];
+
+      const confidence={
+        high:'alta',
+        medium:'media',
+        low:'bassa',
+        none:'non stimabile'
+      }[p.confidence]||'non stimabile';
+
+      const grams=Number(p.estimatedGrams);
+      const valid=Number.isFinite(grams)&&grams>0;
+
+      return {
+        ...ing,
+        ...(valid?{grams}:{}),
+        portion_assumption:
+          `Peso da fotografia, stima ${
+            p.source==='user_confirmed_visual_estimate'
+              ? 'modificata dall’utente'
+              : 'AI'
+          }, confidenza ${confidence}`+
+          (
+            p.minGrams!=null && p.maxGrams!=null
+              ? `, intervallo ${p.minGrams}–${p.maxGrams} g`
+              : ''
+          ),
+        visualPortionSource:p.source||'ai_visual_estimate',
+        visualPortionConfidence:p.confidence,
+        visualPortionMinGrams:p.minGrams,
+        visualPortionMaxGrams:p.maxGrams
+      };
+    });
+
+    // The user's confirmation is the navigation trigger.
+    setRecipeText(text);
     setRecipeReview(review);
+    setTab('oggi');
 
-    if (review.errors?.length) {
+    if(review.errors?.length) {
       setRecipeMsg(review.errors.join(' · '));
     }
 
-  } catch (error) {
-    setRecipeMsg(error.message || 'Interpretazione non riuscita.');
+  } catch(error) {
+    throw new Error(
+      'Impossibile preparare il diario: '+
+      (error.message||'errore sconosciuto')
+    );
   } finally {
     setRecipeBusy('');
   }
 }
+
 
 async function createFromIngredientList(){
   const name=importName.trim();
