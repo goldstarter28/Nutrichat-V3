@@ -1247,7 +1247,25 @@ const draftNdRows=draftCatalogRows.filter(
   function valueForGoal(g,ag){ const v=goalValueFromAggregate(g,ag); if(v===0&&g.name==='Sodio'&&ag.salt>0)return convert(ag.salt/2.5,'g',g.unit); return v; }
   function saveFood(){ if(!foodDraft?.name?.trim()) return; const f={...foodDraft,additives:parseAdditives(foodDraft.ingredients)}; setFoods(p=>[...p.filter(x=>x.id!==f.id),f]); setFoodDraft(null); }
   function removeFood(id){ const f=foods.find(x=>x.id===id); if(!f) return; const n=logs.filter(l=>l.foodId===id).length; if(!confirm(`Rimuovere “${f.name}” dall'archivio?${n?` Verranno eliminate anche ${n} registrazioni del diario.`:''}`)) return; setFoods(p=>p.filter(x=>x.id!==id)); setLogs(p=>p.filter(l=>l.foodId!==id)); }
-  function addFoodLog(foodId,g=grams,extra={}){ if(!foodId||Number(g)<=0) return; setLogs(p=>[...p,{id:newId(),date:selectedDate,foodId,grams:Number(g),...extra}]); }
+  function addFoodLog(foodId, g = grams, extra = {}) {
+  const amount = Number(g);
+
+  if (!foodId || !Number.isFinite(amount) || amount <= 0) {
+    return;
+  }
+
+  setLogs(previous => [
+    ...previous,
+    {
+      id: newId(),
+      date: selectedDate,
+      foodId,
+      grams: amount,
+      ...extra,
+      mealId: activeMealId
+    }
+  ]);
+}
   async function masterFoodFromResult(r,alias=''){
     const existing=foods.find(f=>String(f.masterId||'')===String(r.id));
     const currentRevision=masterRevision(masterManifest);
