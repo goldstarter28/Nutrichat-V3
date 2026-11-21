@@ -2270,34 +2270,67 @@ tab==='oggi'&&h('section',null,
     }
   },'+ Aggiungi pasto')
 ),
-     h('div',{
-  className:'card',
-  style:{marginBottom:'12px',padding:'12px'}
-},
-  h('label',null,
-    'Pasto a cui aggiungere gli alimenti',
-    h('select',{
-      value:activeMealId || '',
-      onChange:e=>
-        setSelectedMealId(e.target.value || null),
-      style:{width:'100%',marginTop:'8px'}
-    },
-      h('option',{value:''},'Non assegnato'),
-      ...meals.map(meal=>
-        h('option',{
-          key:meal.id,
-          value:meal.id
-        },meal.name)
-      )
-    )
-  )
-),
+     h(window.NutriTraceMealDiary,{
+  meals,
+  logs:dayLogs,
+  foods,
+
+  onAdd:mealId=>{
+    setSelectedMealId(
+      meals.some(m=>m.id===mealId)?mealId:null
+    );
+    setQuickQuery('');
+    requestAnimationFrame(()=>{
+      document.querySelector('.quickDiary')
+        ?.scrollIntoView({
+          behavior:'smooth',
+          block:'start'
+        });
+    });
+  },
+
+  onAssign:(logId,mealId)=>{
+    const id=meals.some(m=>m.id===mealId)
+      ?mealId:null;
+
+    setLogs(previous=>previous.map(log=>
+      log.id===logId
+        ?{...log,mealId:id}
+        :log
+    ));
+  },
+
+  onRemove:logId=>{
+    setLogs(previous=>previous.filter(
+      log=>log.id!==logId
+    ));
+  },
+
+  onConfigure:()=>{
+    const panel=document.getElementById(
+      'nutritrace-meal-settings'
+    );
+
+    if(panel){
+      panel.open=true;
+      panel.scrollIntoView({
+        behavior:'smooth',
+        block:'start'
+      });
+    }
+  }
+}),
                 h(window.NutriTraceHydrationWidget,{
         key:selectedDate,
         date:selectedDate
       }),
       h('div',{className:'grid5'},[['kcal','Energia','kcal'],['protein','Proteine','g'],['carbs','Carboidrati','g'],['fat','Grassi','g'],['fiber','Fibre','g']].map(([id,n,u],i)=>{const g=goals.find(x=>x.id===id),cov=macroCoverage(dayLogs,foods,id);return h('article',{className:`metric ${i===0?'primary':''}`,key:id},h('span',null,n),h(Progress,{value:totals[id],goal:effectiveTarget(g||{},profile.weight),unit:u,kind:g?.kind}),dayLogs.length&&cov<.999?h('small',{className:'metricCoverage'},`totale parziale · dati ${fmt(cov*100,0)}%`):null);})),
-      h('article',{className:'card quickDiary'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,selectedDate===deviceToday?'Cosa hai mangiato oggi?':`Aggiungi al ${shortDate(selectedDate)}`),h('p',null,'Il Master DB è la fonte primaria. Ogni voce resta associata al giorno selezionato.'))),
+     h('article',{className:'card quickDiary'},
+  activeMealId&&h('p',{className:'statusMsg'},
+    'Stai aggiungendo a: '+
+    (meals.find(m=>m.id===activeMealId)?.name||'Pasto')
+  ),
+  h('div',{className:'cardTitle'},,h('div',null,h('h2',null,selectedDate===deviceToday?'Cosa hai mangiato oggi?':`Aggiungi al ${shortDate(selectedDate)}`),h('p',null,'Il Master DB è la fonte primaria. Ogni voce resta associata al giorno selezionato.'))),
         h('div',{className:'quickInputs'},h('label',null,'Alimento',h('input',{value:quickQuery,placeholder:'es. banana, 2 uova, cetriolo, salmone cotto…',onChange:e=>setQuickQuery(e.target.value)})),h('label',null,ui('search.gramsLabel','Grammi (facoltativi)'),h('input',{type:'number',min:'1',step:'any',value:grams,placeholder:ui('search.gramsPlaceholder','automatici per porzioni standard'),onChange:e=>setGrams(e.target.value)}))),
         h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),h('small',null,'N/D ≠ 0 · valori multi-fonte quando esiste corrispondenza sicura')),
         quickSuggestions.length?h('div',{className:'quickSuggestions'},quickSuggestions.map(r=>h('button',{className:'quickChoice',key:r.resultType==='master'?`m:${r.id}`:(r.id||r.localId),onClick:()=>quickAdd(r),disabled:recipeBusy==='quick'},h('span',null,h('b',null,r.name),h('small',null,r.resultType==='personal'?'Archivio personale':r.resultType==='master'?`Master DB · ${r.sc||1} ${Number(r.sc||1)===1?'fonte':'fonti'} · ${(r.sources||[]).join(', ')}`:(SOURCE_META[r.source]?.name||'Database locale'))),h('strong',null,recipeBusy==='quick'?'…':'+ Aggiungi')))):quickQuery.trim()?h('div',{className:'emptyAction'},h('span',{className:'muted'},ui('search.notFound','Nessuna corrispondenza nel Master DB o nei database personali.')),h('div',{className:'inlineActions'},h('button',{className:'ghost',onClick:()=>{setFoodDraft({...emptyFood(),name:quickQuery.trim(),aliases:[quickQuery.trim()]});setTab('alimenti');}},ui('search.manualButton','Inserisci manualmente')))):null,
