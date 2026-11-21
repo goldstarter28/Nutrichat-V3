@@ -1072,6 +1072,7 @@ function Home(){
   const [deviceToday,setDeviceToday]=useState(dateKey()), [selectedDate,setSelectedDate]=useState(dateKey());
   const [masterManifest,setMasterManifest]=useState(null), [masterIndex,setMasterIndex]=useState([]), [masterStatus,setMasterStatus]=useState('Caricamento Master DB…'), [masterOfflineMsg,setMasterOfflineMsg]=useState('');
   const [recipeText,setRecipeText]=useState(''), [recipeReview,setRecipeReview]=useState(null), [recipeBusy,setRecipeBusy]=useState(''), [recipeMsg,setRecipeMsg]=useState('');
+  const [photoReviewOpen,setPhotoReviewOpen] = useState(false);
   const [showAllDeficits,setShowAllDeficits]=useState(false), [masterMigrationDone,setMasterMigrationDone]=useState(false);
   const [appConfig,setAppConfig]=useState(DEFAULT_APP_CONFIG);
   const [quickSearchQuery,setQuickSearchQuery]=useState('');
