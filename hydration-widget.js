@@ -4,96 +4,85 @@
 (function(root) {
   const React = root.React;
   const h = React.createElement;
-  const {useState, useEffect} = React;
+  const {useState,useEffect} = React;
 
-  const STORAGE_KEY = 'nutritrace_hydration_v1';
+  const KEY = 'nutritrace_hydration_v1';
   const DEFAULT_GOAL = 2000;
+
+  function validGoal(value) {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= 250 && n <= 10000;
+  }
 
   function readStore() {
     try {
-      const parsed = JSON.parse(
-        localStorage.getItem(STORAGE_KEY) || '{}'
-      );
+      const raw = JSON.parse(localStorage.getItem(KEY) || '{}');
 
       return {
-        goal: Number.isFinite(Number(parsed.goal)) &&
-              Number(parsed.goal) >= 250 &&
-              Number(parsed.goal) <= 10000
-          ? Number(parsed.goal)
-          : DEFAULT_GOAL,
-
-        days: parsed.days && typeof parsed.days === 'object' &&
-              !Array.isArray(parsed.days)
-          ? parsed.days
-          : {}
+        goal:validGoal(raw.goal) ? Number(raw.goal) : DEFAULT_GOAL,
+        days:raw.days && typeof raw.days === 'object' &&
+          !Array.isArray(raw.days) ? raw.days : {},
+        dayGoals:raw.dayGoals &&
+          typeof raw.dayGoals === 'object' &&
+          !Array.isArray(raw.dayGoals) ? raw.dayGoals : {}
       };
     } catch {
-      return {goal:DEFAULT_GOAL, days:{}};
+      return {goal:DEFAULT_GOAL,days:{},dayGoals:{}};
     }
   }
 
   function HydrationWidget({date}) {
     const [data,setData] = useState(readStore);
     const [custom,setCustom] = useState('');
-    const [editingGoal,setEditingGoal] = useState(false);
-    const [goalText,setGoalText] = useState('');
+    const [editing,setEditing] = useState(false);
+    const [goalInput,setGoalInput] = useState('');
     const [message,setMessage] = useState('');
 
     useEffect(() => {
       try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(data)
-        );
-        setMessage('');
+        localStorage.setItem(KEY,JSON.stringify(data));
       } catch {
-        setMessage('Impossibile salvare i dati sul dispositivo.');
+        setMessage('Salvataggio non riuscito.');
       }
-    }, [data]);
+    },[data]);
 
-    const rawEntries = data.days[date];
-    const entries = Array.isArray(rawEntries)
-      ? rawEntries.filter(e =>
-          Number.isFinite(Number(e.ml)) &&
-          Number(e.ml) > 0
-        )
+    const entries = Array.isArray(data.days[date])
+      ? data.days[date].filter(x=>Number(x.ml)>0)
       : [];
 
-    const total = entries.reduce(
-      (sum,e) => sum + Number(e.ml),
-      0
-    );
+    const total = entries.reduce((sum,x)=>sum+Number(x.ml),0);
 
-    const progress = Math.min(
-      100,
-      (total / data.goal) * 100
-    );
+    const dayGoal = validGoal(data.dayGoals?.[date])
+      ? Number(data.dayGoals[date])
+      : data.goal;
 
-    const fmt = value =>
-      Math.round(value).toLocaleString('it-IT');
+    const reached = total >= dayGoal;
+    const extra = Math.max(0,total-dayGoal);
+    const maximum = Math.max(total,dayGoal,1);
+    const greenWidth = reached ? dayGoal/maximum*100 : 0;
+    const blueWidth = reached
+      ? extra/maximum*100
+      : total/dayGoal*100;
 
-    function addWater(ml) {
-      const amount = Number(ml);
+    const fmt = n=>Math.round(n).toLocaleString('it-IT');
 
-      if (!Number.isFinite(amount) ||
-          !Number.isInteger(amount) ||
-          amount <= 0 || amount > 5000) {
+    function addWater(amount) {
+      const ml = Number(amount);
+
+      if (!Number.isInteger(ml) || ml<1 || ml>5000) {
         setMessage('Inserisci una quantità da 1 a 5.000 ml.');
         return;
       }
 
-      setData(prev => ({
+      setData(prev=>({
         ...prev,
-        days: {
+        days:{
           ...prev.days,
-          [date]: [
-            ...(Array.isArray(prev.days[date])
-              ? prev.days[date]
-              : []),
+          [date]:[
+            ...(Array.isArray(prev.days[date])?prev.days[date]:[]),
             {
-              id: String(Date.now()) + '-' +
-                  Math.random().toString(36).slice(2),
-              ml:amount,
+              id:String(Date.now())+'-'+Math.random().toString(36).slice(2),
+              ml,
               time:new Date().toISOString()
             }
           ]
@@ -104,158 +93,189 @@
       setMessage('');
     }
 
-    function undoLast() {
-      setData(prev => {
-        const list = Array.isArray(prev.days[date])
-          ? prev.days[date]
-          : [];
-
-        if (!list.length) return prev;
-
-        return {
-          ...prev,
-          days: {
-            ...prev.days,
-            [date]:list.slice(0,-1)
-          }
-        };
-      });
+    function undo() {
+      setData(prev=>({
+        ...prev,
+        days:{
+          ...prev.days,
+          [date]:(prev.days[date]||[]).slice(0,-1)
+        }
+      }));
     }
 
-    function updateGoal() {
-      const value = Number(goalText);
-
-      if (!Number.isInteger(value) ||
-          value < 250 || value > 10000) {
-        setMessage(
-          'Obiettivo non valido: inserisci da 250 a 10.000 ml.'
-        );
+    function saveDayGoal() {
+      if (!validGoal(goalInput)) {
+        setMessage('Obiettivo consentito: 250–10.000 ml.');
         return;
       }
 
-      setData(prev => ({
+      setData(prev=>({
         ...prev,
-        goal:value
+        dayGoals:{
+          ...prev.dayGoals,
+          [date]:Number(goalInput)
+        }
       }));
 
-      setEditingGoal(false);
+      setEditing(false);
       setMessage('');
     }
 
-    const quickButtons = [
-      {ml:150,label:'Mezzo bicchiere'},
-      {ml:250,label:'Bicchiere intero'},
-      {ml:500,label:'Borraccia'}
+    function resetDayGoal() {
+      setData(prev=>{
+        const dayGoals={...prev.dayGoals};
+        delete dayGoals[date];
+        return {...prev,dayGoals};
+      });
+      setEditing(false);
+      setMessage('');
+    }
+
+    function beginEdit() {
+      setGoalInput(String(dayGoal));
+      setEditing(v=>!v);
+      setMessage('');
+    }
+
+    const quick=[
+      {ml:150,name:'Mezzo bicchiere'},
+      {ml:250,name:'Bicchiere intero'},
+      {ml:500,name:'Borraccia'}
     ];
 
-    const buttonStyle = {
-      flex:'1 1 0',
-      minWidth:0,
-      display:'flex',
-      flexDirection:'column',
-      alignItems:'center',
-      justifyContent:'center',
-      gap:'4px',
-      padding:'12px 5px'
-    };
-
-    return h('article', {
+    return h('article',{
       className:'card',
-      style:{marginBottom:'16px'}
+      style:{marginBottom:'16px',padding:'14px'}
     },
 
-      h('div', {
-        className:'cardTitle',
-        style:{display:'flex',justifyContent:'space-between',
-          alignItems:'center',gap:'12px'}
+      h('div',{
+        style:{
+          display:'flex',
+          justifyContent:'space-between',
+          alignItems:'center',
+          gap:'10px',
+          flexWrap:'wrap'
+        }
       },
-
         h('div',null,
-          h('h2',null,'💧 Idratazione'),
-          h('p',{className:'muted'},
-            'Acqua registrata nel giorno selezionato'
-          )
+          h('h2',{style:{margin:0,fontSize:'18px'}},'💧 Idratazione'),
+          h('small',{className:'muted'},'Giorno selezionato')
         ),
-
         h('button',{
           className:'ghost',
-          onClick:() => {
-            setGoalText(String(data.goal));
-            setEditingGoal(v => !v);
-          }
-        },'⚙ Obiettivo')
+          style:{fontSize:'12px',padding:'7px 10px'},
+          onClick:beginEdit
+        },'Cambia obiettivo del giorno')
       ),
 
       h('div',{
-        style:{display:'flex',alignItems:'baseline',
-          gap:'8px',margin:'14px 0 8px'}
+        style:{
+          display:'flex',
+          alignItems:'baseline',
+          gap:'6px',
+          margin:'14px 0 10px'
+        }
       },
-
         h('strong',{
-          style:{fontSize:'30px',lineHeight:1.2}
+          style:{fontSize:'25px',lineHeight:1.2}
         },fmt(total)),
-
         h('span',{className:'muted'},
-          '/ ' + fmt(data.goal) + ' ml'
+          '/ '+fmt(dayGoal)+' ml'
         )
       ),
 
       h('div',{
         role:'progressbar',
-        'aria-label':'Obiettivo idratazione',
+        'aria-label':'Progresso idratazione',
         'aria-valuemin':0,
-        'aria-valuemax':data.goal,
-        'aria-valuenow':Math.min(total,data.goal),
+        'aria-valuemax':dayGoal,
+        'aria-valuenow':Math.min(total,dayGoal),
         style:{
           height:'12px',
+          display:'flex',
           background:'#dce7e8',
           borderRadius:'20px',
-          overflow:'hidden'
+          overflow:'hidden',
+          position:'relative'
         }
       },
-
-        h('div',{
-          style:{
-            width:progress+'%',
-            height:'100%',
-            background:'#298fc5',
-            borderRadius:'20px',
-            transition:'width .2s ease'
-          }
-        })
-      ),
-
-      h('p',{
-        className:'muted',
-        style:{margin:'7px 0 14px'}
-      },
-        Math.round(total/data.goal*100) +
-        '% dell’obiettivo giornaliero'
+        reached
+          ? h(React.Fragment,null,
+              h('div',{
+                style:{
+                  width:greenWidth+'%',
+                  background:'#279c71',
+                  height:'100%'
+                }
+              }),
+              extra>0&&h('div',{
+                style:{
+                  width:blueWidth+'%',
+                  background:'#318bc4',
+                  height:'100%'
+                }
+              })
+            )
+          : h('div',{
+              style:{
+                width:blueWidth+'%',
+                background:'#318bc4',
+                height:'100%',
+                borderRadius:'20px'
+              }
+            })
       ),
 
       h('div',{
-        style:{display:'flex',gap:'8px',width:'100%'}
+        style:{
+          display:'flex',
+          justifyContent:'space-between',
+          gap:'8px',
+          margin:'7px 0 12px'
+        }
       },
+        h('small',{className:'muted'},
+          fmt(total/dayGoal*100)+'% dell’obiettivo'
+        ),
+        reached
+          ? h('small',{
+              style:{color:'#279c71',fontWeight:600}
+            },extra>0?'+'+fmt(extra)+' ml extra':'Obiettivo raggiunto')
+          : h('small',{className:'muted'},
+              'Mancano '+fmt(dayGoal-total)+' ml'
+            )
+      ),
 
-        quickButtons.map(item =>
+      h('div',{
+        style:{display:'flex',gap:'7px',width:'100%'}
+      },
+        ...quick.map(item=>
           h('button',{
             key:item.ml,
             className:'ghost',
-            style:buttonStyle,
-            onClick:()=>addWater(item.ml)
+            onClick:()=>addWater(item.ml),
+            style:{
+              flex:'1 1 0',
+              minWidth:0,
+              padding:'9px 3px',
+              display:'flex',
+              flexDirection:'column',
+              alignItems:'center',
+              gap:'3px'
+            }
           },
-
-            h('strong',null,'+'+item.ml+' ml'),
-
+            h('strong',{style:{fontSize:'12px'}},
+              '+'+item.ml+' ml'
+            ),
             h('small',{
               style:{
-                fontSize:'11px',
+                fontSize:'10px',
                 fontWeight:400,
                 textAlign:'center',
-                lineHeight:1.3,
+                lineHeight:1.2,
                 whiteSpace:'normal'
               }
-            },item.label)
+            },item.name)
           )
         )
       ),
@@ -265,80 +285,89 @@
           display:'flex',
           gap:'8px',
           alignItems:'center',
-          marginTop:'12px',
+          marginTop:'10px',
           flexWrap:'wrap'
         }
       },
-
         h('input',{
           type:'number',
           min:1,
           max:5000,
           step:1,
           placeholder:'Altri ml',
-          'aria-label':'Quantità personalizzata in ml',
+          'aria-label':'Altri millilitri',
           value:custom,
           onChange:e=>setCustom(e.target.value),
-          style:{flex:'1 1 100px',minWidth:'90px'}
+          style:{flex:'1 1 90px',minWidth:'80px'}
         }),
-
         h('button',{
           className:'ghost',
           disabled:!custom.trim(),
           onClick:()=>addWater(custom)
         },'+ Aggiungi'),
-
         h('button',{
           className:'ghost',
           disabled:!entries.length,
-          onClick:undoLast
-        },'↶ Annulla ultima')
+          onClick:undo
+        },'↶ Annulla')
       ),
 
-      editingGoal &&
+      editing&&h('div',{
+        style:{
+          marginTop:'12px',
+          padding:'12px',
+          border:'1px solid #dce7e8',
+          borderRadius:'10px'
+        }
+      },
+        h('label',null,'Obiettivo per questa data (ml)',
+          h('input',{
+            type:'number',
+            min:250,
+            max:10000,
+            step:50,
+            value:goalInput,
+            onChange:e=>setGoalInput(e.target.value)
+          })
+        ),
         h('div',{
           style:{
-            marginTop:'12px',
             display:'flex',
-            gap:'8px',
             flexWrap:'wrap',
-            alignItems:'center'
+            gap:'8px',
+            marginTop:'8px'
           }
         },
-
-          h('label',null,'Obiettivo (ml)',
-            h('input',{
-              type:'number',
-              min:250,
-              max:10000,
-              step:50,
-              value:goalText,
-              onChange:e=>setGoalText(e.target.value)
-            })
-          ),
-
           h('button',{
             className:'cta',
-            onClick:updateGoal
-          },'Salva obiettivo')
-        ),
+            onClick:saveDayGoal
+          },'Salva'),
+          h('button',{
+            className:'ghost',
+            onClick:resetDayGoal
+          },'Ripristina predefinito'),
+          h('button',{
+            className:'ghost',
+            onClick:()=>setEditing(false)
+          },'Annulla')
+        )
+      ),
 
-      message &&
-        h('p',{
-          role:'alert',
-          style:{marginTop:'10px'}
-        },message),
+      message&&h('p',{
+        role:'alert',
+        className:'errorText'
+      },message),
 
       h('p',{
         className:'muted tiny',
-        style:{marginTop:'12px'}
+        style:{margin:'10px 0 0'}
       },
         entries.length+' registrazioni · '+
-        'Dati salvati su questo dispositivo'
+        'Dati salvati sul dispositivo'
       )
     );
   }
 
-  root.NutriTraceHydrationWidget = HydrationWidget;
+  root.NutriTraceHydrationWidget=HydrationWidget;
 
 })(window);
