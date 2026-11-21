@@ -1864,6 +1864,188 @@ h(window.NutriTraceFoodCamera,{
   onLabel:importPhotoLabel,
   onDish:importPhotoDish
 }),
+                       
+photoReviewOpen && h('article',{
+  className:'card',
+  style:{
+    marginBottom:'16px',
+    border:'2px solid #318bc4'
+  }
+},
+
+  h('div',{
+    style:{
+      display:'flex',
+      justifyContent:'space-between',
+      alignItems:'center',
+      gap:'10px'
+    }
+  },
+    h('div',null,
+      h('h2',null,'📷 Revisione del piatto'),
+      h('p',{className:'muted tiny'},
+        'Controlla alimenti, quantità e corrispondenze '+
+        'prima di salvare nel diario.'
+      )
+    ),
+    h('button',{
+      className:'ghost',
+      onClick:()=>{
+        setPhotoReviewOpen(false);
+        setRecipeReview(null);
+        setRecipeMsg('');
+      }
+    },'Chiudi')
+  ),
+
+  recipeReview
+    ? h(React.Fragment,null,
+
+        h('h3',null,
+          recipeReview.recipe_name || 'Pasto fotografato'
+        ),
+
+        ...(recipeReview.ingredients || []).map((ing,i)=>
+          h('div',{
+            key:i,
+            style:{
+              padding:'12px',
+              marginBottom:'10px',
+              border:'1px solid #dce7e8',
+              borderRadius:'12px'
+            }
+          },
+
+            h('label',null,'Alimento',
+              h('input',{
+                value:ing.name || '',
+                onChange:e=>updateRecipeIngredient(i,{
+                  name:e.target.value,
+                  selectedKey:''
+                })
+              })
+            ),
+
+            h('label',null,'Quantità (g)',
+              h('input',{
+                type:'number',
+                min:1,
+                step:'any',
+                value:ing.grams ?? '',
+                onChange:e=>updateRecipeIngredient(i,{
+                  grams:e.target.value
+                })
+              })
+            ),
+
+            ing.portion_assumption &&
+              h('p',{className:'muted tiny'},
+                ing.portion_assumption
+              ),
+
+            h('label',null,'Alimento nel database',
+              h('select',{
+                value:ing.selectedKey || '',
+                onChange:e=>updateRecipeIngredient(i,{
+                  selectedKey:e.target.value,
+                  ambiguity:e.target.value
+                    ? 'none'
+                    : ing.ambiguity
+                })
+              },
+                h('option',{value:''},
+                  'Seleziona una corrispondenza'
+                ),
+                ...(ing.candidates || []).map((c,j)=>
+                  h('option',{
+                    key:c.candidateKey || j,
+                    value:c.candidateKey || ''
+                  },
+                    `${c.name || 'Alimento'}${
+                      Number.isFinite(Number(c.score))
+                        ? ` · score ${Math.round(Number(c.score))}`
+                        : ''
+                    }`
+                  )
+                )
+              )
+            ),
+
+            h('button',{
+              className:'ghost',
+              disabled:recipeBusy === `ai-${i}`,
+              onClick:()=>estimateRecipeIngredient(i),
+              style:{fontSize:'12px',marginTop:'6px'}
+            },
+              recipeBusy === `ai-${i}`
+                ? 'Ricerca in corso…'
+                : 'Cerca altre corrispondenze'
+            )
+          )
+        ),
+
+        recipeReview.mode === 'recipe' &&
+          h('div',null,
+            h('label',null,'Peso totale della preparazione (g)',
+              h('input',{
+                type:'number',
+                min:1,
+                step:'any',
+                value:recipeReview.yieldOverride ?? '',
+                onChange:e=>setRecipeReview(prev=>({
+                  ...prev,
+                  yieldOverride:e.target.value
+                }))
+              })
+            ),
+            h('label',null,'Quantità consumata (g)',
+              h('input',{
+                type:'number',
+                min:1,
+                step:'any',
+                value:recipeReview.consumed_grams ?? '',
+                onChange:e=>setRecipeReview(prev=>({
+                  ...prev,
+                  consumed_grams:e.target.value
+                }))
+              })
+            )
+          ),
+
+        (recipeReview.errors || []).length > 0 &&
+          h('p',{className:'muted tiny'},
+            recipeReview.errors.join(' · ')
+          ),
+
+        recipeMsg &&
+          h('p',{className:'errorText'},recipeMsg),
+
+        h('button',{
+          className:'cta',
+          disabled:recipeBusy === 'commit',
+          onClick:commitRecipe,
+          style:{width:'100%',marginTop:'12px'}
+        },
+          recipeBusy === 'commit'
+            ? 'Salvataggio…'
+            : 'Conferma e salva nel diario'
+        )
+      )
+
+    : h('div',null,
+        h('p',{className:'statusMsg'},
+          recipeMsg || 'Revisione conclusa.'
+        ),
+        h('button',{
+          className:'ghost',
+          onClick:()=>{
+            setPhotoReviewOpen(false);
+            setTab('oggi');
+          }
+        },'Vai al diario')
+      )
+),
+
  h('article',{className:'card'},
         h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),masterManifest&&h('small',null,`${includedMasterSources.length} sorgenti nazionali derivate · ${validationOnlySources.length} solo validazione`)),
         h('div',{className:'searchBox'},h('input',{value:query,placeholder:'Cerca un alimento…',onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&searchFoods()}),h('button',{className:'cta',onClick:searchFoods,disabled:searching},searching?'Ricerca…':ui('search.dbButton','Cerca')),h('button',{className:'ghost',onClick:searchFoodsWithAI,disabled:aiBusy==='search-ai'||!query.trim()},aiBusy==='search-ai'?ui('search.aiWorking','Ricerca AI…'):ui('search.aiButton','Ricerca con AI'))),
