@@ -2164,7 +2164,11 @@ async function commitRecipe() {
     
 tab==='oggi'&&h('section',null,
       dateNavigator,
-                h('details',{className:'card',style:{marginBottom:'16px'}},
+                h('details',{
+  id:'nutritrace-meal-settings',
+  className:'card',
+  style:{marginBottom:'16px'}
+},
   h('summary',null,'⚙️ Configura i pasti'),
 
   h('p',{className:'muted tiny'},
