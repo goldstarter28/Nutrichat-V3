@@ -1,12 +1,13 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-offline-v2';
+const CACHE = 'nutritrace-v3-offline-lexicon-v1';
 
 const CORE = [
   './',
   './index.html',
   './app.js',
+  './food-lexicon.js',
   './food-camera.js',
   './meal-config.js',
 './meal-shortcuts.js',
