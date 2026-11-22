@@ -3046,6 +3046,57 @@ h('div',{className:'card labelImportCard'},
         h('article',{className:'card'},h('h2',null,'Peso ed energia / macro'),h('p',{className:'muted'},'Proteine, carboidrati, grassi, zuccheri semplici e fibre sono impostabili in g/kg di peso corporeo.'),
           h('div',{className:'macroPlanGrid'},
             h('label',null,'Peso (kg)',h('input',{type:'number',step:'any',value:profile.weight,onChange:e=>setProfile({...profile,weight:e.target.value})})),
+           h('button',{
+  type:'button',
+  className:'ghost',
+  onClick:()=>{
+    try {
+      const stored=JSON.parse(
+        localStorage.getItem('nutritrace_body_weight_v1')||'{}'
+      );
+
+      const entries=Array.isArray(stored.entries)
+        ? stored.entries
+        : [];
+
+      const valid=entries.filter(e=>
+        e &&
+        typeof e.date==='string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(e.date) &&
+        Number.isFinite(Number(e.kg)) &&
+        Number(e.kg)>=20 &&
+        Number(e.kg)<=500
+      );
+
+      if(!valid.length){
+        alert('Nessuna misurazione valida nel diario Peso.');
+        return;
+      }
+
+      valid.sort((a,b)=>
+        (a.date+' '+(a.time||'')).localeCompare(
+          b.date+' '+(b.time||'')
+        )
+      );
+
+      const last=valid[valid.length-1];
+
+      setProfile(prev=>({
+        ...prev,
+        weight:Number(last.kg)
+      }));
+
+      alert(
+        'Peso di riferimento aggiornato: '+
+        Number(last.kg).toLocaleString('it-IT')+
+        ' kg ('+last.date+').'
+      );
+
+    }catch(error){
+      alert('Impossibile leggere il diario Peso.');
+    }
+  }
+},'Usa ultimo peso registrato'),
             h('label',null,'Gestione calorie',h('select',{value:profile.macroPlan.calorieMode,onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,calorieMode:e.target.value}})},h('option',{value:'fixed'},'Calorie fisse · un macro automatico'),h('option',{value:'derived'},'Calorie automatiche dai macro'))),
             profile.macroPlan.calorieMode==='fixed'&&h('label',null,'Calorie target',h('input',{type:'number',step:'1',value:profile.macroPlan.kcal,onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,kcal:e.target.value}})})),
             profile.macroPlan.calorieMode==='fixed'&&h('label',null,'Macro automatico',h('select',{value:profile.macroPlan.autoMacro,onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,autoMacro:e.target.value}})},h('option',{value:'carbs'},'Carboidrati'),h('option',{value:'protein'},'Proteine'),h('option',{value:'fat'},'Grassi'))),
