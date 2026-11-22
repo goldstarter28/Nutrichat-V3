@@ -2419,7 +2419,13 @@ if ('mealFavorites' in data) {
       if (data.profile) {
         setProfile(normalizeProfile(data.profile));
       }
+if (restoredMeals !== null) {
+  setMeals(restoredMeals);
+}
 
+if (restoredFavorites !== null) {
+  setMealFavorites(restoredFavorites);
+}
       alert(
         'Backup importato. Il peso è stato ripristinato se presente.'
       );
