@@ -2347,10 +2347,11 @@ tab==='oggi'&&h('section',null,
     }
   },'+ Aggiungi pasto')
 ),
-     h(window.NutriTraceMealDiary,{
+    h(window.NutriTraceMealDiary,{
   meals,
   logs:dayLogs,
   foods,
+  favorites:mealFavorites,
 
   onAdd:mealId=>{
     setSelectedMealId(
@@ -2381,6 +2382,76 @@ tab==='oggi'&&h('section',null,
     setLogs(previous=>previous.filter(
       log=>log.id!==logId
     ));
+  },
+
+  onAddFavorite:(mealId,logId)=>{
+    try{
+      const log=dayLogs.find(l=>l.id===logId);
+      if(!log){
+        throw new Error('Alimento non trovato nel diario.');
+      }
+
+      const updated=window.NutriTraceMealShortcuts.addFavorite(
+        mealFavorites,
+        {
+          mealId,
+          foodId:log.foodId,
+          grams:log.grams
+        },
+        meals,
+        foods
+      );
+
+      setMealFavorites(updated);
+    }catch(error){
+      window.alert(error.message);
+    }
+  },
+
+  onRemoveFavorite:favoriteId=>{
+    setMealFavorites(previous=>
+      window.NutriTraceMealShortcuts.removeFavorite(
+        previous,
+        favoriteId
+      )
+    );
+  },
+
+  onQuickFavorite:favorite=>{
+    try{
+      const log=window.NutriTraceMealShortcuts.createFavoriteLog(
+        favorite,
+        selectedDate,
+        meals,
+        foods
+      );
+
+      setLogs(previous=>[...previous,log]);
+    }catch(error){
+      window.alert(error.message);
+    }
+  },
+
+  onCopyYesterday:mealId=>{
+    try{
+      const copied=window.NutriTraceMealShortcuts.copyYesterday(
+        logs,
+        selectedDate,
+        mealId,
+        meals,
+        foods
+      );
+
+      if(!window.confirm(
+        `Copia ${copied.length} alimenti dal pasto di ieri?`
+      )){
+        return;
+      }
+
+      setLogs(previous=>[...previous,...copied]);
+    }catch(error){
+      window.alert(error.message);
+    }
   },
 
   onConfigure:()=>{
