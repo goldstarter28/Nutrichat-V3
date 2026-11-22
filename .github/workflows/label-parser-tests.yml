@@ -1,0 +1,90 @@
+
+name: Label parser tests
+
+on:
+  push:
+    branches:
+      - feature/local-label-camera-ocr
+      - 'ingredient-auto-audit.js'
+      - 'ingredient-reconstruction.js'
+      - 'api/**'
+      - 'hydration-widget.js'
+      - 'food-camera.js'
+      - 'api/analyze-food-image.js'
+    paths:
+      - 'label-import.js'
+      - 'label-import-v3.js'
+      - 'label-import-ui-state.js'
+      - 'label-import-ui.js'
+      - 'label-import-ui.css'
+      - 'index.html'
+      - 'app.js'
+      - 'sw.js'
+      - 'tests/**'
+      - '.github/workflows/label-parser-tests.yml'
+      - 'ingredient-auto-audit.js'
+      - 'ingredient-reconstruction.js'
+      - 'api/**'
+      - 'hydration-widget.js'
+      - 'food-camera.js'
+      - 'api/analyze-food-image.js'
+      
+  pull_request:
+    paths:
+      - 'label-import.js'
+      - 'label-import-v3.js'
+      - 'label-import-ui-state.js'
+      - 'label-import-ui.js'
+      - 'label-import-ui.css'
+      - 'index.html'
+      - 'app.js'
+      - 'sw.js'
+      - 'tests/**'
+      - '.github/workflows/label-parser-tests.yml'
+      - 'ingredient-auto-audit.js'
+      - 'ingredient-reconstruction.js'
+      - 'api/**'
+      - 'hydration-widget.js'
+      - 'food-camera.js'
+      - 'api/analyze-food-image.js'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node-tests:
+    name: Node.js parser and import tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check label-import.js
+          node --check label-import-v3.js
+          node --check label-import-ui-state.js
+          node --check label-import-ui.js
+          
+          node --check app.js
+          node --check food-camera.js
+          node --check api/analyze-food-image.js
+          node --check hydration-widget.js
+          node --check ingredient-reconstruction.js
+          node --check sw.js
+          node --check ingredient-auto-audit.js
+          node --check api/ingredient-context.js
+          node --check api/nutrition-enrich.js
+
+
+      - name: Run all Node.js tests
+        run: node --test tests/*.test.js
