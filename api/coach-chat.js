@@ -38,9 +38,20 @@ async function reserveProductionQuota(ip){
    headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
    body:JSON.stringify(['EVAL',script,'2',...keys,String(globalLimit),String(ipLimit)])
   });
-  if(!result.ok)throw Error('Redis quota unavailable');
+  if(!result.ok){
+   console.error('[CoachQuota] Upstash HTTP',result.status);
+   throw Error('Redis quota unavailable');
+  }
   const data=await result.json();
-  if(data.error||![0,1,'0','1'].includes(data.result))throw Error('Invalid Redis response');
+  if(data.error){
+   // Only log a coarse error category, never Upstash response text or secrets.
+   console.error('[CoachQuota] Redis returned error; category:',/unknown command/i.test(String(data.error))?'unsupported-command':/script|eval/i.test(String(data.error))?'script-error':'redis-error');
+   throw Error('Redis command failed');
+  }
+  if(![0,1,'0','1'].includes(data.result)){
+   console.error('[CoachQuota] Unexpected response type',typeof data.result);
+   throw Error('Invalid Redis response');
+  }
   return Number(data.result)===1;
  }finally{clearTimeout(timer);}
 }
@@ -66,7 +77,10 @@ module.exports=async function handler(req,res){
  if(process.env.VERCEL_ENV==='production'){
   try{
    if(!await reserveProductionQuota(ip))return res.status(429).json({error:'Limite gratuito Coach raggiunto. Riprova più tardi.'});
-  }catch{return res.status(503).json({error:'Protezione quote non disponibile. Riprova più tardi.'});}
+  }catch(e){
+   console.error('[CoachQuota] Check failed:',e?.name==='AbortError'?'timeout':e?.message==='Quota config missing'?'missing-config':e?.message==='Invalid quota'?'invalid-limit':'check-failed');
+   return res.status(503).json({error:'Protezione quote non disponibile. Riprova più tardi.'});
+  }
  }
  if(limiter.size>2000)limiter.clear();
  let body=req.body;
