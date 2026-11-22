@@ -1,12 +1,14 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-ai-coach-v1-coach2-md1-v21-chatv3-consent1';
+const CACHE = 'nutritrace-v3-aurora-v4-' + '20261122';
 
 const CORE = [
   './',
   './index.html',
   './app.js',
+  './aurora-components.js',
+  './aurora-v4.css',
   './ai-coach.js',
   './ai-coach-chat.js',
   './coach-markdown.js',
@@ -49,7 +51,7 @@ const VENDOR = [
 ];
 
 
-const APP_ASSET = /\/(?:app\.js|food-camera\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
+const APP_ASSET = /\/(?:app\.js|food-camera\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v4\.css|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);

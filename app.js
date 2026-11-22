@@ -2938,28 +2938,14 @@ function importBackup(event) {
     selectedDate!==deviceToday?h('button',{className:'ghost todayBtn',onClick:()=>setSelectedDate(deviceToday)},'Oggi'):null
   );
 
-  return h('main',null,
-    h('header',{className:'hero'},h('div',null,h('div',{className:'eyebrow'},'DIARIO NUTRIZIONALE PERSONALE · V2.3 DATA + SEARCH'),h('h1',null,'NutriTrace'),h('p',null,'Diario per data, Master Food DB multi-fonte, N/D espliciti e AI usata come interprete e ricerca assistita.')),h('div',{className:'heroActions'},
-  h('div',{className:'privacy'},
-    '● Local-first · Master DB primario · AI tracciata'
-  ),
-  h('button',{
-    type:'button',
-    className:'ghost themeToggle',
-    'aria-label':darkMode
-      ?'Attiva modalità giorno'
-      :'Attiva modalità notte',
-    'aria-pressed':darkMode,
-    onClick:()=>setDarkMode(value=>!value)
-  },
-    darkMode?'☀️ Giorno':'🌙 Notte'
-  )
-)),
-    h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','peso','analisi','coach','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
-
-    
-tab==='coach'&&h(window.NutriTraceAICoach.View,{logs,foods,goals,profile}),
-    tab==='oggi'&&h('section',null,
+  return h('main',{className:'aurora-app'},
+    h(window.NutriTraceAurora.Header,{
+      darkMode,
+      onToggleTheme:()=>setDarkMode(value=>!value)
+    }),
+    h(window.NutriTraceAurora.Navigation,{tab,onChange:setTab}),
+    tab==='coach'&&h('section',{className:'aurora-coach'},h(window.NutriTraceAurora.PageIntro,{kicker:'INTELLIGENZA ALIMENTARE',title:'Coach AI',description:'Una conversazione intelligente per analizzare e comprendere la tua alimentazione.',icon:'sparkles'}),h(window.NutriTraceAICoach.View,{logs,foods,goals,profile})),
+    tab==='oggi'&&h('section',{className:'aurora-today'},
       dateNavigator,
                 h('details',{
   id:'nutritrace-meal-settings',
@@ -3067,7 +3053,7 @@ tab==='coach'&&h(window.NutriTraceAICoach.View,{logs,foods,goals,profile}),
     }
   },'+ Aggiungi pasto')
 ),
-    h(window.NutriTraceMealDiary,{
+    h(window.NutriTraceAurora.MealDiaryPanel,{
   meals,
   logs:dayLogs,
   foods,
@@ -3263,7 +3249,27 @@ tab==='coach'&&h(window.NutriTraceAICoach.View,{logs,foods,goals,profile}),
         key:selectedDate,
         date:selectedDate
       }),
-      h('div',{className:'grid5'},[['kcal','Energia','kcal'],['protein','Proteine','g'],['carbs','Carboidrati','g'],['fat','Grassi','g'],['fiber','Fibre','g']].map(([id,n,u],i)=>{const g=goals.find(x=>x.id===id),cov=macroCoverage(dayLogs,foods,id);return h('article',{className:`metric ${i===0?'primary':''}`,key:id},h('span',null,n),h(Progress,{value:totals[id],goal:effectiveTarget(g||{},profile.weight),unit:u,kind:g?.kind}),dayLogs.length&&cov<.999?h('small',{className:'metricCoverage'},`totale parziale · dati ${fmt(cov*100,0)}%`):null);})),
+      h(window.NutriTraceAurora.DailyOverview,{
+        metrics:[
+    ['kcal','Calorie','kcal'],
+    ['protein','Proteine','g'],
+    ['carbs','Carboidrati','g'],
+    ['fat','Grassi','g'],
+    ['fiber','Fibre','g']
+  ].map(([id,label,unit])=>{
+    const g=goals.find(x=>x.id===id);
+    return {
+      id,label,unit,
+      value:totals[id],
+      target:effectiveTarget(g||{},profile.weight),
+      coverage:dayLogs.length?macroCoverage(dayLogs,foods,id):1,
+      kind:g?.kind||'target'
+    };
+  }),
+        onAdd:()=>document.querySelector('.quickDiary')?.scrollIntoView({behavior:'smooth',block:'start'}),
+        onSearch:()=>setTab('ricerca'),
+        onCoach:()=>setTab('coach')
+      }),
      h('article',{className:'card quickDiary'},
   activeMealId&&h('p',{className:'statusMsg'},
     'Stai aggiungendo a: '+
@@ -3365,17 +3371,23 @@ aiMsg && h('p', {
       h('article',{className:'card'},h('h2',null,'Micronutrienti del giorno'),!Object.keys(totals.nutrients).length?h('p',{className:'empty'},'Nessun micronutriente numerico registrato. I campi N/D non vengono sommati come zero.'):h('div',{className:'nutriTable'},Object.entries(totals.nutrients).sort().map(([k,v])=>{const [n,form,unit]=k.split('|');return h('div',{className:'bioRow',key:k},h('div',null,h('b',null,n),h('small',null,form)),h('strong',null,`${fmt(v.amount,3)} ${unit}`),h('span',null,[...v.sources].join(', ')));})))
     ),
 
-    tab==='ricerca'&&h('section',null,
-      h('div',{className:'sectionHead'},h('div',null,h('h2',null,'Ricerca alimenti'),h('p',null,'Runtime Food DB auditato a 14 fonti prima, archivio personale e database aggiunti da te come fonti complementari.'))),
-     
-h(window.NutriTraceFoodCamera,{
-  onLabel:importPhotoLabel,
-  onDish:importPhotoDish
-}),
-  h(window.NutriTraceBarcodeScanner,{
-  onProduct: openBarcodeProduct
-}),                   
-photoReviewOpen && h('article',{
+    tab==='ricerca'&&h('section',{className:'aurora-search'},
+      h(window.NutriTraceAurora.SearchHero,{
+        query,
+        onQuery:setQuery,
+        onSearch:searchFoods,
+        onAISearch:searchFoodsWithAI,
+        searching,
+        aiBusy:aiBusy==='search-ai',
+        camera:h(window.NutriTraceFoodCamera,{
+          onLabel:importPhotoLabel,
+          onDish:importPhotoDish
+        }),
+        scanner:h(window.NutriTraceBarcodeScanner,{
+          onProduct:openBarcodeProduct
+        })
+      }),
+      photoReviewOpen && h('article',{
   className:'card',
   style:{
     marginBottom:'16px',
@@ -3576,9 +3588,9 @@ photoReviewOpen && h('article',{
       )
 ),
 
- h('article',{className:'card'},
+ h('article',{className:'card aurora-search-panel'},
         h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),masterManifest&&h('small',null,`${includedMasterSources.length} sorgenti nazionali derivate · ${validationOnlySources.length} solo validazione`)),
-        h('div',{className:'searchBox'},h('input',{value:query,placeholder:'Cerca un alimento…',onChange:e=>setQuery(e.target.value),onKeyDown:e=>e.key==='Enter'&&searchFoods()}),h('button',{className:'cta',onClick:searchFoods,disabled:searching},searching?'Ricerca…':ui('search.dbButton','Cerca')),h('button',{className:'ghost',onClick:searchFoodsWithAI,disabled:aiBusy==='search-ai'||!query.trim()},aiBusy==='search-ai'?ui('search.aiWorking','Ricerca AI…'):ui('search.aiButton','Ricerca con AI'))),
+        h('div',{className:'aurora-results-heading'},h('h2',null,query.trim()?`Risultati per “${query.trim()}”`:'Esplora il database'),h('span',null,`${results.length} risultati`)),
        
 h('div',{className:'inlineActions'},
   h('button',{
@@ -3653,12 +3665,38 @@ h('div',{className:'card labelImportCard'},
       )
     ),
 
-    tab==='alimenti'&&h('section',null,
-      h('div',{className:'sectionHead'},h('div',null,h('h2',null,'Archivio alimenti'),h('p',null,'Alimenti importati, manuali o stimati con AI.'))),
+    tab==='alimenti'&&h('section',{className:'aurora-alimenti'},
+      h(window.NutriTraceAurora.PageIntro,{kicker:'LA TUA RACCOLTA',title:'Archivio alimenti',description:'Tutti i tuoi prodotti e alimenti personalizzati, pronti per il diario.',icon:'food'}),
+      h('span',{className:'a-kicker'},'ALIMENTI SALVATI'),
       !foods.length?h('article',{className:'card empty'},'Non hai ancora alimenti.'):h('div',{className:'foodCards'},foods.map(f=>h('article',{className:'card',key:f.id},h('div',{className:'cardTitle'},h('div',null,h('h3',null,f.name),h('p',null,f.brand||f.officialName||'')),h('div',{className:'inlineActions'},h('button',{className:'ghost',onClick:()=>setFoodDraft(structuredClone(f))},'Modifica'),h('button',{className:'ghost danger',onClick:()=>removeFood(f.id)},'Rimuovi'))),h('div',{className:'macroLine'},h('span',null,`${fmtMaybe(f.label?.kcal)} kcal`),h('span',null,`P ${fmtMaybe(f.label?.protein)} g`),h('span',null,`C ${fmtMaybe(f.label?.carbs)} g`),h('span',null,`G ${fmtMaybe(f.label?.fat)} g`)),h('small',{className:'sourceText'},`${f.masterId?'Master DB · ':''}Fonti: ${f.sources?.length?f.sources.map(s=>s?.name||s).join(', '):'manuale'} · N/D non conteggiati come zero`))))
     ),
 
-    tab==='obiettivi'&&h('section',null,
+    tab==='obiettivi'&&h('section',{className:'aurora-goals'},
+      h(window.NutriTraceAurora.GoalsHero,{
+        metrics:[
+    ['kcal','Calorie','kcal'],
+    ['protein','Proteine','g'],
+    ['carbs','Carboidrati','g'],
+    ['fat','Grassi','g'],
+    ['fiber','Fibre','g']
+  ].map(([id,label,unit])=>{
+    const g=goals.find(x=>x.id===id);
+    return {
+      id,label,unit,
+      value:totals[id],
+      target:effectiveTarget(g||{},profile.weight),
+      coverage:dayLogs.length?macroCoverage(dayLogs,foods,id):1,
+      kind:g?.kind||'target'
+    };
+  }),
+        micros:pinnedGoals.map(g=>({
+          id:g.id,name:g.name,unit:g.unit,
+          value:valueForGoal(g,totals),
+          target:effectiveTarget(g,profile.weight),
+          coverage:dayLogs.length?goalCoverageFromLogs(dayLogs,foods,g):0
+        }))
+      }),
+      
       h('div',{className:'twoCol goalsTop'},
         h('article',{className:'card'},h('h2',null,'Peso ed energia / macro'),h('p',{className:'muted'},'Proteine, carboidrati, grassi, zuccheri semplici e fibre sono impostabili in g/kg di peso corporeo.'),
           h('div',{className:'macroPlanGrid'},
@@ -3731,15 +3769,23 @@ h('div',{className:'card labelImportCard'},
         [...new Set(goals.filter(g=>g.group!=='Energia e macro').map(g=>g.group||'Personalizzati'))].map(group=>h('details',{className:'goalGroup',key:group,open:group==='Vitamine'||group==='Minerali e oligoelementi'},h('summary',null,h('b',null,group),h('span',null,`${goals.filter(g=>(g.group||'Personalizzati')===group).length} voci`)),h('div',{className:'goalRows'},goals.map((g,i)=>(g.group||'Personalizzati')===group?h(GoalRow,{key:g.id,g,index:i,goals,setGoals,weight:profile.weight,current:valueForGoal(g,g.period==='week'?weekTotals:totals)}):null))))
       )
     ),
-tab==='peso'&&h('section',null,
+tab==='peso'&&h('section',{className:'aurora-peso'},
+      h(window.NutriTraceAurora.PageIntro,{kicker:'IL TUO BENESSERE',title:'Peso e composizione',description:'Misurazioni, progressi e grafici salvati nel tuo diario.',icon:'scale'}),
   h(window.NutriTraceBodyWeight),
   h(window.NutriTraceWeightCalorieChart,{
     logs,
     foods
   })
 ),
-    tab==='analisi'&&h('section',null,
-      h('div',{className:'sectionHead'},h('div',null,h('h2',null,'Analisi e cronologia'),h('p',null,'Report ricalcolati dal diario: giorno, settimana, mese, anno o intervallo personalizzato. N/D non viene mai trattato come zero.'))),
+    tab==='analisi'&&h('section',{className:'aurora-analysis'},
+      h(window.NutriTraceAurora.AnalysisHero,{
+        average:reportAvg.kcal,
+        previous:previousAvg.kcal,
+        days:reportTrackedDays,
+        formatPeriod:{day:'GIORNO',week:'SETTIMANA',month:'MESE',year:'ANNO',custom:'INTERVALLO'}[reportMode]
+      }),
+      
+      h('p',{className:'a-analysis-sub'},'Report basati sul diario. N/D non viene trattato come zero.'),
       h('article',{className:'card reportControls'},
         h('div',{className:'reportModeButtons'},...['day','week','month','year','custom'].map(mode=>h('button',{className:reportMode===mode?'cta':'ghost',key:mode,onClick:()=>setReportMode(mode)},({day:'Giorno',week:'Settimana',month:'Mese',year:'Anno',custom:'Intervallo'}[mode])))),
         reportMode==='custom'?h('div',{className:'reportCustomRange'},h('label',null,'Dal',h('input',{type:'date',value:reportFrom,onChange:e=>setReportFrom(e.target.value)})),h('label',null,'Al',h('input',{type:'date',value:reportTo,onChange:e=>setReportTo(e.target.value)}))):h('label',{className:'reportAnchor'},'Periodo di riferimento',h('input',{type:'date',value:reportAnchor,onChange:e=>setReportAnchor(e.target.value)})),
@@ -3773,7 +3819,8 @@ tab==='peso'&&h('section',null,
       )
     ),
 
-    tab==='dati'&&h('section',null,
+    tab==='dati'&&h('section',{className:'aurora-dati'},
+      h(window.NutriTraceAurora.PageIntro,{kicker:'QUALITÀ DEI DATI',title:'Dati e database',description:'Fonti scientifiche, archivi personali e backup, tutti sotto il tuo controllo.',icon:'grid'}),
       h('article',{className:'card masterCard'},
         h('div',{className:'cardTitle'},h('div',null,h('span',{className:'eyebrow'},'DATABASE INTEGRATO'),h('h2',null,`NutriTrace Runtime DB ${masterManifest?.runtime_version||'v1'}`),h('p',null,'Fonte primaria dell’app: valori normalizzati per 100 g, provenance conservata, fusioni conservative e N/D espliciti.')),h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus)),
         masterManifest&&h('div',{className:'masterStats'},
