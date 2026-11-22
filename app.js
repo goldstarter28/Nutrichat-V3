@@ -2340,6 +2340,86 @@ if ('mealFavorites' in data) {
     );
   }
 }
+        // Verifica preliminare della struttura del backup.
+for (const field of ['foods', 'logs', 'goals']) {
+  if (
+    field in data &&
+    !Array.isArray(data[field])
+  ) {
+    throw new Error(
+      'La sezione "' + field + '" non è valida.'
+    );
+  }
+}
+
+if (
+  'profile' in data &&
+  (
+    !data.profile ||
+    typeof data.profile !== 'object' ||
+    Array.isArray(data.profile)
+  )
+) {
+  throw new Error('Il profilo nel backup non è valido.');
+}
+
+// Riepilogo delle informazioni da ripristinare.
+const summary = [
+  'RIPRISTINO BACKUP NUTRITRACE',
+  '',
+  'File: ' + file.name,
+  'Versione: ' + (data.version ?? 'non indicata'),
+  '',
+  'CONTENUTO DEL BACKUP',
+  '',
+  'Alimenti: ' + (
+    Array.isArray(data.foods)
+      ? data.foods.length
+      : 'non presenti'
+  ),
+  'Registrazioni alimentari: ' + (
+    Array.isArray(data.logs)
+      ? data.logs.length
+      : 'non presenti'
+  ),
+  'Obiettivi nutrizionali: ' + (
+    Array.isArray(data.goals)
+      ? data.goals.length
+      : 'non presenti'
+  ),
+  'Pasti configurati: ' + (
+    restoredMeals !== null
+      ? restoredMeals.length
+      : 'non presenti'
+  ),
+  'Preferiti per pasto: ' + (
+    restoredFavorites !== null
+      ? restoredFavorites.length
+      : 'non presenti'
+  ),
+  'Misurazioni del peso: ' + (
+    Array.isArray(data.bodyWeight?.entries)
+      ? data.bodyWeight.entries.length
+      : 'non presenti'
+  ),
+  'Profilo: ' + (
+    data.profile ? 'presente' : 'non presente'
+  ),
+  '',
+  'ATTENZIONE',
+  'Le sezioni presenti nel backup sostituiranno',
+  'quelle attualmente salvate sul dispositivo.',
+  'Le sezioni assenti saranno conservate.',
+  '',
+  'Prima di procedere è consigliabile esportare',
+  'una copia dei dati attuali.',
+  '',
+  'Vuoi continuare con il ripristino?'
+].join('\n');
+
+if (!window.confirm(summary)) {
+  return;
+}
       if ('bodyWeight' in data) {
         const weight = data.bodyWeight;
 
