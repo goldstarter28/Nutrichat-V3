@@ -5,7 +5,7 @@
   const h = root.React.createElement;
   const { useState, useEffect, useRef } = root.React;
 
-  function BarcodeScanner() {
+  function BarcodeScanner({ onProduct }) {
     const videoRef = useRef(null);
     const [scanning, setScanning] = useState(false);
     const [code, setCode] = useState('');
@@ -269,12 +269,18 @@
         ),
 
         product.source?.url && h('p', null,
-          h('a', {
-            href: product.source.url,
-            target: '_blank',
-            rel: 'noopener noreferrer'
-          }, 'Verifica la fonte Open Food Facts')
-        )
+  h('a', {
+    href: product.source.url,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  }, 'Verifica la fonte Open Food Facts')
+),
+
+typeof onProduct === 'function' && h('button', {
+  type: 'button',
+  className: 'cta',
+  onClick: () => onProduct(product)
+}, 'Rivedi e salva in NutriTrace')
       )
     );
   }
