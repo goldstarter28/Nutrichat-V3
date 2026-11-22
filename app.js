@@ -1109,17 +1109,43 @@ function Home(){
   const [foods,setFoods]=useState([]), [logs,setLogs]=useState([]), [goals,setGoals]=useState(buildDefaultGoals()), [profile,setProfile]=useState(structuredClone(DEFAULT_PROFILE));
   const [meals,setMeals] = useState(() => {
   const config = window.NutriTraceMealConfig;
+  const migrationKey = 'nutritrace_extras_migrated_v3';
+
+  let current;
 
   try {
     const saved = localStorage.getItem('nutritrace_meals_v3');
 
-    return saved === null
+    current = saved === null
       ? config.defaults()
       : config.normalize(JSON.parse(saved));
   } catch (error) {
     console.warn('Configurazione pasti non leggibile', error);
-    return config.defaults();
+    current = config.defaults();
   }
+
+  if (localStorage.getItem(migrationKey) !== '1') {
+    const hasExtras = current.some(meal =>
+      meal.id === 'extras' ||
+      ['extra', 'extras'].includes(
+        String(meal.name || '').trim().toLowerCase()
+      )
+    );
+
+    if (!hasExtras && current.length < 20) {
+      current = [
+        ...current,
+        { id: 'extras', name: 'Extra' }
+      ];
+    }
+
+    if (hasExtras || current.length <= 20 &&
+        current.some(meal => meal.id === 'extras')) {
+      localStorage.setItem(migrationKey, '1');
+    }
+  }
+
+  return current;
 });
     const [selectedMealId,setSelectedMealId] = useState(null);
 const [mealFavorites, setMealFavorites] = useState(() => {
