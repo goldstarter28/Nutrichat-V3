@@ -1,50 +1,63 @@
 
-/* NutriTrace offline food lexicon engine.
- * Dataset provided separately.
- */
+/* NutriTrace Food Lexicon — Wikidata CC0 V1/V2 */
 (function(root){
   'use strict';
 
   const normalize=value=>String(value??'')
-    .toLowerCase()
-    .normalize('NFD')
+    .toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^a-z0-9]+/g,' ')
-    .trim();
+    .replace(/[^a-z0-9]+/g,' ').trim();
 
-  const normalizeRow=row=>({
-    qid:String(row.qid||''),
-    it:normalize(row.it),
-    en:[...new Set(
-      (Array.isArray(row.en)?row.en:[row.en])
-        .map(normalize).filter(Boolean)
-    )],
-    ambiguous:row.ambiguous===true
-  });
+  const list=value=>Array.isArray(value)?value:[value];
 
-  const create=(input={})=>{
+  const unique=values=>[
+    ...new Set(values.map(normalize).filter(Boolean))
+  ];
+
+  const blocked=new Set(['frutta secca']);
+
+  function create(input={}){
     if(
+      input.source!=='wikidata-structured-data' ||
       input.license!=='CC0-1.0' ||
-      input.source!=='wikidata-structured-data'
+      !Array.isArray(input.entries)
     ){
-      throw new Error(
-        'Lexicon source not verified as Wikidata CC0 structured data'
-      );
+      throw new Error('Dataset Wikidata CC0 non valido');
     }
 
-    const rows=Array.isArray(input.entries)
-      ? input.entries.map(normalizeRow)
-      : [];
+    const byItalian=new Map();
+    let accepted=0;
 
-    const byIt=new Map();
+    for(const row of input.entries){
+      const qid=String(row?.qid||'');
 
-    for(const row of rows){
-      if(!row.it||!row.en.length||row.ambiguous)
-        continue;
+      if(
+        !/^Q[1-9]\d*$/.test(qid) ||
+        row.ambiguous===true
+      ) continue;
 
-      const list=byIt.get(row.it)||[];
-      list.push(row);
-      byIt.set(row.it,list);
+      const italian=unique([
+        row.it,
+        ...list(row.aliases_it||[])
+      ]);
+
+      const english=unique([
+        ...list(row.en),
+        ...list(row.aliases_en||[])
+      ]);
+
+      if(!italian.length||!english.length)continue;
+
+      accepted++;
+
+      for(const term of italian){
+        if(blocked.has(term))continue;
+
+        if(!byItalian.has(term))
+          byItalian.set(term,new Map());
+
+        byItalian.get(term).set(qid,english);
+      }
     }
 
     return Object.freeze({
@@ -54,48 +67,48 @@
         version:String(input.version||'')
       }),
 
-      count:rows.length,
+      count:accepted,
 
       variants(query,limit=8){
-        const q=normalize(query);
-        if(!q)return [];
+        const key=normalize(query);
 
-        const matches=byIt.get(q)||[];
+        if(!key||blocked.has(key))return [];
 
-        const concepts=new Set(
-          matches.map(x=>x.qid)
+        const concepts=byItalian.get(key);
+
+        if(!concepts||concepts.size!==1)return [];
+
+        const cap=Math.max(
+          0,Math.min(20,Math.trunc(Number(limit)||0))
         );
 
-        if(concepts.size!==1)return [];
-
-        return [...new Set(
-          matches.flatMap(x=>x.en)
-        )].slice(0,limit);
+        return [
+          ...new Set([...concepts.values()].flat())
+        ]
+          .filter(term=>term!==key)
+          .slice(0,cap);
       }
     });
-  };
+  }
 
-  const load=async(
-    path='/data/food-lexicon-it-en.json'
-  )=>{
+  async function load(
+    path='./data/food-lexicon-it-en-v2.json'
+  ){
     const response=await fetch(path,{
       cache:'force-cache'
     });
 
-    if(!response.ok){
-      throw new Error(
-        'Offline food lexicon unavailable'
-      );
-    }
+    if(!response.ok)
+      throw new Error('Dizionario offline non disponibile');
 
     return create(await response.json());
-  };
+  }
 
-  root.NutriTraceFoodLexicon={
+  root.NutriTraceFoodLexicon=Object.freeze({
     create,
     load,
     normalize
-  };
+  });
 
 })(
   typeof window!=='undefined'
