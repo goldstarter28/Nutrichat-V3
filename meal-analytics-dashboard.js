@@ -203,13 +203,13 @@
       const food = foodMap.get(log.foodId);
       if (!food) continue;
 
-      const base = number(food.servingGrams) || 100;
-      const value = foodValue(food, metric);
+      const base = number(food.servingGrams);
+const value = foodValue(food, metric);
 
-      if (value !== null) {
-        row.value += value * grams / base;
-        row.knownWeight += grams;
-      }
+if (base !== null && base > 0 && value !== null) {
+  row.value += value * grams / base;
+  row.knownWeight += grams;
+}
     }
 
     return results;
