@@ -2262,7 +2262,7 @@ async function commitRecipe() {
 
   return h('main',null,
     h('header',{className:'hero'},h('div',null,h('div',{className:'eyebrow'},'DIARIO NUTRIZIONALE PERSONALE · V2.3 DATA + SEARCH'),h('h1',null,'NutriTrace'),h('p',null,'Diario per data, Master Food DB multi-fonte, N/D espliciti e AI usata come interprete e ricerca assistita.')),h('div',{className:'privacy'},'● Local-first · Master DB primario · AI tracciata')),
-    h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','analisi','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
+    h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','peso','analisi','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
 
     
 tab==='oggi'&&h('section',null,
@@ -2912,7 +2912,7 @@ h('div',{className:'card labelImportCard'},
         [...new Set(goals.filter(g=>g.group!=='Energia e macro').map(g=>g.group||'Personalizzati'))].map(group=>h('details',{className:'goalGroup',key:group,open:group==='Vitamine'||group==='Minerali e oligoelementi'},h('summary',null,h('b',null,group),h('span',null,`${goals.filter(g=>(g.group||'Personalizzati')===group).length} voci`)),h('div',{className:'goalRows'},goals.map((g,i)=>(g.group||'Personalizzati')===group?h(GoalRow,{key:g.id,g,index:i,goals,setGoals,weight:profile.weight,current:valueForGoal(g,g.period==='week'?weekTotals:totals)}):null))))
       )
     ),
-
+tab==='peso'&&h(window.NutriTraceBodyWeight),
     tab==='analisi'&&h('section',null,
       h('div',{className:'sectionHead'},h('div',null,h('h2',null,'Analisi e cronologia'),h('p',null,'Report ricalcolati dal diario: giorno, settimana, mese, anno o intervallo personalizzato. N/D non viene mai trattato come zero.'))),
       h('article',{className:'card reportControls'},
