@@ -28,86 +28,110 @@
   }
 
   function normalize(favorites) {
-    if (!Array.isArray(favorites)) return [];
+  if (!Array.isArray(favorites)) return [];
 
-    const out = [];
-    const seen = new Set();
+  const out = [];
+  const seen = new Set();
 
-    for (const item of favorites) {
-      if (!item || typeof item !== 'object') continue;
+  for (const item of favorites) {
+    if (!item || typeof item !== 'object') continue;
 
-      const mealId = clean(item.mealId);
-      const foodId = clean(item.foodId);
-      const grams = validGrams(item.grams);
+    const mealId = clean(item.mealId);
+    const foodId = clean(item.foodId);
+    const grams = validGrams(item.grams);
 
-      if (!mealId || !foodId || grams === null) {
-        continue;
-      }
+    if (!mealId || !foodId || grams === null) continue;
 
-      const key = JSON.stringify([
-        mealId, foodId, grams
-      ]);
+    const unit = ['g', 'ml', 'pz'].includes(item.unit)
+      ? item.unit
+      : 'g';
 
-      if (seen.has(key)) continue;
+    const rawQuantity = Number(item.quantity);
+    const rawFactor = Number(item.gramsPerUnit);
 
-      seen.add(key);
+    const validMetadata =
+      unit !== 'g' &&
+      Number.isFinite(rawQuantity) &&
+      rawQuantity > 0 &&
+      Number.isFinite(rawFactor) &&
+      rawFactor > 0 &&
+      Math.abs(rawQuantity * rawFactor - grams) < 0.01;
 
-      out.push({
-        id: clean(item.id) || newId(),
-        mealId,
-        foodId,
-        grams,
-        label: clean(item.label).slice(0, 100)
-      });
+    const finalUnit = validMetadata ? unit : 'g';
+    const quantity = validMetadata ? rawQuantity : grams;
+    const gramsPerUnit = validMetadata ? rawFactor : 1;
 
-      if (out.length >= MAX_FAVORITES) break;
-    }
-
-    return out;
-  }
-
-  function addFavorite(favorites, entry, meals, foods) {
-    const current = normalize(favorites);
-
-    const mealId = clean(entry?.mealId);
-    const foodId = clean(entry?.foodId);
-    const grams = validGrams(entry?.grams);
-
-    if (!(meals || []).some(m => m.id === mealId)) {
-      throw new Error('Seleziona un pasto valido.');
-    }
-
-    if (!(foods || []).some(f => f.id === foodId)) {
-      throw new Error('Alimento non presente nell’archivio.');
-    }
-
-    if (grams === null) {
-      throw new Error('Indica una quantità valida in grammi.');
-    }
-
-    if (current.some(item =>
-      item.mealId === mealId &&
-      item.foodId === foodId &&
-      item.grams === grams
-    )) {
-      return current;
-    }
-
-    if (current.length >= MAX_FAVORITES) {
-      throw new Error('Limite massimo di 100 preferiti.');
-    }
-
-    return normalize([
-      ...current,
-      {
-        id: newId(),
-        mealId,
-        foodId,
-        grams,
-        label: clean(entry.label)
-      }
+    const key = JSON.stringify([
+      mealId,
+      foodId,
+      grams
     ]);
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push({
+      id: clean(item.id) || newId(),
+      mealId,
+      foodId,
+      grams,
+      quantity,
+      unit: finalUnit,
+      gramsPerUnit,
+      label: clean(item.label).slice(0, 100)
+    });
+
+    if (out.length >= MAX_FAVORITES) break;
   }
+
+  return out;
+}
+
+function addFavorite(favorites, entry, meals, foods) {
+  const current = normalize(favorites);
+
+  const mealId = clean(entry?.mealId);
+  const foodId = clean(entry?.foodId);
+  const grams = validGrams(entry?.grams);
+
+  if (!(meals || []).some(m => m.id === mealId)) {
+    throw new Error('Seleziona un pasto valido.');
+  }
+
+  if (!(foods || []).some(f => f.id === foodId)) {
+    throw new Error('Alimento non presente nell’archivio.');
+  }
+
+  if (grams === null) {
+    throw new Error('Indica una quantità valida in grammi.');
+  }
+
+  if (current.some(item =>
+    item.mealId === mealId &&
+    item.foodId === foodId &&
+    item.grams === grams
+  )) {
+    return current;
+  }
+
+  if (current.length >= MAX_FAVORITES) {
+    throw new Error('Limite massimo di 100 preferiti.');
+  }
+
+  return normalize([
+    ...current,
+    {
+      id: newId(),
+      mealId,
+      foodId,
+      grams,
+      quantity: entry.quantity ?? grams,
+      unit: entry.unit || 'g',
+      gramsPerUnit: entry.gramsPerUnit ?? 1,
+      label: clean(entry.label)
+    }
+  ]);
+}
 
   function removeFavorite(favorites, favoriteId) {
     return normalize(favorites).filter(
