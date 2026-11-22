@@ -2303,7 +2303,43 @@ function importBackup(event) {
       ) {
         throw new Error('Il file non contiene un backup valido.');
       }
+let restoredMeals = null;
+let restoredFavorites = null;
 
+if ('meals' in data) {
+  if (!Array.isArray(data.meals) || data.meals.length > 20) {
+    throw new Error('La configurazione dei pasti non è valida.');
+  }
+
+  restoredMeals = window.NutriTraceMealConfig.normalize(
+    data.meals
+  );
+
+  if (restoredMeals.length !== data.meals.length) {
+    throw new Error(
+      'Il backup contiene pasti non validi o duplicati.'
+    );
+  }
+}
+
+if ('mealFavorites' in data) {
+  if (
+    !Array.isArray(data.mealFavorites) ||
+    data.mealFavorites.length > 100
+  ) {
+    throw new Error('I preferiti dei pasti non sono validi.');
+  }
+
+  restoredFavorites = window.NutriTraceMealShortcuts.normalize(
+    data.mealFavorites
+  );
+
+  if (restoredFavorites.length !== data.mealFavorites.length) {
+    throw new Error(
+      'Il backup contiene preferiti non validi o duplicati.'
+    );
+  }
+}
       if ('bodyWeight' in data) {
         const weight = data.bodyWeight;
 
