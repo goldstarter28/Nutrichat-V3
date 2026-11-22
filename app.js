@@ -3246,10 +3246,7 @@ tab==='oggi'&&h('section',null,
 
     h(NutriTraceFastFoodInput, {
       value: quickQuery,
-      onQueryChange: text => {
-        setQuickQuery(text);
-        setAiMsg('');
-      }
+      V
     })
   ),
 
