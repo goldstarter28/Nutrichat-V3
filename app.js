@@ -1412,7 +1412,138 @@ const draftNdRows=draftCatalogRows.filter(
   const ui=(path,fallback)=>cfgGet(appConfig?.ui,path,fallback);
 
   function valueForGoal(g,ag){ const v=goalValueFromAggregate(g,ag); if(v===0&&g.name==='Sodio'&&ag.salt>0)return convert(ag.salt/2.5,'g',g.unit); return v; }
-  function saveFood(){ if(!foodDraft?.name?.trim()) return; const f={...foodDraft,additives:parseAdditives(foodDraft.ingredients)}; setFoods(p=>[...p.filter(x=>x.id!==f.id),f]); setFoodDraft(null); }
+  function openBarcodeProduct(product) {
+  if (
+    !product ||
+    !/^\d{8}$|^\d{12,14}$/.test(String(product.barcode || '')) ||
+    !String(product.name || '').trim()
+  ) {
+    window.alert('Scheda barcode non valida.');
+    return;
+  }
+
+  const barcode = String(product.barcode);
+  const name = String(product.name).trim();
+  const brand = String(product.brand || '').trim();
+
+  const found =
+    foods.find(f => String(f.barcode || '') === barcode) ||
+    foods.find(f =>
+      norm(f.name) === norm(name) &&
+      norm(f.brand || '') === norm(brand)
+    );
+
+  if (found) {
+    window.alert(
+      'Alimento già presente: apriamo la scheda esistente. ' +
+      'I nutrienti salvati non verranno sovrascritti automaticamente.'
+    );
+  }
+
+  const label = emptyLabel();
+
+  if (!found) {
+    for (const key of Object.keys(label)) {
+      const value = product.label?.[key];
+
+      if (
+        typeof value === 'number' &&
+        Number.isFinite(value) &&
+        value >= 0
+      ) {
+        label[key] = value;
+      }
+    }
+  }
+
+  const draft = found
+    ? {
+        ...structuredClone(found),
+        barcode
+      }
+    : {
+        ...emptyFood(),
+        barcode,
+        name,
+        brand,
+        ingredients: String(product.ingredients || ''),
+        label,
+        aliases: [name],
+        servingGrams: 100,
+        notes:
+          'Dati Open Food Facts: verifica con l’etichetta originale.',
+        sources: [{
+          id: newId(),
+          name: 'Open Food Facts',
+          reference: product.source?.url ||
+            ('https://world.openfoodfacts.org/product/' + barcode),
+          quality: 'secondaria'
+        }]
+      };
+
+  draft.barcodeDiary = {
+    add: false,
+    grams: '100',
+    mealId: ''
+  };
+
+  setFoodDraft(draft);
+}
+
+function saveFood() {
+  if (!foodDraft?.name?.trim()) return;
+
+  const { barcodeDiary, ...data } = foodDraft;
+  const gramsValue = Number(barcodeDiary?.grams);
+
+  if (
+    barcodeDiary?.add &&
+    (
+      !Number.isFinite(gramsValue) ||
+      gramsValue <= 0 ||
+      gramsValue > 10000
+    )
+  ) {
+    window.alert('Inserisci una quantità valida fino a 10000 g.');
+    return;
+  }
+
+  const mealId = barcodeDiary?.mealId || null;
+
+  if (
+    barcodeDiary?.add &&
+    mealId &&
+    !meals.some(m => m.id === mealId)
+  ) {
+    window.alert('Seleziona un pasto valido.');
+    return;
+  }
+
+  const food = {
+    ...data,
+    additives: parseAdditives(data.ingredients)
+  };
+
+  setFoods(prev => [
+    ...prev.filter(f => f.id !== food.id),
+    food
+  ]);
+
+  if (barcodeDiary?.add) {
+    setLogs(prev => [
+      ...prev,
+      {
+        id: newId(),
+        date: selectedDate,
+        foodId: food.id,
+        grams: gramsValue,
+        mealId
+      }
+    ]);
+  }
+
+  setFoodDraft(null);
+}
   function removeFood(id){ const f=foods.find(x=>x.id===id); if(!f) return; const n=logs.filter(l=>l.foodId===id).length; if(!confirm(`Rimuovere “${f.name}” dall'archivio?${n?` Verranno eliminate anche ${n} registrazioni del diario.`:''}`)) return; setFoods(p=>p.filter(x=>x.id!==id)); setLogs(p=>p.filter(l=>l.foodId!==id)); }
   function addFoodLog(foodId, g = grams, extra = {}) {
   const amount = Number(g);
