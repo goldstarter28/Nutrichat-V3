@@ -856,29 +856,72 @@ async function loadMasterBundle(){
   return {manifest,index};
 }
 function scoreMasterRow(q,row){
-  const nq=norm(q); if(!nq)return 0;
-  const nn=row.__nn??norm(row.name), ne=row.__ne??norm(row.name_en), aliases=row.__aliases??(row.aliases||[]).map(norm);
-  const name=`${nn} ${ne}`.trim();
-  let s=0;
+  const nq=norm(q);
+  if(!nq)return 0;
+
+  const nn=row.__nn??norm(row.name);
+  const ne=row.__ne??norm(row.name_en);
+  const aliases=row.__aliases??(row.aliases||[]).map(norm);
+  const names=[nn,ne].filter(Boolean);
+
+  let relevance=0;
+
   for(const p of phraseAlternatives(q)){
-    if(nn===p||ne===p)s=Math.max(s,120);
-    else if(nn.startsWith(`${p} `)||ne.startsWith(`${p} `))s=Math.max(s,65);
-    else if(hasTerm(name,p))s=Math.max(s,48);
-    if(aliases.some(a=>a===p))s=Math.max(s,150);
+    if(names.some(n=>n===p)){
+      relevance=Math.max(relevance,400);
+    }else if(names.some(n=>n.startsWith(p+' '))){
+      relevance=Math.max(relevance,280);
+    }else if(names.some(n=>hasTerm(n,p))){
+      relevance=Math.max(relevance,200);
+    }
+
+    if(aliases.some(x=>x===p)){
+      relevance=Math.max(relevance,160);
+    }else if(aliases.some(x=>hasTerm(x,p))){
+      relevance=Math.max(relevance,90);
+    }
   }
-  for(const token of queryTokens(q)){
-    const alts=tokenAlternatives(token);
-    if(alts.some(a=>hasTerm(name,a)))s+=14;else s-=4;
-    if(alts.some(a=>aliases.some(x=>hasTerm(x,a))))s+=25;
+
+  const tokens=queryTokens(q);
+  let matched=0;
+
+  for(const token of tokens){
+    const alternatives=tokenAlternatives(token);
+
+    const inName=alternatives.some(t=>
+      names.some(n=>hasTerm(n,t))
+    );
+
+    const inAlias=alternatives.some(t=>
+      aliases.some(x=>hasTerm(x,t))
+    );
+
+    if(inName||inAlias){
+      matched++;
+      relevance+=inName?18:7;
+    }
   }
-  if(nq && (nn===nq||ne===nq))s+=80;
-  if(nq && (nn.startsWith(nq)||ne.startsWith(nq)))s+=25;
-  if(s>=40)s+=Math.min(80,Math.max(0,Number(row.sc||1)-1)*20);
-  if((row.sources||[]).includes('it'))s+=25;
-  if(Number(row.tc||0)>=.95)s+=4;
-  // Prefer records whose runtime has complete core macros, without hiding less-complete alternatives.
-  if(row.core)s+=18; else s+=Math.min(6,Number(row.mc||0));
-  return Math.max(0,s);
+
+  // Nessun bonus di qualità senza corrispondenza lessicale.
+  if(relevance===0)return 0;
+
+  // Evita risultati deboli nelle ricerche con più parole.
+  if(tokens.length>1 && matched<tokens.length && relevance<90){
+    return 0;
+  }
+
+  if(tokens.length>1 && matched<tokens.length){
+    relevance-=35*(tokens.length-matched);
+  }
+
+  // La qualità distingue risultati pertinenti,
+  // ma non può superare una corrispondenza più precisa.
+  const quality=
+    Math.min(18,Math.max(0,Number(row.sc||1)-1)*6)+
+    ((row.sources||[]).includes('it')?6:0)+
+    (row.core?6:Math.min(3,Number(row.mc||0)));
+
+  return Math.max(0,relevance+quality);
 }
 function searchMasterIndex(q,index,limit=12){
   const raw=clean(q); if(!raw)return [];
