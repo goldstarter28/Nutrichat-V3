@@ -3192,7 +3192,9 @@ h(window.NutriTraceFoodCamera,{
   onLabel:importPhotoLabel,
   onDish:importPhotoDish
 }),
-   h(window.NutriTraceBarcodeScanner,{}),                    
+  h(window.NutriTraceBarcodeScanner,{
+  onProduct: openBarcodeProduct
+}),                   
 photoReviewOpen && h('article',{
   className:'card',
   style:{
@@ -3703,7 +3705,87 @@ h('label',null,'Lista come in etichetta',h('textarea',{rows:4,value:foodDraft.in
       h('div',{className:'cardTitle'},h('h3',null,'Fonti'),h('button',{className:'ghost',onClick:()=>setFoodDraft({...foodDraft,sources:[...(foodDraft.sources||[]),{id:newId(),name:'',reference:'',quality:'primaria'}]})},'+ Fonte')),
       (foodDraft.sources||[]).map((s,i)=>h('div',{className:'sourceEdit',key:s?.id||i},h('input',{value:s?.name||'',placeholder:'Fonte',onChange:e=>{const x=[...foodDraft.sources];x[i]={...s,name:e.target.value};setFoodDraft({...foodDraft,sources:x})}}),h('input',{value:s?.reference||'',placeholder:'Riferimento',onChange:e=>{const x=[...foodDraft.sources];x[i]={...s,reference:e.target.value};setFoodDraft({...foodDraft,sources:x})}}),h('select',{value:s?.quality||'primaria',onChange:e=>{const x=[...foodDraft.sources];x[i]={...s,quality:e.target.value};setFoodDraft({...foodDraft,sources:x})}},h('option',{value:'primaria'},'Primaria'),h('option',{value:'secondaria'},'Secondaria'),h('option',{value:'stimata'},'Stimata')),h('button',{className:'ghost danger',onClick:()=>setFoodDraft({...foodDraft,sources:foodDraft.sources.filter((_,j)=>j!==i)})},'×'))),
       h('label',null,'Note',h('textarea',{rows:3,value:foodDraft.notes||'',onChange:e=>setFoodDraft({...foodDraft,notes:e.target.value})})),
-      h('div',{className:'modalActions'},h('button',{className:'ghost',onClick:()=>setFoodDraft(null)},'Annulla'),h('button',{className:'cta',onClick:saveFood},'Salva alimento'))
+      foodDraft.barcodeDiary && h('div', {
+  className: 'card',
+  style: { marginTop: '12px' }
+},
+
+  h('label', {
+    style: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: '8px'
+    }
+  },
+
+    h('input', {
+      type: 'checkbox',
+      style: { width: 'auto' },
+      checked: foodDraft.barcodeDiary.add,
+      onChange: e => setFoodDraft(prev => ({
+        ...prev,
+        barcodeDiary: {
+          ...prev.barcodeDiary,
+          add: e.target.checked
+        }
+      }))
+    }),
+
+    'Aggiungi anche al diario (' + selectedDate + ')'
+  ),
+
+  foodDraft.barcodeDiary.add && h('div', {
+    className: 'formGrid'
+  },
+
+    h('label', null,
+      'Quantità (g)',
+
+      h('input', {
+        type: 'number',
+        min: '0.01',
+        max: '10000',
+        step: 'any',
+        value: foodDraft.barcodeDiary.grams,
+        onChange: e => setFoodDraft(prev => ({
+          ...prev,
+          barcodeDiary: {
+            ...prev.barcodeDiary,
+            grams: e.target.value
+          }
+        }))
+      })
+    ),
+
+    h('label', null,
+      'Pasto',
+
+      h('select', {
+        value: foodDraft.barcodeDiary.mealId,
+        onChange: e => setFoodDraft(prev => ({
+          ...prev,
+          barcodeDiary: {
+            ...prev.barcodeDiary,
+            mealId: e.target.value
+          }
+        }))
+      },
+
+        h('option', {
+          value: ''
+        }, 'Senza pasto'),
+
+        ...meals.map(meal =>
+          h('option', {
+            key: meal.id,
+            value: meal.id
+          }, meal.name)
+        )
+      )
+    )
+  )
+),
+                                                     h('div',{className:'modalActions'},h('button',{className:'ghost',onClick:()=>setFoodDraft(null)},'Annulla'),h('button',{className:'cta',onClick:saveFood},'Salva alimento'))
     ))
   );
 }
