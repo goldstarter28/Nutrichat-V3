@@ -3114,7 +3114,13 @@ h('div',{className:'card labelImportCard'},
         [...new Set(goals.filter(g=>g.group!=='Energia e macro').map(g=>g.group||'Personalizzati'))].map(group=>h('details',{className:'goalGroup',key:group,open:group==='Vitamine'||group==='Minerali e oligoelementi'},h('summary',null,h('b',null,group),h('span',null,`${goals.filter(g=>(g.group||'Personalizzati')===group).length} voci`)),h('div',{className:'goalRows'},goals.map((g,i)=>(g.group||'Personalizzati')===group?h(GoalRow,{key:g.id,g,index:i,goals,setGoals,weight:profile.weight,current:valueForGoal(g,g.period==='week'?weekTotals:totals)}):null))))
       )
     ),
-tab==='peso'&&h(window.NutriTraceBodyWeight),
+tab==='peso'&&h('section',null,
+  h(window.NutriTraceBodyWeight),
+  h(window.NutriTraceWeightCalorieChart,{
+    logs,
+    foods
+  })
+),
     tab==='analisi'&&h('section',null,
       h('div',{className:'sectionHead'},h('div',null,h('h2',null,'Analisi e cronologia'),h('p',null,'Report ricalcolati dal diario: giorno, settimana, mese, anno o intervallo personalizzato. N/D non viene mai trattato come zero.'))),
       h('article',{className:'card reportControls'},
