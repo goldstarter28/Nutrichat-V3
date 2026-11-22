@@ -685,19 +685,35 @@ function handleTouchEnd(event) {
             ? 'Grafico a linee interattivo'
             : 'Grafico a barre verticali interattivo',
           style: {
-            width: '100%',
-            minWidth: '360px',
-            display: 'block',
-            touchAction: 'pan-y'
-          },
-          onPointerDown: pickPoint,
-          onPointerMove: event => {
-            if (event.pointerType === 'mouse') {
-              pickPoint(event);
-            }
-          },
-          onPointerLeave: () => setActive(null)
-        },
+  width: '100%',
+  minWidth: '360px',
+  display: 'block',
+  touchAction: 'none'
+},
+onTouchStart: handleTouchStart,
+onTouchMove: handleTouchMove,
+onTouchEnd: handleTouchEnd,
+onTouchCancel: () => {
+  gestureRef.current = null;
+},
+onPointerDown: event => {
+  if (event.pointerType === 'mouse') {
+    pickPoint(event);
+  }
+},
+onPointerMove: event => {
+  if (
+    event.pointerType === 'mouse' &&
+    event.buttons === 1
+  ) {
+    pickPoint(event);
+  }
+},
+onPointerLeave: () => {
+  if (!gestureRef.current) {
+    setActive(null);
+  }
+}
 
           ...[0, .25, .5, .75, 1].map(fraction =>
             h('g', { key: fraction },
