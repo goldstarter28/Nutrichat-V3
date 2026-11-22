@@ -1262,6 +1262,7 @@ useEffect(()=>{
   const [showAllDeficits,setShowAllDeficits]=useState(false), [masterMigrationDone,setMasterMigrationDone]=useState(false);
   const [appConfig,setAppConfig]=useState(DEFAULT_APP_CONFIG);
   const [quickSearchQuery,setQuickSearchQuery]=useState('');
+  const [quickAiResult,setQuickAiResult]=useState(null);
   const [candidateBrowserIndex,setCandidateBrowserIndex]=useState(null), [candidatePreview,setCandidatePreview]=useState(null), [candidatePreviewBusy,setCandidatePreviewBusy]=useState(false);
   const [reportMode,setReportMode]=useState('week'), [reportAnchor,setReportAnchor]=useState(dateKey()), [reportFrom,setReportFrom]=useState(dateKey()), [reportTo,setReportTo]=useState(dateKey());
 
@@ -1326,14 +1327,48 @@ useEffect(()=>{
   const totals=useMemo(()=>aggregate(dayLogs,foods),[dayLogs,foods]), weekTotals=useMemo(()=>aggregate(weekLogs,foods),[weekLogs,foods]);
   const recentIds=useMemo(()=>[...logs].reverse().map(l=>l.foodId).filter((id,i,a)=>a.indexOf(id)===i).slice(0,6),[logs]);
   const quickSuggestions=useMemo(()=>{
-    const q=quickSearchQuery.trim();
-    if(!q)return recentIds.map(id=>foods.find(f=>f.id===id)).filter(Boolean).map(f=>({...f,resultType:'personal'}));
-    if(norm(q).length<2)return [];
-    const personal=searchPersonalFoods(q,foods,4);
-    const master=searchMasterIndex(q,masterIndex,8);
-    const local=searchLocalDataset(q,datasets,4).map(f=>({...f,resultType:'local'}));
-    return [...personal,...master,...local].slice(0,10);
-  },[quickSearchQuery,foods,datasets,recentIds,masterIndex]);
+  const q=quickSearchQuery.trim();
+
+  if(!q)
+    return recentIds
+      .map(id=>foods.find(f=>f.id===id))
+      .filter(Boolean)
+      .map(f=>({...f,resultType:'personal'}));
+
+  if(norm(q).length<2)return [];
+
+  const regular=[
+    ...searchPersonalFoods(q,foods,4),
+    ...searchMasterIndex(q,masterIndex,8),
+    ...searchLocalDataset(q,datasets,4)
+      .map(f=>({...f,resultType:'local'}))
+  ];
+
+  if(
+    !quickAiResult ||
+    norm(quickAiResult.query)!==norm(q)
+  ) return regular.slice(0,10);
+
+  const seen=new Set();
+
+  return [...quickAiResult.rows,...regular]
+    .filter(row=>{
+      const key=row.resultType==='master'
+        ? 'm:'+row.id
+        : row.resultType==='personal'
+          ? 'p:'+row.id
+          : 'l:'+(row.localId||row.sourceId||row.id);
+
+      if(seen.has(key))return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0,12);
+
+},[
+  quickSearchQuery,foods,datasets,
+  recentIds,masterIndex,quickAiResult
+]);
   const macroPreview=useMemo(()=>computeMacroPlan(profile),[profile]);
   const pinnedGoals=goals.filter(g=>g.group!=='Energia e macro'&&g.pinned);
   const trackedWeekDays=useMemo(()=>new Set(weekLogs.map(l=>l.date)).size,[weekLogs]);
