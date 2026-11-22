@@ -362,7 +362,52 @@ function parseSheetRows(data, type = 'array') { const wb = XLSX.read(data, { typ
 } return rows; }
 
 const h = React.createElement;
+const NutriTraceFastFoodInput = React.memo(
+  function NutriTraceFastFoodInput({
+    value,
+    onQueryChange
+  }) {
+    const [draft, setDraft] = React.useState(value);
 
+    const timer = React.useRef(null);
+    const callback = React.useRef(onQueryChange);
+
+    React.useEffect(() => {
+      callback.current = onQueryChange;
+    }, [onQueryChange]);
+
+    React.useEffect(() => {
+      if (value === '' && draft !== '') {
+        clearTimeout(timer.current);
+        setDraft('');
+      }
+    }, [value]);
+
+    React.useEffect(() => {
+      return () => clearTimeout(timer.current);
+    }, []);
+
+    function handleChange(event) {
+      const text = event.target.value;
+
+      setDraft(text);
+      clearTimeout(timer.current);
+
+      timer.current = setTimeout(() => {
+        callback.current(text);
+      }, 350);
+    }
+
+    return h('input', {
+      value: draft,
+      onChange: handleChange,
+      placeholder:
+        'Es. latte, banana, pollo, 2 uova...',
+      autoComplete: 'off',
+      'aria-label': 'Cerca un alimento'
+    });
+  }
+);
 const MICRO_CATALOG = [
   { group:'Vitamine', id:'Vitamina A', name:'Vitamina A', unit:'µg', dailyTarget:900, minIndicative:700, ul:3000, kind:'minimum' },
   { group:'Vitamine', id:'Tiamina B1', name:'Tiamina B1', unit:'mg', dailyTarget:1.2, minIndicative:1.1, kind:'minimum' },
@@ -2331,7 +2376,41 @@ tab==='oggi'&&h('section',null,
     (meals.find(m=>m.id===activeMealId)?.name||'Pasto')
   ),
   h('div',{className:'cardTitle'},h('div',null,h('h2',null,selectedDate===deviceToday?'Cosa hai mangiato oggi?':`Aggiungi al ${shortDate(selectedDate)}`),h('p',null,'Il Master DB è la fonte primaria. Ogni voce resta associata al giorno selezionato.'))),
-        h('div',{className:'quickInputs'},h('label',null,'Alimento',h('input',{value:quickQuery,placeholder:'es. banana, 2 uova, cetriolo, salmone cotto…',onChange:e=>setQuickQuery(e.target.value)})),h('label',null,ui('search.gramsLabel','Grammi (facoltativi)'),h('input',{type:'number',min:'1',step:'any',value:grams,placeholder:ui('search.gramsPlaceholder','automatici per porzioni standard'),onChange:e=>setGrams(e.target.value)}))),
+        h('div', { className: 'quickInputs' },
+
+  h('label', null,
+    'Alimento',
+
+    h(NutriTraceFastFoodInput, {
+      value: quickQuery,
+      onQueryChange: text => {
+        setQuickQuery(text);
+        setAiMsg('');
+      }
+    })
+  ),
+
+  h('label', null,
+    ui('search.gramsLabel', 'Grammi'),
+
+    h('input', {
+      type: 'number',
+      min: '0.1',
+      step: 'any',
+      value: grams,
+      placeholder: 'Inserisci il peso in grammi',
+      onChange: event => {
+        setGrams(event.target.value);
+        setAiMsg('');
+      }
+    })
+  )
+),
+
+aiMsg && h('p', {
+  className: 'errorText',
+  role: 'alert'
+}, aiMsg),
         h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),h('small',null,'N/D ≠ 0 · valori multi-fonte quando esiste corrispondenza sicura')),
         quickSuggestions.length?h('div',{className:'quickSuggestions'},quickSuggestions.map(r=>h('button',{className:'quickChoice',key:r.resultType==='master'?`m:${r.id}`:(r.id||r.localId),onClick:()=>quickAdd(r),disabled:recipeBusy==='quick'},h('span',null,h('b',null,r.name),h('small',null,r.resultType==='personal'?'Archivio personale':r.resultType==='master'?`Master DB · ${r.sc||1} ${Number(r.sc||1)===1?'fonte':'fonti'} · ${(r.sources||[]).join(', ')}`:(SOURCE_META[r.source]?.name||'Database locale'))),h('strong',null,recipeBusy==='quick'?'…':'+ Aggiungi')))):quickQuery.trim()?h('div',{className:'emptyAction'},h('span',{className:'muted'},ui('search.notFound','Nessuna corrispondenza nel Master DB o nei database personali.')),h('div',{className:'inlineActions'},h('button',{className:'ghost',onClick:()=>{setFoodDraft({...emptyFood(),name:quickQuery.trim(),aliases:[quickQuery.trim()]});setTab('alimenti');}},ui('search.manualButton','Inserisci manualmente')))):null,
         quickQuery.trim()&&h('div',{className:'inlineActions'},h('button',{className:'cta',disabled:recipeBusy==='parse',onClick:quickSearchWithAI},recipeBusy==='parse'?ui('search.aiWorking','Ricerca AI…'):ui('search.aiButton','Ricerca con AI'))),
