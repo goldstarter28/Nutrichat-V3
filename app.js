@@ -1122,7 +1122,39 @@ function Home(){
   }
 });
     const [selectedMealId,setSelectedMealId] = useState(null);
+const [mealFavorites, setMealFavorites] = useState(() => {
+  try {
+    const saved = localStorage.getItem(
+      'nutritrace_meal_favorites_v3'
+    );
 
+    return window.NutriTraceMealShortcuts.normalize(
+      saved ? JSON.parse(saved) : []
+    );
+  } catch (error) {
+    console.warn(
+      'Impossibile leggere i preferiti dei pasti',
+      error
+    );
+    return [];
+  }
+});
+
+useEffect(() => {
+  if (!loaded) return;
+
+  try {
+    localStorage.setItem(
+      'nutritrace_meal_favorites_v3',
+      JSON.stringify(mealFavorites)
+    );
+  } catch (error) {
+    console.error(
+      'Impossibile salvare i preferiti dei pasti',
+      error
+    );
+  }
+}, [mealFavorites, loaded]);
 const activeMealId = meals.some(
   meal => meal.id === selectedMealId
 ) ? selectedMealId : null;
