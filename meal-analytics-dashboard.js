@@ -969,7 +969,149 @@
                 selectedIds.length !== 1
               ) ? null : limit
             }),
+data && data.series.length > 0 && h('div', {
+  style: { margin: '18px 0', overflowX: 'auto' }
+},
+  h('h3', null, 'Statistiche delle serie selezionate'),
 
+  h('p', { className: 'muted tiny' },
+    'Totali rilevati e medie dei soli giorni registrati ' +
+    'con il nutriente disponibile. Se la copertura è ' +
+    'inferiore al 100%, il totale è parziale. ' +
+    'Il raggruppamento del grafico non altera questi calcoli.'
+  ),
+
+  h('table', {
+    style: {
+      width: '100%',
+      borderCollapse: 'collapse',
+      fontSize: '13px'
+    }
+  },
+
+    h('thead', null,
+      h('tr', null,
+        ...[
+          'Serie',
+          'Totale rilevato',
+          'Media/giorno',
+          'Min/giorno',
+          'Max/giorno',
+          'Giorni con dati',
+          'Copertura'
+        ].map(label =>
+          h('th', {
+            key: label,
+            style: {
+              padding: '8px',
+              textAlign: 'right',
+              whiteSpace: 'nowrap'
+            }
+          }, label)
+        )
+      )
+    ),
+
+    h('tbody', null,
+      ...data.series.map((item, index) => {
+        const activeMetric = mode === 'metrics'
+          ? (index === 0 ? metric : secondMetric)
+          : metric;
+
+        const activeMeal = mode === 'meals'
+          ? selectedIds[index]
+          : selectedIds[0];
+
+        const startDate = mode === 'periods' && index === 1
+          ? previousStart
+          : from;
+
+        const endDate = mode === 'periods' && index === 1
+          ? previousEnd
+          : to;
+
+        const daily = [...calculateDays(
+          logs,
+          foods,
+          activeMeal,
+          activeMetric,
+          startDate,
+          endDate,
+          validIds
+        ).values()];
+
+        const known = daily.filter(
+          row => row.knownWeight > 0
+        );
+
+        const total = known.reduce(
+          (sum, row) => sum + row.value,
+          0
+        );
+
+        const totalWeight = daily.reduce(
+          (sum, row) => sum + row.totalWeight,
+          0
+        );
+
+        const knownWeight = daily.reduce(
+          (sum, row) => sum + row.knownWeight,
+          0
+        );
+
+        const coverage = totalWeight > 0
+          ? knownWeight / totalWeight * 100
+          : null;
+
+        const values = [
+          item.name,
+
+          known.length
+            ? fmt(total, 2) + ' ' + item.unit
+            : 'N/D',
+
+          known.length
+            ? fmt(total / known.length, 2) + ' ' + item.unit
+            : 'N/D',
+
+          known.length
+            ? fmt(
+                Math.min(...known.map(row => row.value)),
+                2
+              ) + ' ' + item.unit
+            : 'N/D',
+
+          known.length
+            ? fmt(
+                Math.max(...known.map(row => row.value)),
+                2
+              ) + ' ' + item.unit
+            : 'N/D',
+
+          known.length + ' / ' + daily.length,
+
+          coverage === null
+            ? 'N/D'
+            : fmt(coverage, 0) + '%'
+        ];
+
+        return h('tr', { key: index },
+          ...values.map((value, column) =>
+            h('td', {
+              key: column,
+              style: {
+                padding: '9px 8px',
+                textAlign: 'right',
+                borderTop: '1px solid #ddd',
+                whiteSpace: 'nowrap'
+              }
+            }, value)
+          )
+        );
+      })
+    )
+  )
+),
       h('div', {
         style: {
           display: 'flex',
