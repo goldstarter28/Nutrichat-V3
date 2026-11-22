@@ -28,7 +28,8 @@ function systemPrompt(context){return[
 'grams ONLY from explicit g/kg text. Articles/counts NEVER become grams. "una banana" => count=1 grams=null.',
 'Natural countable foods use natural_unit; omitted singular count=1; omitted size=medium.',
 'You MAY estimate natural-unit edible weight with range/confidence when meaningful; never invent plate/dish/bowl/generic serving weights.',
-'NEVER calculate nutrients, infer brands, or invent recipe formulation.'
+'NEVER calculate nutrients, infer brands, or invent recipe formulation.',
+'All user-facing text fields, including errors, ambiguity_reason, portion_assumption and portion_estimate_reason, MUST be written exclusively in Italian. English is allowed only in lookup_name_en, search_terms_en, broader_terms_en, must_terms_en and exclude_terms_en.'
 ].join(' ')}
 async function openrouter(key,p){return fetch(OPENROUTER_URL,{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json',...(process.env.OPENROUTER_SITE_URL?{'HTTP-Referer':process.env.OPENROUTER_SITE_URL}:{}),'X-Title':process.env.OPENROUTER_APP_NAME||'NutriChat'},body:JSON.stringify(p)})}
 async function attempt(key,base,{jsonMode=true,reasoning='none',maxTokens=2200}={}){const p={...base,max_tokens:maxTokens};if(reasoning)p.reasoning={effort:reasoning,exclude:true};if(jsonMode){p.response_format={type:'json_object'};p.plugins=[{id:'response-healing'}]}const response=await openrouter(key,p),data=await response.json().catch(()=>({}));return{response,data,parsed:response.ok?parseJsonLoose(data):null}}
