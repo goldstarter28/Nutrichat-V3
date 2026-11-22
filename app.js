@@ -2194,8 +2194,121 @@ function editCatalogNutrient(name, unit, value) {
     catch(e){setRecipeMsg(e.message)}finally{setRecipeBusy('')}
   }
   async function quickSearchWithAI(){
-    if(!quickQuery.trim())return;setRecipeBusy('parse');setRecipeMsg('');setRecipeReview(null);try{const review=await interpretText(quickQuery,'quick');setRecipeText(quickQuery);setRecipeReview(review);if(review.errors?.length)setRecipeMsg(review.errors.join(' · '));}catch(e){setRecipeMsg(e.message)}finally{setRecipeBusy('')}
+  const text=quickQuery.trim();
+  if(!text)return;
+
+  setRecipeBusy('quick-ai');
+  setAiMsg('');
+  setQuickAiResult(null);
+
+  try{
+    const review=await interpretText(text,'search');
+    const ingredients=review.ingredients||[];
+
+    if(ingredients.length!==1){
+      setAiMsg(
+        'La ricerca rapida accetta un alimento alla volta. '+
+        'Per liste e ricette usa Voce libera.'
+      );
+      return;
+    }
+
+    const ing=ingredients[0];
+
+    if(ing.ambiguity==='needs_detail'){
+      setAiMsg(
+        'Descrizione troppo generica: specifica il tipo '+
+        'di alimento per ottenere risultati affidabili.'
+      );
+      return;
+    }
+
+    const queries=semanticLookupQueries(ing);
+    const byKey=new Map();
+
+    for(const term of queries){
+      for(const row of searchMasterIndex(
+        term,masterIndex,25
+      )){
+        const key='m:'+row.id;
+        const prev=byKey.get(key);
+
+        if(!prev||row.score>prev.score)
+          byKey.set(key,{...row,matchedQuery:term});
+      }
+
+      for(const row of searchLocalDataset(
+        term,datasets,12
+      )){
+        const key='l:'+
+          (row.localId||row.sourceId||row.id);
+        const prev=byKey.get(key);
+
+        if(!prev||row.score>prev.score)
+          byKey.set(key,{
+            ...row,resultType:'local',
+            matchedQuery:term
+          });
+      }
+
+      for(const row of searchPersonalFoods(
+        term,foods,12
+      )){
+        const key='p:'+row.id;
+        const prev=byKey.get(key);
+
+        if(!prev||row.score>prev.score)
+          byKey.set(key,{
+            ...row,resultType:'personal',
+            matchedQuery:term
+          });
+      }
+    }
+
+    const policy=cfgGet(
+      appConfig,'searchPolicy.databaseMatchPolicy',{}
+    );
+
+    let matches=[...byKey.values()];
+
+    if(policy.requireLexicalEvidence!==false){
+      matches=matches.filter(row=>
+        candidateSemanticGate(
+          ing,row,row.matchedQuery
+        )
+      );
+    }
+
+    matches=matches
+      .filter(row=>
+        Number(row.score)>=
+        Number(policy.minCandidateScore??42)
+      )
+      .sort((a,b)=>b.score-a.score)
+      .slice(0,12);
+
+    setQuickAiResult({
+      query:text,
+      rows:matches
+    });
+
+    setAiMsg(
+      matches.length
+        ? 'Ricerca AI completata: '+
+          matches.length+
+          ' corrispondenze. Seleziona il prodotto corretto.'
+        : 'Alimento interpretato, ma nessuna '+
+          'corrispondenza sufficientemente affidabile.'
+    );
+
+  }catch(error){
+    setAiMsg(
+      error.message||'Ricerca AI non riuscita.'
+    );
+  }finally{
+    setRecipeBusy('');
   }
+}
   async function searchFoodsWithAI(){
     if(!query.trim())return;setAiBusy('search-ai');setAiMsg('');setSearchError('');
     try{
