@@ -1144,6 +1144,21 @@ const activeMealId = meals.some(
   meal => meal.id === selectedMealId
 ) ? selectedMealId : null;
   const [tab,setTab]=useState('oggi'), [foodDraft,setFoodDraft]=useState(null), [grams,setGrams]=useState(''), [loaded,setLoaded]=useState(false);
+  useEffect(() => {
+  if (!loaded) return;
+
+  try {
+    localStorage.setItem(
+      'nutritrace_meal_favorites_v3',
+      JSON.stringify(mealFavorites)
+    );
+  } catch (error) {
+    console.error(
+      'Impossibile salvare i preferiti dei pasti',
+      error
+    );
+  }
+}, [mealFavorites, loaded]);
   const [query,setQuery]=useState(''), [results,setResults]=useState([]), [searchError,setSearchError]=useState(''), [searching,setSearching]=useState(false);    
   const [importName,setImportName]=useState('');
   const [importBrand,setImportBrand]=useState('');
