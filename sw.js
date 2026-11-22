@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-ai-coach-v1-coach2-md1-v21-chatv3';
+const CACHE = 'nutritrace-v3-ai-coach-v1-coach2-md1-v21-chatv3-consent1';
 
 const CORE = [
   './',

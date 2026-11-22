@@ -167,8 +167,7 @@ function View(props){
     h('small',null,m.name),h('strong',null,m.avg==null?'N/D':Number(m.avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
    ...analysis.insights.map((x,i)=>h('p',{key:i},h('strong',null,x.title),': ',x.body))),
   h('details',{className:'coach-details'},h('summary',null,'Privacy e condivisione dei dati'),
-   h('p',null,'La domanda e gli ultimi messaggi contestuali vengono inviati a GroqCloud. Non inserire informazioni identificative o cliniche.'),
-   h('label',null,h('input',{type:'checkbox',checked:consent,onChange:e=>setConsent(e.target.checked)}),' Autorizzo l’invio delle mie domande a GroqCloud'),
+   h('p',null,'Il consenso per inviare i messaggi si trova sempre sopra la casella della chat. Qui puoi scegliere se condividere anche statistiche nutrizionali o peso. Non inserire informazioni identificative o cliniche.'),
    h('label',null,h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked)setWeight(false);}}),' Condividi statistiche nutrizionali aggregate (facoltativo)'),
    share&&h('label',null,h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),' Condividi le ultime 10 misurazioni del peso (facoltativo)')),
   h('div',{className:'coach-messages',role:'log','aria-label':'Messaggi della conversazione'},
@@ -185,16 +184,23 @@ function View(props){
    busy&&h('p',{className:'coach-wait',role:'status'},'Il Coach sta preparando la risposta…'),
    h('div',{ref:bottom})),
   h('form',{className:'coach-composer',onSubmit:send},
+   h('label',{className:'coach-consent-row'},
+    h('input',{type:'checkbox',checked:consent,onChange:e=>{
+      setConsent(e.target.checked);
+      if(e.target.checked)setError('');
+    }}),
+    h('span',null,'Autorizzo l’invio delle mie domande e degli ultimi messaggi della chat a GroqCloud.')),
    editing&&h('p',{className:'coach-editing'},'Modifica messaggio · ',btn('Annulla',()=>{setEditing(null);setDraft('');setError('');})),
    h('textarea',{value:draft,maxLength:3000,rows:3,onChange:e=>setDraft(e.target.value),placeholder:'Scrivi un messaggio…','aria-label':'Messaggio al Coach'}),
    photo&&h('p',{className:'coach-photo'},'📷 '+photo.name+' (solo locale) ',btn('Rimuovi',()=>{setPhoto(null);setError('');})),
+   !consent&&h('p',{className:'coach-notice coach-inline-notice',role:'status'},
+    'Per inviare un messaggio, seleziona la casella di autorizzazione qui sopra.'),
+   error&&h('p',{className:'coach-error coach-inline-notice',role:'alert'},error),
    h('div',{className:'coach-composer-actions'},
     btn(listening?'Ferma microfono':'🎙 Detta',dictate,busy),
     btn('📷 Foto',()=>fileRef.current?.click(),busy),
     h('input',{type:'file',ref:fileRef,accept:'image/jpeg,image/png,image/webp',capture:'environment',style:{display:'none'},onChange:photoSelect}),
     h('button',{type:'submit',className:'coach-btn coach-primary',disabled:busy||!draft.trim()||Boolean(photo)},busy?'Invio…':editing?'Salva e rigenera':'Invia'))),
-  !consent&&h('p',{className:'coach-notice',role:'status'},'Per conversare apri “Privacy e condivisione dei dati” e autorizza l’invio delle domande.'),
-  error&&h('p',{className:'coach-error',role:'alert'},error),
   storageError&&h('p',{className:'coach-error',role:'alert'},storageError),
   h('small',{className:'coach-disclaimer'},'Conversazioni salvate soltanto su questo dispositivo/browser. La dettatura e la lettura vocale dipendono dal browser. Le foto non vengono ancora interpretate. Nessuna diagnosi medica.')
  );

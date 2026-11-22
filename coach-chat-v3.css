@@ -32,3 +32,11 @@
 .coach-error{color:var(--danger,#a22)}
 .coach-disclaimer{color:var(--muted);line-height:1.5}
 @media(max-width:650px){.coach-head{align-items:stretch}.coach-head-actions{width:100%}.coach-message.user{max-width:95%}.coach-messages{padding:12px 2px}.coach-composer-actions{justify-content:flex-start}.coach-btn{font-size:.9em}}
+
+/* Coach consent always visible above composer, warning adjacent to send. */
+.coach-consent-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
+  border:1px solid var(--line);border-radius:10px;margin:0 0 12px;
+  line-height:1.4;cursor:pointer}
+.coach-consent-row input{flex:0 0 auto;width:19px;height:19px;margin:1px 0 0;accent-color:var(--accent)}
+.coach-inline-notice{margin:10px 0 0;font-size:.93em;line-height:1.4}
+.coach-composer:focus-within{scroll-margin-bottom:14px}
