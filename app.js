@@ -2955,10 +2955,11 @@ function importBackup(event) {
     darkMode?'☀️ Giorno':'🌙 Notte'
   )
 )),
-    h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','peso','analisi','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
+    h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','peso','analisi','coach','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
 
     
-tab==='oggi'&&h('section',null,
+tab==='coach'&&h(window.NutriTraceAICoach.View,{logs,foods,goals,profile}),
+    tab==='oggi'&&h('section',null,
       dateNavigator,
                 h('details',{
   id:'nutritrace-meal-settings',
