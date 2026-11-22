@@ -2288,6 +2288,7 @@ async function commitRecipe() {
 
 function importBackup(event) {
   const file = event.target.files?.[0];
+  event.target.value = '';
   if (!file) return;
 
   const reader = new FileReader();
@@ -2296,147 +2297,140 @@ function importBackup(event) {
     try {
       const data = JSON.parse(reader.result);
 
-      if (
-        !data ||
-        typeof data !== 'object' ||
-        Array.isArray(data)
-      ) {
-        throw new Error('Il file non contiene un backup valido.');
+      const own = key =>
+        Object.prototype.hasOwnProperty.call(data, key);
+
+      if (!data || typeof data !== 'object' ||
+          Array.isArray(data)) {
+        throw new Error('Formato del backup non valido.');
       }
-let restoredMeals = null;
-let restoredFavorites = null;
 
-if ('meals' in data) {
-  if (!Array.isArray(data.meals) || data.meals.length > 20) {
-    throw new Error('La configurazione dei pasti non è valida.');
-  }
+      if (Number(data.version || 4) > 6) {
+        throw new Error(
+          'Backup creato con una versione più recente di NutriTrace.'
+        );
+      }
 
-  restoredMeals = window.NutriTraceMealConfig.normalize(
-    data.meals
-  );
+      const updates = new Map();
+      const sections = [];
 
-  if (restoredMeals.length !== data.meals.length) {
-    throw new Error(
-      'Il backup contiene pasti non validi o duplicati.'
-    );
-  }
-}
+      for (const [field, storageKey, label] of [
+        ['foods', 'nutritrace_foods', 'Alimenti'],
+        ['logs', 'nutritrace_logs', 'Registrazioni'],
+        ['goals', 'nutritrace_goals_v23', 'Obiettivi']
+      ]) {
+        if (!own(field)) continue;
 
-if ('mealFavorites' in data) {
-  if (
-    !Array.isArray(data.mealFavorites) ||
-    data.mealFavorites.length > 100
-  ) {
-    throw new Error('I preferiti dei pasti non sono validi.');
-  }
+        if (!Array.isArray(data[field]) ||
+            !data[field].every(x =>
+              x && typeof x === 'object' && !Array.isArray(x)
+            )) {
+          throw new Error(label + ': dati non validi.');
+        }
 
-  restoredFavorites = window.NutriTraceMealShortcuts.normalize(
-    data.mealFavorites
-  );
+        const normalized = field === 'goals'
+          ? mergeGoalCatalog(data[field])
+          : data[field];
 
-  if (restoredFavorites.length !== data.mealFavorites.length) {
-    throw new Error(
-      'Il backup contiene preferiti non validi o duplicati.'
-    );
-  }
-}
-        // Verifica preliminare della struttura del backup.
-for (const field of ['foods', 'logs', 'goals']) {
-  if (
-    field in data &&
-    !Array.isArray(data[field])
-  ) {
-    throw new Error(
-      'La sezione "' + field + '" non è valida.'
-    );
-  }
-}
+        updates.set(storageKey, JSON.stringify(normalized));
+        sections.push(label + ': ' + data[field].length);
+      }
 
-if (
-  'profile' in data &&
-  (
-    !data.profile ||
-    typeof data.profile !== 'object' ||
-    Array.isArray(data.profile)
-  )
-) {
-  throw new Error('Il profilo nel backup non è valido.');
-}
+      if (own('profile')) {
+        if (!data.profile || typeof data.profile !== 'object' ||
+            Array.isArray(data.profile)) {
+          throw new Error('Profilo non valido.');
+        }
 
-// Riepilogo delle informazioni da ripristinare.
-const summary = [
-  'RIPRISTINO BACKUP NUTRITRACE',
-  '',
-  'File: ' + file.name,
-  'Versione: ' + (data.version ?? 'non indicata'),
-  '',
-  'CONTENUTO DEL BACKUP',
-  '',
-  'Alimenti: ' + (
-    Array.isArray(data.foods)
-      ? data.foods.length
-      : 'non presenti'
-  ),
-  'Registrazioni alimentari: ' + (
-    Array.isArray(data.logs)
-      ? data.logs.length
-      : 'non presenti'
-  ),
-  'Obiettivi nutrizionali: ' + (
-    Array.isArray(data.goals)
-      ? data.goals.length
-      : 'non presenti'
-  ),
-  'Pasti configurati: ' + (
-    restoredMeals !== null
-      ? restoredMeals.length
-      : 'non presenti'
-  ),
-  'Preferiti per pasto: ' + (
-    restoredFavorites !== null
-      ? restoredFavorites.length
-      : 'non presenti'
-  ),
-  'Misurazioni del peso: ' + (
-    Array.isArray(data.bodyWeight?.entries)
-      ? data.bodyWeight.entries.length
-      : 'non presenti'
-  ),
-  'Profilo: ' + (
-    data.profile ? 'presente' : 'non presente'
-  ),
-  '',
-  'ATTENZIONE',
-  'Le sezioni presenti nel backup sostituiranno',
-  'quelle attualmente salvate sul dispositivo.',
-  'Le sezioni assenti saranno conservate.',
-  '',
-  'Prima di procedere è consigliabile esportare',
-  'una copia dei dati attuali.',
-  '',
-  'Vuoi continuare con il ripristino?'
-].join('\n');
+        updates.set(
+          'nutritrace_profile_v23',
+          JSON.stringify(normalizeProfile(data.profile))
+        );
+        sections.push('Profilo: presente');
+      }
 
-if (!window.confirm(summary)) {
-  return;
-}
-      if ('bodyWeight' in data) {
+      let restoredMeals = null;
+
+      if (own('meals')) {
+        if (!Array.isArray(data.meals) ||
+            data.meals.length > 20) {
+          throw new Error('Configurazione pasti non valida.');
+        }
+
+        restoredMeals = window.NutriTraceMealConfig.normalize(
+          data.meals
+        );
+
+        if (restoredMeals.length !== data.meals.length) {
+          throw new Error(
+            'Pasti duplicati o non validi nel backup.'
+          );
+        }
+
+        updates.set(
+          'nutritrace_meals_v3',
+          JSON.stringify(restoredMeals)
+        );
+
+        sections.push('Pasti: ' + restoredMeals.length);
+      }
+
+      if (own('mealFavorites')) {
+        if (!Array.isArray(data.mealFavorites) ||
+            data.mealFavorites.length > 100) {
+          throw new Error('Preferiti non validi.');
+        }
+
+        const favorites =
+          window.NutriTraceMealShortcuts.normalize(
+            data.mealFavorites
+          );
+
+        if (favorites.length !== data.mealFavorites.length) {
+          throw new Error('Preferiti duplicati o non validi.');
+        }
+
+        const referenceMeals = restoredMeals || meals;
+        const referenceFoods = own('foods') ? data.foods : foods;
+
+        const mealIds = new Set(
+          referenceMeals.map(x => x.id)
+        );
+        const foodIds = new Set(
+          referenceFoods.map(x => x.id)
+        );
+
+        if (favorites.some(x =>
+          !mealIds.has(x.mealId) ||
+          !foodIds.has(x.foodId)
+        )) {
+          throw new Error(
+            'Alcuni preferiti fanno riferimento a pasti ' +
+            'o alimenti non presenti.'
+          );
+        }
+
+        updates.set(
+          'nutritrace_meal_favorites_v3',
+          JSON.stringify(favorites)
+        );
+
+        sections.push('Preferiti: ' + favorites.length);
+      }
+
+      if (own('bodyWeight')) {
         const weight = data.bodyWeight;
 
-        if (
-          !weight ||
-          !Array.isArray(weight.entries) ||
-          !(
-            weight.target === null ||
-            (
-              typeof weight.target === 'number' &&
+        if (!weight || !Array.isArray(weight.entries)) {
+          throw new Error('Diario del peso non valido.');
+        }
+
+        if (weight.target !== null &&
+            !(typeof weight.target === 'number' &&
               Number.isFinite(weight.target) &&
               weight.target >= 20 &&
-              weight.target <= 500
-            )
-          )
-        ) {
-          throw new Error('La sezione del peso non è valida.');
+              weight.target <= 500)) {
+          throw new Error('Obiettivo peso non valido.');
         }
 
         const ids = new Set();
@@ -2447,71 +2441,108 @@ if (!window.confirm(summary)) {
           const validDate =
             typeof date === 'string' &&
             /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-            !Number.isNaN(Date.parse(date)) &&
+            Number.isFinite(Date.parse(date)) &&
             new Date(date + 'T12:00:00Z')
-              .toISOString()
-              .slice(0, 10) === date;
+              .toISOString().slice(0, 10) === date;
 
-          if (
-            !validDate ||
-            typeof entry.id !== 'string' ||
-            !entry.id ||
-            ids.has(entry.id) ||
-            typeof entry.kg !== 'number' ||
-            !Number.isFinite(entry.kg) ||
-            entry.kg < 20 ||
-            entry.kg > 500 ||
-            (
-              entry.time &&
-              !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.time)
-            ) ||
-            (
-              entry.note != null &&
-              typeof entry.note !== 'string'
-            )
-          ) {
+          if (!validDate ||
+              typeof entry.id !== 'string' ||
+              !entry.id ||
+              ids.has(entry.id) ||
+              typeof entry.kg !== 'number' ||
+              !Number.isFinite(entry.kg) ||
+              entry.kg < 20 || entry.kg > 500 ||
+              (entry.time &&
+                (typeof entry.time !== 'string' ||
+                !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.time))) ||
+              (entry.note != null &&
+                typeof entry.note !== 'string')) {
             throw new Error(
-              'Una misurazione del peso non è valida.'
+              'Misurazione del peso non valida.'
             );
           }
 
           ids.add(entry.id);
         }
 
-        localStorage.setItem(
+        updates.set(
           'nutritrace_body_weight_v1',
           JSON.stringify(weight)
         );
+
+        sections.push(
+          'Misurazioni peso: ' + weight.entries.length
+        );
       }
 
-      if (Array.isArray(data.foods)) {
-        setFoods(data.foods);
+      if (!updates.size) {
+        throw new Error(
+          'Nessuna sezione riconosciuta nel backup.'
+        );
       }
 
-      if (Array.isArray(data.logs)) {
-        setLogs(data.logs);
+      const summary = [
+        'RIPRISTINO BACKUP NUTRITRACE',
+        '',
+        'File: ' + file.name,
+        'Versione: ' + (data.version ?? 'precedente'),
+        '',
+        ...sections,
+        '',
+        'Le sezioni elencate sostituiranno',
+        'quelle presenti sul dispositivo.',
+        'Le sezioni assenti saranno conservate.',
+        '',
+        'Hai conservato una copia dei dati attuali?',
+        '',
+        'Confermi il ripristino?'
+      ].join('\n');
+
+      if (!window.confirm(summary)) return;
+
+      const previous = new Map();
+
+      for (const key of updates.keys()) {
+        previous.set(key, localStorage.getItem(key));
       }
 
-      if (Array.isArray(data.goals)) {
-        setGoals(mergeGoalCatalog(data.goals));
+      try {
+        for (const [key, content] of updates) {
+          localStorage.setItem(key, content);
+        }
+      } catch (error) {
+        let rollbackFailed = false;
+
+        for (const [key, content] of previous) {
+          try {
+            if (content === null) {
+              localStorage.removeItem(key);
+            } else {
+              localStorage.setItem(key, content);
+            }
+          } catch {
+            rollbackFailed = true;
+          }
+        }
+
+        if (rollbackFailed) {
+          throw new Error(
+            'Salvataggio fallito e ripristino precedente ' +
+            'non completamente riuscito. Conserva il file di backup.'
+          );
+        }
+
+        throw new Error(
+          'Salvataggio fallito. I dati precedenti sono stati ripristinati.'
+        );
       }
 
-      if (data.profile) {
-        setProfile(normalizeProfile(data.profile));
-      }
-if (restoredMeals !== null) {
-  setMeals(restoredMeals);
-}
-
-if (restoredFavorites !== null) {
-  setMealFavorites(restoredFavorites);
-}
-      alert(
-        'Backup importato. Il peso è stato ripristinato se presente.'
-      );
+      window.location.reload();
 
     } catch (error) {
-      alert('Importazione non riuscita: ' + error.message);
+      alert(
+        'Importazione non riuscita: ' + error.message
+      );
     }
   };
 
@@ -2520,7 +2551,6 @@ if (restoredFavorites !== null) {
   };
 
   reader.readAsText(file);
-  event.target.value = '';
 }
   async function importCustomDataset(){ if(!newDatasetName.trim()||!newDatasetFile){ setDatasetMsg('Inserisci un nome e seleziona un file.'); return; } const id=`CUSTOM_${Date.now()}`; SOURCE_META[id]={name:newDatasetName.trim(),version:'importato',mode:'local',official:false,scientific:true}; setDatasetMsg(`Importazione ${newDatasetName.trim()}…`); try{ const buf=await newDatasetFile.arrayBuffer(), lower=newDatasetFile.name.toLowerCase(); let normalized=[]; if(lower.endsWith('.json')||lower.endsWith('.jsonl')) normalized=parseJsonDataset(id,new TextDecoder().decode(buf)); else { const rows=parseSheetRows(buf,'array'); normalized=looksLikeCreaFlat(rows)?normalizeCreaFlat(id,rows):normalizeRows(id,rows); } if(!normalized.length) throw new Error('Formato non riconosciuto o nessun alimento trovato. Sono supportati CSV/XLSX/ODS e JSON/JSONL, incluso il formato CREA esportato.'); await dbSet(id,normalized); setDatasets(d=>({...d,[id]:normalized})); setDatasetMeta(m=>[...m,{id,name:newDatasetName.trim(),fileName:newDatasetFile.name,count:normalized.length,version:'importato'}]); setDatasetMsg(`${newDatasetName.trim()}: ${normalized.length} alimenti disponibili offline.`); setNewDatasetFile(null); }catch(e){ setDatasetMsg(`Errore: ${e.message}`); } }
   async function removeDataset(id){ const m=datasetMeta.find(x=>x.id===id); if(!confirm(`Rimuovere il database “${m?.name||id}” dal dispositivo?`)) return; await dbDel(id); setDatasets(d=>{const x={...d};delete x[id];return x}); setDatasetMeta(x=>x.filter(m=>m.id!==id)); setDatasetMsg('Database rimosso.'); }
