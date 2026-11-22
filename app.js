@@ -2257,13 +2257,15 @@ async function commitRecipe() {
     }
 
     const backup = {
-      version: 5,
-      foods,
-      logs,
-      goals,
-      profile,
-      bodyWeight
-    };
+  version: 6,
+  foods,
+  logs,
+  goals,
+  profile,
+  bodyWeight,
+  meals: window.NutriTraceMealConfig.normalize(meals),
+  mealFavorites: window.NutriTraceMealShortcuts.normalize(mealFavorites)
+};
 
     const blob = new Blob(
       [JSON.stringify(backup, null, 2)],
