@@ -1,13 +1,14 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-ai-coach-v1';
+const CACHE = 'nutritrace-v3-ai-coach-v1-coach2';
 
 const CORE = [
   './',
   './index.html',
   './app.js',
   './ai-coach.js',
+  './ai-coach-chat.js',
   './food-lexicon.js',
   './food-search-bridge.js',
   './data/food-lexicon-it-en.json',
