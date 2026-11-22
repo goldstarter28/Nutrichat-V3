@@ -1,4 +1,3 @@
-
 'use strict';
 
 (function (root) {
@@ -9,7 +8,8 @@
     'morning-snack': '🍎',
     lunch: '🍽️',
     'afternoon-snack': '🥜',
-    dinner: '🌙'
+    dinner: '🌙',
+    extras: '🍪'
   };
 
   function number(value) {
@@ -28,7 +28,7 @@
 
   function totals(logs, foods) {
     const byId = new Map(
-      (foods || []).map(food => [food.id, food])
+      foods.map(food => [food.id, food])
     );
 
     const result = {
@@ -40,7 +40,7 @@
       count: 0
     };
 
-    for (const log of logs || []) {
+    for (const log of logs) {
       const food = byId.get(log.foodId);
       const grams = number(log.grams);
 
@@ -51,18 +51,13 @@
 
       result.count++;
 
-      for (const key of [
-        'kcal', 'protein', 'carbs', 'fat'
-      ]) {
+      for (const key of ['kcal', 'protein', 'carbs', 'fat']) {
         const value = number(food.label?.[key]);
-
         if (value === null) continue;
 
         result[key] += value * ratio;
 
-        if (key === 'kcal') {
-          result.knownKcal++;
-        }
+        if (key === 'kcal') result.knownKcal++;
       }
     }
 
@@ -74,22 +69,30 @@
     logs,
     foods,
     meals,
+    favorites,
     onAdd,
     onAssign,
-    onRemove
+    onRemove,
+    onAddFavorite,
+    onRemoveFavorite,
+    onQuickFavorite,
+    onCopyYesterday
   }) {
     const data = totals(logs, foods);
-    const complete =
-      data.count > 0 &&
-      data.knownKcal === data.count;
+    const isUnassigned = meal.id === '__unassigned__';
 
-    const icon = ICONS[meal.id] || '🥗';
+    const mealFavorites = favorites.filter(
+      item => item.mealId === meal.id
+    );
+
+    const complete = data.count > 0 &&
+      data.knownKcal === data.count;
 
     return h('article', {
       className: 'card',
       style: {
-        marginBottom: '12px',
-        padding: '16px'
+        padding: '16px',
+        marginBottom: '12px'
       }
     },
 
@@ -103,17 +106,17 @@
 
         h('div', {
           style: {
-            width: '48px',
-            height: '48px',
+            width: '46px',
+            height: '46px',
             borderRadius: '14px',
             background: 'rgba(40,145,110,.10)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '25px',
+            fontSize: '24px',
             flexShrink: 0
           }
-        }, icon),
+        }, ICONS[meal.id] || '🥗'),
 
         h('div', {
           style: { flex: 1, minWidth: 0 }
@@ -122,9 +125,7 @@
             style: { margin: '0 0 4px' }
           }, meal.name),
 
-          h('small', {
-            className: 'muted'
-          },
+          h('small', { className: 'muted' },
             logs.length
               ? `${logs.length} alimenti · ` +
                 `${fmt(data.kcal, 0)} kcal` +
@@ -133,12 +134,11 @@
           )
         ),
 
-        h('button', {
+        !isUnassigned && h('button', {
           type: 'button',
           className: 'cta',
-          title: `Aggiungi alimento a ${meal.name}`,
-          'aria-label':
-            `Aggiungi alimento a ${meal.name}`,
+          title: `Aggiungi a ${meal.name}`,
+          'aria-label': `Aggiungi a ${meal.name}`,
           onClick: () => onAdd(meal.id),
           style: {
             borderRadius: '50%',
@@ -151,142 +151,205 @@
         }, '+')
       ),
 
-      logs.length > 0
-        ? h('details', {
-            style: { marginTop: '14px' }
+      !isUnassigned && h('div', {
+        style: { marginTop: '14px' }
+      },
+
+        mealFavorites.length > 0 && h('div', null,
+          h('small', {
+            className: 'muted',
+            style: { display: 'block', marginBottom: '8px' }
+          }, 'Preferiti di questo pasto'),
+
+          h('div', {
+            style: {
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px'
+            }
           },
 
-            h('summary', null,
-              'Mostra alimenti e nutrienti'
+            ...mealFavorites.map(favorite => {
+              const food = foods.find(
+                f => f.id === favorite.foodId
+              );
+
+              if (!food) return null;
+
+              const name = favorite.label ||
+                food.name;
+
+              return h('div', {
+                key: favorite.id,
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  borderRadius: '12px',
+                  background: 'rgba(40,145,110,.08)',
+                  padding: '4px'
+                }
+              },
+
+                h('button', {
+                  type: 'button',
+                  className: 'ghost',
+                  title: `Aggiungi ${name}`,
+                  onClick: () => onQuickFavorite(favorite)
+                }, `+ ${fmt(favorite.grams)} g ${name}`),
+
+                h('button', {
+                  type: 'button',
+                  className: 'ghost danger',
+                  title: `Rimuovi ${name} dai preferiti`,
+                  'aria-label': 'Rimuovi preferito',
+                  onClick: () => onRemoveFavorite(favorite.id)
+                }, '×')
+              );
+            })
+          )
+        ),
+
+        h('button', {
+          type: 'button',
+          className: 'ghost',
+          style: { marginTop: '10px' },
+          onClick: () => onCopyYesterday(meal.id)
+        }, '📋 Copia ' + meal.name.toLowerCase() + ' di ieri')
+      ),
+
+      logs.length > 0 && h('details', {
+        style: { marginTop: '14px' }
+      },
+
+        h('summary', null, 'Mostra alimenti e nutrienti'),
+
+        h('div', {
+          style: {
+            display: 'flex',
+            gap: '16px',
+            flexWrap: 'wrap',
+            margin: '12px 0'
+          }
+        },
+
+          ...[
+            ['Proteine', data.protein],
+            ['Carboidrati', data.carbs],
+            ['Grassi', data.fat]
+          ].map(([label, value]) =>
+            h('div', { key: label },
+              h('small', {
+                className: 'muted',
+                style: { display: 'block' }
+              }, label),
+
+              h('strong', null, `${fmt(value)} g`)
+            )
+          )
+        ),
+
+        ...logs.map(log => {
+          const food = foods.find(
+            f => f.id === log.foodId
+          );
+
+          const grams = number(log.grams);
+          const serving = number(food?.servingGrams) || 100;
+          const kcal = number(food?.label?.kcal);
+
+          const energy = kcal !== null && grams !== null
+            ? `${fmt(kcal * grams / serving, 0)} kcal`
+            : 'N/D kcal';
+
+          return h('div', {
+            key: log.id,
+            style: {
+              padding: '12px 0',
+              borderTop: '1px solid rgba(128,128,128,.18)'
+            }
+          },
+
+            h('div', {
+              style: {
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '10px',
+                alignItems: 'center'
+              }
+            },
+
+              h('div', {
+                style: { flex: 1 }
+              },
+                h('strong', null,
+                  food?.name || 'Alimento non trovato'
+                ),
+
+                h('small', {
+                  className: 'muted',
+                  style: { display: 'block' }
+                },
+                  `${grams === null ? 'N/D' : fmt(grams)} g · ${energy}`
+                )
+              ),
+
+              h('button', {
+                type: 'button',
+                className: 'ghost danger',
+                onClick: () => onRemove(log.id)
+              }, 'Rimuovi')
             ),
 
             h('div', {
               style: {
                 display: 'flex',
-                gap: '14px',
                 flexWrap: 'wrap',
-                marginTop: '12px',
-                marginBottom: '12px'
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '10px'
               }
             },
-              ...[
-                ['Proteine', data.protein],
-                ['Carboidrati', data.carbs],
-                ['Grassi', data.fat]
-              ].map(([label, value]) =>
-                h('div', { key: label },
-                  h('small', {
-                    className: 'muted'
-                  }, label),
-                  h('strong', {
-                    style: {
-                      display: 'block',
-                      marginTop: '4px'
-                    }
-                  }, `${fmt(value)} g`)
-                )
-              )
-            ),
 
-            ...logs.map(log => {
-              const food = foods.find(
-                item => item.id === log.foodId
-              );
+              !isUnassigned && food && h('button', {
+                type: 'button',
+                className: 'ghost',
+                onClick: () =>
+                  onAddFavorite(meal.id, log.id)
+              }, '☆ Salva come preferito'),
 
-              const amount = number(log.grams);
-              const base = number(
-                food?.servingGrams
-              ) || 100;
-
-              const kcal = number(
-                food?.label?.kcal
-              );
-
-              const energy =
-                kcal !== null && amount !== null
-                  ? fmt(kcal * amount / base, 0)
-                  : 'N/D';
-
-              return h('div', {
-                key: log.id,
-                style: {
-                  padding: '12px 0',
-                  borderTop:
-                    '1px solid rgba(128,128,128,.18)'
-                }
+              h('label', {
+                style: { flex: '1 1 160px' }
               },
+                h('small', {
+                  className: 'muted',
+                  style: { display: 'block' }
+                }, 'Sposta nel pasto'),
 
-                h('div', {
-                  style: {
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '10px'
-                  }
-                },
-                  h('div', null,
-                    h('strong', null,
-                      food?.name || 'Alimento non trovato'
+                h('select', {
+                  value: log.mealId || '',
+                  onChange: event =>
+                    onAssign(
+                      log.id,
+                      event.target.value || null
                     ),
-
-                    h('small', {
-                      className: 'muted',
-                      style: { display: 'block' }
-                    },
-                      `${amount === null
-                        ? 'Peso N/D'
-                        : `${fmt(amount)} g`} · ` +
-                      `${energy} kcal`
-                    )
-                  ),
-
-                  h('button', {
-                    type: 'button',
-                    className: 'ghost danger',
-                    onClick: () => onRemove(log.id)
-                  }, 'Rimuovi')
-                ),
-
-                h('label', {
-                  style: {
-                    display: 'block',
-                    marginTop: '10px'
-                  }
+                  style: { width: '100%' }
                 },
-                  h('small', {
-                    className: 'muted'
-                  }, 'Sposta in un altro pasto'),
 
-                  h('select', {
-                    value: log.mealId || '',
-                    onChange: event =>
-                      onAssign(
-                        log.id,
-                        event.target.value || null
-                      ),
-                    style: {
-                      display: 'block',
-                      width: '100%',
-                      marginTop: '5px'
-                    }
-                  },
+                  h('option', { value: '' }, 'Senza pasto'),
 
+                  ...meals.map(target =>
                     h('option', {
-                      value: ''
-                    }, 'Non assegnato'),
-
-                    ...meals.map(target =>
-                      h('option', {
-                        key: target.id,
-                        value: target.id
-                      }, target.name)
-                    )
+                      key: target.id,
+                      value: target.id
+                    }, target.name)
                   )
                 )
-              );
-            })
-          )
-        : null
+              )
+            )
+          );
+        })
+      )
     );
   }
 
@@ -294,27 +357,28 @@
     meals = [],
     logs = [],
     foods = [],
+    favorites = [],
     onAdd = () => {},
     onAssign = () => {},
     onRemove = () => {},
-    onConfigure = () => {}
+    onConfigure = () => {},
+    onAddFavorite = () => {},
+    onRemoveFavorite = () => {},
+    onQuickFavorite = () => {},
+    onCopyYesterday = () => {}
   }) {
     const validIds = new Set(
       meals.map(meal => meal.id)
     );
 
-    const unassigned = logs.filter(log =>
-      !log.mealId || !validIds.has(log.mealId)
+    const unassigned = logs.filter(
+      log => !log.mealId || !validIds.has(log.mealId)
     );
 
-    const groups = [
-      ...meals.map(meal => ({
-        meal,
-        logs: logs.filter(log =>
-          log.mealId === meal.id
-        )
-      }))
-    ];
+    const groups = meals.map(meal => ({
+      meal,
+      logs: logs.filter(log => log.mealId === meal.id)
+    }));
 
     if (unassigned.length) {
       groups.push({
@@ -326,6 +390,8 @@
       });
     }
 
+    const dayTotals = totals(logs, foods);
+
     return h('section', {
       className: 'nutritraceMealDiary'
     },
@@ -335,7 +401,7 @@
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '12px',
+          gap: '10px',
           marginBottom: '14px'
         }
       },
@@ -347,7 +413,7 @@
 
           h('small', {
             className: 'muted'
-          }, 'Diario organizzato per pasto')
+          }, 'Preferiti, copia pasto e diario')
         ),
 
         h('button', {
@@ -364,17 +430,105 @@
           logs: group.logs,
           foods,
           meals,
+          favorites,
           onAdd,
           onAssign,
-          onRemove
+          onRemove,
+          onAddFavorite,
+          onRemoveFavorite,
+          onQuickFavorite,
+          onCopyYesterday
         })
       ),
 
-      !groups.length
-        ? h('p', {
-            className: 'muted'
-          }, 'Aggiungi un pasto per iniziare.')
-        : null
+      h('article', {
+        className: 'card',
+        style: { padding: '16px', marginTop: '12px' }
+      },
+
+        h('h3', null, 'Riepilogo completo del giorno'),
+
+        h('p', { className: 'muted tiny' },
+          'Somma di tutti gli alimenti registrati, ' +
+          'indipendentemente dal pasto.'
+        ),
+
+        h('strong', null,
+          `${fmt(dayTotals.kcal, 0)} kcal` +
+          (
+            dayTotals.knownKcal !== dayTotals.count
+              ? ' · totale parziale'
+              : ''
+          )
+        ),
+
+        h('div', {
+          style: {
+            display: 'flex',
+            gap: '15px',
+            flexWrap: 'wrap',
+            marginTop: '12px'
+          }
+        },
+
+          ...[
+            ['Proteine', dayTotals.protein],
+            ['Carboidrati', dayTotals.carbs],
+            ['Grassi', dayTotals.fat]
+          ].map(([name, value]) =>
+            h('div', { key: name },
+              h('small', {
+                className: 'muted',
+                style: { display: 'block' }
+              }, name),
+
+              h('strong', null, `${fmt(value)} g`)
+            )
+          )
+        ),
+
+        h('details', {
+          style: { marginTop: '12px' }
+        },
+
+          h('summary', null, `Tutti gli alimenti (${logs.length})`),
+
+          ...logs.map(log => {
+            const food = foods.find(
+              f => f.id === log.foodId
+            );
+
+            const meal = meals.find(
+              m => m.id === log.mealId
+            );
+
+            return h('div', {
+              key: log.id,
+              style: {
+                padding: '8px 0',
+                borderBottom: '1px solid rgba(128,128,128,.15)'
+              }
+            },
+
+              h('strong', null,
+                food?.name || 'Alimento non trovato'
+              ),
+
+              h('small', {
+                className: 'muted',
+                style: { display: 'block' }
+              },
+                `${fmt(log.grams)} g · ` +
+                `${meal?.name || 'Senza pasto'}`
+              )
+            );
+          })
+        )
+      ),
+
+      !groups.length && h('p', {
+        className: 'muted'
+      }, 'Configura almeno un pasto per iniziare.')
     );
   }
 
