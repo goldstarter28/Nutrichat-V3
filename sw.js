@@ -8,6 +8,13 @@ const CORE = [
   './index.html',
   './app.js',
   './food-camera.js',
+  './meal-config.js',
+'./meal-shortcuts.js',
+'./meal-analytics.js',
+'./meal-analytics-dashboard.js',
+'./meal-diary.js',
+'./body-weight.js',
+'./weight-calorie-chart.js',
   './hydration-widget.js',
   './ingredient-reconstruction.js',
   './ingredient-auto-audit.js',
@@ -34,9 +41,7 @@ const VENDOR = [
 ];
 
 
-const APP_ASSET = /\/(?:app\.js|food-camera\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|style\.css|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
-
-
+const APP_ASSET = /\/(?:app\.js|food-camera\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
