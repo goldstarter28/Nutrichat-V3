@@ -31,6 +31,8 @@ function View(props){
  const [weight,setWeight]=useState(false);
  const [editing,setEditing]=useState(null);
  const [listening,setListening]=useState(false);
+ const [speech,setSpeech]=useState({id:null,status:'stopped'});
+ const speechRef=useRef({id:null,utter:null});
  const [photo,setPhoto]=useState(null);
  const [storageError,setStorageError]=useState('');
  const [sidebar,setSidebar]=useState(false);
@@ -46,7 +48,8 @@ function View(props){
  },[data]);
  useEffect(()=>{try{localStorage.setItem(CONSENT,consent?'yes':'no');}catch{}},[consent]);
  useEffect(()=>{bottom.current?.scrollIntoView?.({block:'nearest',behavior:'smooth'});},[thread?.messages.length,busy]);
- useEffect(()=>()=>{recognition.current?.stop?.();root.speechSynthesis?.cancel?.();},[]);
+ useEffect(()=>()=>{recognition.current?.stop?.();root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};},[]);
+ useEffect(()=>{root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};setSpeech({id:null,status:'stopped'});},[data.active]);
  const updateThread=(id,fn)=>setData(prev=>({...prev,threads:prev.threads.map(t=>t.id===id?{...fn(t),updatedAt:Date.now()}:t)}));
  function newThread(){const t=initial();setData(prev=>({threads:[t,...prev.threads].slice(0,30),active:t.id}));setDraft('');setEditing(null);setError('');setPhoto(null);setSidebar(false);}
  function selectThread(id){if(busy)return;setData(prev=>({...prev,active:id}));setDraft('');setEditing(null);setError('');setPhoto(null);setSidebar(false);}
@@ -106,11 +109,32 @@ function View(props){
   ask('Continua esattamente dal punto in cui ti sei interrotto, senza ripetere quanto già scritto.',messages,thread.id,'continue');
  }
  function editMessage(m){if(busy)return;setDraft(m.content);setEditing(m.id);setError('Modificando e reinviando, le risposte successive saranno rigenerate.');}
- function speak(text){
-  if(!('speechSynthesis' in root)){setError('Lettura vocale non supportata da questo browser.');return;}
-  root.speechSynthesis.cancel();
-  const utter=new SpeechSynthesisUtterance(text.replace(/[#*`|_]/g,' ').slice(0,3500));
-  utter.lang='it-IT';utter.rate=1;root.speechSynthesis.speak(utter);
+ function stopSpeech(){
+  if(root.speechSynthesis)root.speechSynthesis.cancel();
+  speechRef.current={id:null,utter:null};
+  setSpeech({id:null,status:'stopped'});
+ }
+ function toggleSpeech(message){
+  if(!('speechSynthesis' in root)||!('SpeechSynthesisUtterance' in root)){
+   setError('La lettura vocale non è supportata da questo browser.');return;
+  }
+  const engine=root.speechSynthesis;
+  if(speechRef.current.id===message.id){
+   if(speech.status==='playing'){
+    engine.pause();setSpeech({id:message.id,status:'paused'});return;
+   }
+   if(speech.status==='paused'){
+    engine.resume();setSpeech({id:message.id,status:'playing'});return;
+   }
+  }
+  stopSpeech();
+  const utter=new root.SpeechSynthesisUtterance(message.content.replace(/[#*`|_]/g,' ').slice(0,3500));
+  utter.lang='it-IT';utter.rate=1;
+  utter.onend=()=>{if(speechRef.current.utter===utter){speechRef.current={id:null,utter:null};setSpeech({id:null,status:'stopped'});}};
+  utter.onerror=()=>{if(speechRef.current.utter===utter){speechRef.current={id:null,utter:null};setSpeech({id:null,status:'stopped'});}};
+  speechRef.current={id:message.id,utter};
+  setSpeech({id:message.id,status:'playing'});
+  engine.speak(utter);
  }
  function dictate(){
   const SR=root.SpeechRecognition||root.webkitSpeechRecognition;
@@ -155,7 +179,8 @@ function View(props){
     m.role==='assistant'?root.NutriTraceCoachMarkdown.render(m.content):h('p',{className:'coach-user-text'},m.content),
     h('div',{className:'coach-message-actions'},
      m.role==='user'?btn('Modifica',()=>editMessage(m),busy):h(root.React.Fragment,null,
-      btn('Ascolta',()=>speak(m.content)),
+      btn(speech.id===m.id?(speech.status==='paused'?'▶ Riprendi':'⏸ Pausa'):'▶ Ascolta',()=>toggleSpeech(m)),
+      speech.id===m.id&&btn('■ Ferma',stopSpeech),
       m.truncated&&btn('Continua risposta',continueAnswer,busy,'coach-btn coach-primary'))))),
    busy&&h('p',{className:'coach-wait',role:'status'},'Il Coach sta preparando la risposta…'),
    h('div',{ref:bottom})),
