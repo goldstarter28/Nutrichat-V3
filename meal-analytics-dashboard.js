@@ -397,7 +397,197 @@ function InteractiveChart({
 
   const x = index =>
     L + (index + 0.5) * step;
+const gestureRef = React.useRef(null);
+const lastTapRef = React.useRef(0);
 
+function touchX(touch, svg) {
+  const rect = svg.getBoundingClientRect();
+  return (touch.clientX - rect.left) / rect.width * W;
+}
+
+function setWindow(nextStart, nextCount) {
+  const n = Math.min(total, Math.max(2, nextCount));
+  const s = Math.max(0, Math.min(total - n, nextStart));
+
+  setViewport({ start: s, count: n });
+  setActive(null);
+}
+
+function handleTouchStart(event) {
+  if (!total) return;
+
+  const touches = [...event.touches];
+
+  if (touches.length === 2 && total >= 2) {
+    const xa = touchX(touches[0], event.currentTarget);
+    const xb = touchX(touches[1], event.currentTarget);
+    const center = (xa + xb) / 2;
+
+    const ratio = Math.max(
+      0,
+      Math.min(1, (center - L) / plotWidth)
+    );
+
+    gestureRef.current = {
+      type: 'pinch',
+      distance: Math.max(1, Math.abs(xa - xb)),
+      count,
+      start,
+      anchor: start + ratio * (count - 1),
+      ratio
+    };
+
+    return;
+  }
+
+  if (touches.length === 1) {
+    const x0 = touchX(touches[0], event.currentTarget);
+
+    gestureRef.current = {
+      type: 'single',
+      x0,
+      start,
+      count,
+      moved: false
+    };
+  }
+}
+
+function handleTouchMove(event) {
+  const g = gestureRef.current;
+  if (!g) return;
+
+  const touches = [...event.touches];
+
+  if (g.type === 'pinch' && touches.length === 2) {
+    if (event.cancelable) event.preventDefault();
+
+    const xa = touchX(touches[0], event.currentTarget);
+    const xb = touchX(touches[1], event.currentTarget);
+
+    const distance = Math.max(
+      1,
+      Math.abs(xa - xb)
+    );
+
+    const nextCount = Math.min(
+      total,
+      Math.max(
+        2,
+        Math.round(
+          g.count * g.distance / distance
+        )
+      )
+    );
+
+    const nextStart = Math.round(
+      g.anchor - g.ratio * (nextCount - 1)
+    );
+
+    setWindow(nextStart, nextCount);
+    return;
+  }
+
+  if (g.type === 'single' && touches.length === 1) {
+    const xNow = touchX(
+      touches[0],
+      event.currentTarget
+    );
+
+    const dx = xNow - g.x0;
+
+    if (Math.abs(dx) > 10) {
+      g.moved = true;
+    }
+
+    if (!g.moved) return;
+
+    if (event.cancelable) event.preventDefault();
+
+    if (g.count < total) {
+      const shift = Math.round(
+        -dx / plotWidth * g.count
+      );
+
+      setWindow(g.start + shift, g.count);
+
+    } else {
+      const fraction = Math.max(
+        0,
+        Math.min(1, (xNow - L) / plotWidth)
+      );
+
+      setActive(
+        Math.min(
+          total - 1,
+          Math.floor(fraction * total)
+        )
+      );
+    }
+  }
+}
+
+function handleTouchEnd(event) {
+  const g = gestureRef.current;
+  if (!g) return;
+
+  if (event.touches.length > 0) {
+    if (
+      g.type === 'pinch' &&
+      event.touches.length === 1
+    ) {
+      const x0 = touchX(
+        event.touches[0],
+        event.currentTarget
+      );
+
+      gestureRef.current = {
+        type: 'single',
+        x0,
+        start,
+        count,
+        moved: true
+      };
+    }
+    return;
+  }
+
+  gestureRef.current = null;
+
+  if (g.type !== 'single' || g.moved) {
+    return;
+  }
+
+  const now = Date.now();
+
+  if (now - lastTapRef.current < 300) {
+    setViewport({
+      start: 0,
+      count: null
+    });
+
+    setActive(null);
+    lastTapRef.current = 0;
+    return;
+  }
+
+  lastTapRef.current = now;
+
+  const fraction = Math.max(
+    0,
+    Math.min(1, (g.x0 - L) / plotWidth)
+  );
+
+  setActive(
+    Math.min(
+      labels.length - 1,
+      Math.max(
+        0,
+        Math.floor(fraction * labels.length)
+      )
+    )
+  );
+}
   function pickPoint(event) {
     if (!labels.length) return;
 
