@@ -1140,21 +1140,6 @@ const [mealFavorites, setMealFavorites] = useState(() => {
   }
 });
 
-useEffect(() => {
-  if (!loaded) return;
-
-  try {
-    localStorage.setItem(
-      'nutritrace_meal_favorites_v3',
-      JSON.stringify(mealFavorites)
-    );
-  } catch (error) {
-    console.error(
-      'Impossibile salvare i preferiti dei pasti',
-      error
-    );
-  }
-}, [mealFavorites, loaded]);
 const activeMealId = meals.some(
   meal => meal.id === selectedMealId
 ) ? selectedMealId : null;
