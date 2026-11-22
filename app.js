@@ -1212,7 +1212,28 @@ const [mealFavorites, setMealFavorites] = useState(() => {
 const activeMealId = meals.some(
   meal => meal.id === selectedMealId
 ) ? selectedMealId : null;
-  const [tab,setTab]=useState('oggi'), [foodDraft,setFoodDraft]=useState(null), [grams,setGrams]=useState(''), [loaded,setLoaded]=useState(false);
+  const [darkMode,setDarkMode]=useState(()=>{
+  try {
+    return localStorage.getItem('nutritrace_theme_v3')==='dark';
+  } catch {
+    return false;
+  }
+});
+
+useEffect(()=>{
+  document.documentElement.dataset.theme=
+    darkMode?'dark':'light';
+
+  try {
+    localStorage.setItem(
+      'nutritrace_theme_v3',
+      darkMode?'dark':'light'
+    );
+  } catch(error) {
+    console.warn('Preferenza tema non salvata',error);
+  }
+},[darkMode]);
+    const [tab,setTab]=useState('oggi'), [foodDraft,setFoodDraft]=useState(null), [grams,setGrams]=useState(''), [loaded,setLoaded]=useState(false);
   useEffect(() => {
   if (!loaded) return;
 
@@ -2609,7 +2630,22 @@ function importBackup(event) {
   );
 
   return h('main',null,
-    h('header',{className:'hero'},h('div',null,h('div',{className:'eyebrow'},'DIARIO NUTRIZIONALE PERSONALE · V2.3 DATA + SEARCH'),h('h1',null,'NutriTrace'),h('p',null,'Diario per data, Master Food DB multi-fonte, N/D espliciti e AI usata come interprete e ricerca assistita.')),h('div',{className:'privacy'},'● Local-first · Master DB primario · AI tracciata')),
+    h('header',{className:'hero'},h('div',null,h('div',{className:'eyebrow'},'DIARIO NUTRIZIONALE PERSONALE · V2.3 DATA + SEARCH'),h('h1',null,'NutriTrace'),h('p',null,'Diario per data, Master Food DB multi-fonte, N/D espliciti e AI usata come interprete e ricerca assistita.')),h('div',{className:'heroActions'},
+  h('div',{className:'privacy'},
+    '● Local-first · Master DB primario · AI tracciata'
+  ),
+  h('button',{
+    type:'button',
+    className:'ghost themeToggle',
+    'aria-label':darkMode
+      ?'Attiva modalità giorno'
+      :'Attiva modalità notte',
+    'aria-pressed':darkMode,
+    onClick:()=>setDarkMode(value=>!value)
+  },
+    darkMode?'☀️ Giorno':'🌙 Notte'
+  )
+)),
     h('nav',{className:'tabs'},['oggi','ricerca','alimenti','obiettivi','peso','analisi','dati'].map(x=>h('button',{key:x,className:tab===x?'active':'',onClick:()=>setTab(x)},x[0].toUpperCase()+x.slice(1)))),
 
     
