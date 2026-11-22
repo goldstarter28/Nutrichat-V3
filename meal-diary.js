@@ -441,90 +441,102 @@
         })
       ),
 
+
       h('article', {
         className: 'card',
-        style: { padding: '16px', marginTop: '12px' }
+        style: { padding: '12px 16px', marginTop: '12px' }
       },
-
-        h('h3', null, 'Riepilogo completo del giorno'),
-
-        h('p', { className: 'muted tiny' },
-          'Somma di tutti gli alimenti registrati, ' +
-          'indipendentemente dal pasto.'
+        h('h3', { style: { marginBottom: '6px' } },
+          `Alimenti del giorno (${logs.length})`
         ),
 
-        h('strong', null,
-          `${fmt(dayTotals.kcal, 0)} kcal` +
-          (
-            dayTotals.knownKcal !== dayTotals.count
-              ? ' · totale parziale'
-              : ''
-          )
-        ),
+        logs.length === 0
+          ? h('p', {
+              className: 'muted tiny',
+              style: { margin: 0 }
+            }, 'Nessun alimento registrato.')
 
-        h('div', {
-          style: {
-            display: 'flex',
-            gap: '15px',
-            flexWrap: 'wrap',
-            marginTop: '12px'
-          }
-        },
+          : h('div', null,
+              ...logs.map(log => {
+                const food = foods.find(f => f.id === log.foodId);
+                const meal = meals.find(m => m.id === log.mealId);
+                const grams = number(log.grams);
+                const serving = number(food?.servingGrams) || 100;
+                const ratio = grams === null ? null : grams / serving;
 
-          ...[
-            ['Proteine', dayTotals.protein],
-            ['Carboidrati', dayTotals.carbs],
-            ['Grassi', dayTotals.fat]
-          ].map(([name, value]) =>
-            h('div', { key: name },
-              h('small', {
-                className: 'muted',
-                style: { display: 'block' }
-              }, name),
+                const values = [
+                  ['kcal', 'kcal', 0],
+                  ['P', 'protein', 1],
+                  ['C', 'carbs', 1],
+                  ['G', 'fat', 1],
+                  ['F', 'fiber', 1]
+                ];
 
-              h('strong', null, `${fmt(value)} g`)
+                return h('div', {
+                  key: log.id,
+                  style: {
+                    padding: '7px 0',
+                    borderBottom: '1px solid var(--line)'
+                  }
+                },
+
+                  h('div', {
+                    style: {
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'baseline',
+                      justifyContent: 'space-between',
+                      gap: '2px 10px'
+                    }
+                  },
+
+                    h('strong', {
+                      style: { fontSize: '13px' }
+                    }, food?.name || 'Alimento non trovato'),
+
+                    h('small', {
+                      className: 'muted'
+                    },
+                      `${grams === null ? 'N/D' : fmt(grams)} g · ` +
+                      (meal?.name || 'Senza pasto')
+                    )
+                  ),
+
+                  h('div', {
+                    className: 'muted',
+                    style: {
+                      fontSize: '11px',
+                      lineHeight: 1.45,
+                      marginTop: '2px',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      columnGap: '12px',
+                      rowGap: '2px'
+                    }
+                  },
+
+                    ...values.map(([name, key, digits]) => {
+                      const base = number(food?.label?.[key]);
+
+                      const value = ratio === null || base === null
+                        ? null
+                        : base * ratio;
+
+                      return h('span', { key },
+                        `${name}: ${
+                          value === null
+                            ? 'N/D'
+                            : fmt(value, digits) +
+                              (key === 'kcal' ? ' kcal' : ' g')
+                        }`
+                      );
+                    })
+                  )
+                );
+              })
             )
-          )
-        ),
-
-        h('details', {
-          style: { marginTop: '12px' }
-        },
-
-          h('summary', null, `Tutti gli alimenti (${logs.length})`),
-
-          ...logs.map(log => {
-            const food = foods.find(
-              f => f.id === log.foodId
-            );
-
-            const meal = meals.find(
-              m => m.id === log.mealId
-            );
-
-            return h('div', {
-              key: log.id,
-              style: {
-                padding: '8px 0',
-                borderBottom: '1px solid rgba(128,128,128,.15)'
-              }
-            },
-
-              h('strong', null,
-                food?.name || 'Alimento non trovato'
-              ),
-
-              h('small', {
-                className: 'muted',
-                style: { display: 'block' }
-              },
-                `${fmt(log.grams)} g · ` +
-                `${meal?.name || 'Senza pasto'}`
-              )
-            );
-          })
-        )
       ),
+
 
       !groups.length && h('p', {
         className: 'muted'
