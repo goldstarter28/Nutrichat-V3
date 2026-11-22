@@ -2245,8 +2245,159 @@ async function commitRecipe() {
     }catch(e){setMasterOfflineMsg(`Download offline incompleto: ${e.message}. Puoi riprovare; i chunk già salvati restano in cache.`);}
   }
   function applyMacroPlan(){ const p=macroPreview; setProfile(x=>({...x,macroPlan:{...x.macroPlan,perKg:{...x.macroPlan.perKg,...p.perKg}}})); setGoals(gs=>gs.map(g=>g.id==='kcal'?{...g,target:p.kcal,targetMode:'absolute'}:['protein','carbs','fat','sugar','fiber'].includes(g.id)?{...g,perKg:p.perKg[g.id],target:p.grams[g.id],targetMode:'perKg'}:g)); }
-  function exportData(){ const b=new Blob([JSON.stringify({version:4,foods,logs,goals,profile},null,2)],{type:'application/json'}),u=URL.createObjectURL(b),a=document.createElement('a'); a.href=u; a.download=`nutritrace-${dateKey()}.json`; a.click(); URL.revokeObjectURL(u); }
-  function importBackup(e){ const f=e.target.files?.[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ const d=JSON.parse(rd.result); if(d.foods)setFoods(d.foods); if(d.logs)setLogs(d.logs); if(d.goals)setGoals(mergeGoalCatalog(d.goals)); if(d.profile)setProfile(normalizeProfile(d.profile)); }catch{ alert('Backup non valido'); } }; rd.readAsText(f); }
+  function exportData() {
+  try {
+    const raw = localStorage.getItem('nutritrace_body_weight_v1');
+    const bodyWeight = raw === null
+      ? { entries: [], target: null }
+      : JSON.parse(raw);
+
+    if (!bodyWeight || !Array.isArray(bodyWeight.entries)) {
+      throw new Error('Archivio del peso non valido.');
+    }
+
+    const backup = {
+      version: 5,
+      foods,
+      logs,
+      goals,
+      profile,
+      bodyWeight
+    };
+
+    const blob = new Blob(
+      [JSON.stringify(backup, null, 2)],
+      { type: 'application/json' }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = 'nutritrace-' + dateKey() + '.json';
+    link.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  } catch (error) {
+    alert('Esportazione non riuscita: ' + error.message);
+  }
+}
+
+function importBackup(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        Array.isArray(data)
+      ) {
+        throw new Error('Il file non contiene un backup valido.');
+      }
+
+      if ('bodyWeight' in data) {
+        const weight = data.bodyWeight;
+
+        if (
+          !weight ||
+          !Array.isArray(weight.entries) ||
+          !(
+            weight.target === null ||
+            (
+              typeof weight.target === 'number' &&
+              Number.isFinite(weight.target) &&
+              weight.target >= 20 &&
+              weight.target <= 500
+            )
+          )
+        ) {
+          throw new Error('La sezione del peso non è valida.');
+        }
+
+        const ids = new Set();
+
+        for (const entry of weight.entries) {
+          const date = entry?.date;
+
+          const validDate =
+            typeof date === 'string' &&
+            /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+            !Number.isNaN(Date.parse(date)) &&
+            new Date(date + 'T12:00:00Z')
+              .toISOString()
+              .slice(0, 10) === date;
+
+          if (
+            !validDate ||
+            typeof entry.id !== 'string' ||
+            !entry.id ||
+            ids.has(entry.id) ||
+            typeof entry.kg !== 'number' ||
+            !Number.isFinite(entry.kg) ||
+            entry.kg < 20 ||
+            entry.kg > 500 ||
+            (
+              entry.time &&
+              !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.time)
+            ) ||
+            (
+              entry.note != null &&
+              typeof entry.note !== 'string'
+            )
+          ) {
+            throw new Error(
+              'Una misurazione del peso non è valida.'
+            );
+          }
+
+          ids.add(entry.id);
+        }
+
+        localStorage.setItem(
+          'nutritrace_body_weight_v1',
+          JSON.stringify(weight)
+        );
+      }
+
+      if (Array.isArray(data.foods)) {
+        setFoods(data.foods);
+      }
+
+      if (Array.isArray(data.logs)) {
+        setLogs(data.logs);
+      }
+
+      if (Array.isArray(data.goals)) {
+        setGoals(mergeGoalCatalog(data.goals));
+      }
+
+      if (data.profile) {
+        setProfile(normalizeProfile(data.profile));
+      }
+
+      alert(
+        'Backup importato. Il peso è stato ripristinato se presente.'
+      );
+
+    } catch (error) {
+      alert('Importazione non riuscita: ' + error.message);
+    }
+  };
+
+  reader.onerror = () => {
+    alert('Impossibile leggere il file di backup.');
+  };
+
+  reader.readAsText(file);
+  event.target.value = '';
+}
   async function importCustomDataset(){ if(!newDatasetName.trim()||!newDatasetFile){ setDatasetMsg('Inserisci un nome e seleziona un file.'); return; } const id=`CUSTOM_${Date.now()}`; SOURCE_META[id]={name:newDatasetName.trim(),version:'importato',mode:'local',official:false,scientific:true}; setDatasetMsg(`Importazione ${newDatasetName.trim()}…`); try{ const buf=await newDatasetFile.arrayBuffer(), lower=newDatasetFile.name.toLowerCase(); let normalized=[]; if(lower.endsWith('.json')||lower.endsWith('.jsonl')) normalized=parseJsonDataset(id,new TextDecoder().decode(buf)); else { const rows=parseSheetRows(buf,'array'); normalized=looksLikeCreaFlat(rows)?normalizeCreaFlat(id,rows):normalizeRows(id,rows); } if(!normalized.length) throw new Error('Formato non riconosciuto o nessun alimento trovato. Sono supportati CSV/XLSX/ODS e JSON/JSONL, incluso il formato CREA esportato.'); await dbSet(id,normalized); setDatasets(d=>({...d,[id]:normalized})); setDatasetMeta(m=>[...m,{id,name:newDatasetName.trim(),fileName:newDatasetFile.name,count:normalized.length,version:'importato'}]); setDatasetMsg(`${newDatasetName.trim()}: ${normalized.length} alimenti disponibili offline.`); setNewDatasetFile(null); }catch(e){ setDatasetMsg(`Errore: ${e.message}`); } }
   async function removeDataset(id){ const m=datasetMeta.find(x=>x.id===id); if(!confirm(`Rimuovere il database “${m?.name||id}” dal dispositivo?`)) return; await dbDel(id); setDatasets(d=>{const x={...d};delete x[id];return x}); setDatasetMeta(x=>x.filter(m=>m.id!==id)); setDatasetMsg('Database rimosso.'); }
   const addNutrient=()=>setFoodDraft({...foodDraft,nutrients:[...(foodDraft.nutrients||[]),emptyNutrient()]});
