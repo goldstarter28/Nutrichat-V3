@@ -58,7 +58,7 @@ function CoachV2(props){
     h('label',{style:{display:'block',marginBottom:10}},h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked)setWeight(false);}}),' Invia anche le statistiche nutrizionali aggregate (facoltativo)'),
     share&&h('label',{style:{display:'block',marginBottom:10}},h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),' Includi anche le ultime 10 misurazioni di peso (facoltativo)'),
     h('div',{style:{...grid,maxHeight:360,overflowY:'auto',marginBottom:12},role:'log','aria-live':'polite'},
-      ...history.map((m,i)=>h('div',{key:i,style:{...panel,background:m.role==='user'?'var(--accent2,#e5f2e9)':'var(--card,#fff)',whiteSpace:'pre-wrap'}},h('strong',null,m.role==='user'?'Tu':'Coach'),h('p',null,m.content)))),
+      ...history.map((m,i)=>h('div',{key:i,style:{...panel,background:m.role==='user'?'var(--accent2,#e5f2e9)':'var(--card,#fff)',whiteSpace:'pre-wrap'}},h('strong',null,m.role==='user'?'Tu':'Coach'),m.role==='assistant'?global.NutriTraceCoachMarkdown.render(m.content):h('p',null,m.content)))),
     h('form',{onSubmit:send},
       h('textarea',{value:question,onChange:e=>setQuestion(e.target.value),maxLength:1000,rows:3,placeholder:'Es. Come posso aumentare peso gradualmente?'}),
       h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginTop:10}},
