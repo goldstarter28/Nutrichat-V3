@@ -2759,28 +2759,99 @@ tab==='oggi'&&h('section',null,
   },
 
   onAddFavorite:(mealId,logId)=>{
-    try{
-      const log=dayLogs.find(l=>l.id===logId);
-      if(!log){
-        throw new Error('Alimento non trovato nel diario.');
-      }
+  try {
+    const log=dayLogs.find(l=>l.id===logId);
 
-      const updated=window.NutriTraceMealShortcuts.addFavorite(
-        mealFavorites,
-        {
-          mealId,
-          foodId:log.foodId,
-          grams:log.grams
-        },
-        meals,
-        foods
+    if(!log){
+      throw new Error('Alimento non trovato nel diario.');
+    }
+
+    const food=foods.find(f=>f.id===log.foodId);
+
+    if(!food){
+      throw new Error('Alimento non presente nell’archivio.');
+    }
+
+    const unitInput=window.prompt(
+      'Unità del preferito: g, ml oppure pz',
+      'g'
+    );
+
+    if(unitInput===null)return;
+
+    const unit=unitInput.trim().toLowerCase();
+
+    if(!['g','ml','pz'].includes(unit)){
+      throw new Error('Unità non valida. Usa g, ml o pz.');
+    }
+
+    const quantityInput=window.prompt(
+      'Quantità in '+unit,
+      unit==='g'?String(log.grams):''
+    );
+
+    if(quantityInput===null)return;
+
+    const quantity=Number(
+      quantityInput.trim().replace(',','.')
+    );
+
+    if(!Number.isFinite(quantity)||quantity<=0){
+      throw new Error('Inserisci una quantità positiva.');
+    }
+
+    let gramsPerUnit=1;
+
+    if(unit!=='g'){
+      const message=unit==='ml'
+        ? 'Quanti grammi pesa 1 ml di questo alimento?'
+        : 'Quanti grammi pesa 1 pezzo di questo alimento?';
+
+      const factorInput=window.prompt(message,'');
+
+      if(factorInput===null)return;
+
+      gramsPerUnit=Number(
+        factorInput.trim().replace(',','.')
       );
 
-      setMealFavorites(updated);
-    }catch(error){
-      window.alert(error.message);
+      if(!Number.isFinite(gramsPerUnit)||gramsPerUnit<=0){
+        throw new Error(
+          'Inserisci un fattore di conversione valido.'
+        );
+      }
     }
-  },
+
+    const grams=Math.round(
+      quantity*gramsPerUnit*1000
+    )/1000;
+
+    if(grams<=0||grams>10000){
+      throw new Error(
+        'Il peso convertito deve essere compreso tra 0 e 10000 g.'
+      );
+    }
+
+    const updated=window.NutriTraceMealShortcuts.addFavorite(
+      mealFavorites,
+      {
+        mealId,
+        foodId:log.foodId,
+        grams,
+        quantity,
+        unit,
+        gramsPerUnit
+      },
+      meals,
+      foods
+    );
+
+    setMealFavorites(updated);
+
+  }catch(error){
+    window.alert(error.message);
+  }
+},
 
   onRemoveFavorite:favoriteId=>{
     setMealFavorites(previous=>
