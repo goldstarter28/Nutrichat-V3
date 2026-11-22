@@ -196,7 +196,7 @@
                   className: 'ghost',
                   title: `Aggiungi ${name}`,
                   onClick: () => onQuickFavorite(favorite)
-                }, `+ ${fmt(favorite.grams)} g ${name}`),
+               }, `+ ${fmt(favorite.quantity ?? favorite.grams)} ${favorite.unit || 'g'} ${name}`),
 
                 h('button', {
                   type: 'button',
