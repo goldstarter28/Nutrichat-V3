@@ -714,7 +714,7 @@ onPointerLeave: () => {
     setActive(null);
   }
 }
-
+},
           ...[0, .25, .5, .75, 1].map(fraction =>
             h('g', { key: fraction },
               h('line', {
