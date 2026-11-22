@@ -3061,7 +3061,7 @@ h(window.NutriTraceFoodCamera,{
   onLabel:importPhotoLabel,
   onDish:importPhotoDish
 }),
-                       
+   h(window.NutriTraceBarcodeScanner,{}),                    
 photoReviewOpen && h('article',{
   className:'card',
   style:{
