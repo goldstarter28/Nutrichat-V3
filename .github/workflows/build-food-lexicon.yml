@@ -1,0 +1,178 @@
+name: Build offline food lexicon (Wikidata CC0)
+on:
+  push:
+    branches:
+      - feature/offline-food-lexicon-cc0
+    paths:
+      - .github/workflows/build-food-lexicon.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Extract only Wikidata structured labels and build audit artifacts
+        env:
+          WIKIDATA_UA: "NutriTraceFoodLexicon/0.2 (https://github.com/goldstarter28/Nutrichat-V3; offline lexicon research)"
+        shell: bash
+        run: |
+          mkdir -p output
+          cat > /tmp/build_food_lexicon.py <<'PY'
+          import csv
+          import datetime as dt
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from collections import defaultdict
+
+          OUT = pathlib.Path('output')
+          ENDPOINT = 'https://query.wikidata.org/sparql'
+          USER_AGENT = os.environ['WIKIDATA_UA']
+          # Two distinct documented roots: food and prepared dish.
+          ROOTS = {'food': 'Q2095', 'dish': 'Q746549'}
+          PAGE_SIZE = 250
+          MAX_PAGES_PER_ROOT = 32  # Safety cap, NOT an assertion of completeness.
+          rows, failed, truncated, counts = [], [], [], {}
+          queries = []
+
+          def get_page(root, offset):
+              # Only Wikidata main-namespace structured item labels: no Wikipedia text.
+              sparql = f'''SELECT DISTINCT ?item ?itLabel ?enLabel WHERE {{
+                ?item wdt:P31/wdt:P279* wd:{root} .
+                ?item rdfs:label ?itLabel .
+                ?item rdfs:label ?enLabel .
+                FILTER(LANG(?itLabel) = "it")
+                FILTER(LANG(?enLabel) = "en")
+              }} ORDER BY ?item LIMIT {PAGE_SIZE} OFFSET {offset}'''
+              url = ENDPOINT + '?' + urllib.parse.urlencode({'query': sparql, 'format': 'json'})
+              for attempt in range(3):
+                  try:
+                      req = urllib.request.Request(url, headers={
+                          'User-Agent': USER_AGENT,
+                          'Accept': 'application/sparql-results+json',
+                      })
+                      with urllib.request.urlopen(req, timeout=80) as response:
+                          data = json.load(response)
+                      return data.get('results', {}).get('bindings', []), sparql
+                  except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+                      if attempt == 2:
+                          raise RuntimeError(f'{root} offset {offset}: {exc}') from exc
+                      time.sleep(3 * (attempt + 1))
+
+          for category, root in ROOTS.items():
+              total = 0
+              complete = False
+              for page in range(MAX_PAGES_PER_ROOT):
+                  try:
+                      batch, sparql = get_page(root, page * PAGE_SIZE)
+                  except Exception as exc:
+                      failed.append(str(exc))
+                      break
+                  queries.append(sparql)
+                  for item in batch:
+                      qid = item.get('item', {}).get('value', '').rsplit('/', 1)[-1]
+                      it = item.get('itLabel', {}).get('value', '').strip()
+                      en = item.get('enLabel', {}).get('value', '').strip()
+                      if (re.fullmatch(r'Q[1-9]\d*', qid) and it and en
+                              and len(it) <= 120 and len(en) <= 120):
+                          rows.append((qid, it, en, category))
+                          total += 1
+                  print(f'{category}: page {page + 1}, returned {len(batch)} rows')
+                  if len(batch) < PAGE_SIZE:
+                      complete = True
+                      break
+                  time.sleep(1.5)
+              counts[category] = total
+              if not complete:
+                  truncated.append(category)
+
+          csv_path = OUT / 'wikidata-food-labels.csv'
+          with csv_path.open('w', encoding='utf-8', newline='') as out:
+              writer = csv.writer(out)
+              writer.writerow(['qid', 'it', 'en', 'category'])
+              writer.writerows(rows)
+
+          groups = defaultdict(lambda: {'qids': set(), 'english': set()})
+          pairs = {}
+          for qid, it, en, cat in rows:
+              it_key = ' '.join(it.casefold().split())
+              en_key = ' '.join(en.casefold().split())
+              if it_key == en_key:
+                  continue
+              pairs[qid] = {'qid': qid, 'it': it, 'en': [en]}
+              groups[it_key]['qids'].add(qid)
+              groups[it_key]['english'].add(en_key)
+
+          # Reject all labels associated with >1 concept; conservative by design.
+          ambiguous = {it for it, v in groups.items() if len(v['qids']) != 1}
+          entries = sorted([
+              item for item in pairs.values()
+              if ' '.join(item['it'].casefold().split()) not in ambiguous
+          ], key=lambda x: (x['it'].casefold(), x['qid']))
+          lexicon = {
+              'source': 'wikidata-structured-data',
+              'license': 'CC0-1.0',
+              'version': dt.datetime.now(dt.timezone.utc).date().isoformat(),
+              'entries': entries,
+          }
+          lex_path = OUT / 'food-lexicon-it-en.json'
+          lex_path.write_text(json.dumps(lexicon, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+
+          def checksum(p):
+              return hashlib.sha256(p.read_bytes()).hexdigest()
+
+          provenance = {
+              'source_url': 'https://www.wikidata.org/wiki/Wikidata:Licensing',
+              'license': 'CC0-1.0',
+              'endpoint': ENDPOINT,
+              'retrieved_utc': dt.datetime.now(dt.timezone.utc).isoformat(),
+              'root_categories': ROOTS,
+              'page_size': PAGE_SIZE,
+              'maximum_pages_per_category': MAX_PAGES_PER_ROOT,
+              'observed_rows_per_category': counts,
+              'failed_queries': failed,
+              'incomplete_or_truncated_categories': truncated,
+              'query_count': len(queries),
+              'raw_csv_sha256': checksum(csv_path),
+              'lexicon_sha256': checksum(lex_path),
+              'caveat': 'Item labels do not guarantee exhaustive food vocabulary or accuracy. The extractor is taxonomy-dependent.',
+          }
+          (OUT / 'provenance.json').write_text(json.dumps(provenance, ensure_ascii=False, indent=2), encoding='utf-8')
+          report = {
+              'raw_rows': len(rows),
+              'unique_item_qids': len({r[0] for r in rows}),
+              'unambiguous_translation_pairs': len(entries),
+              'excluded_ambiguous_italian_labels': len(ambiguous),
+              'index_bytes': lex_path.stat().st_size,
+              'complete_taxonomy_traversal': not truncated and not failed,
+              'coverage_of_user_food_queries': 'NOT MEASURED: requires manually validated benchmark',
+              'sample': entries[:15],
+          }
+          (OUT / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+          print('REPORT: ' + json.dumps({k: v for k, v in report.items() if k != 'sample'}))
+          if failed:
+              print('Extraction errors:', failed, file=sys.stderr)
+          # No false-success data release if extraction fails or returns empty.
+          if not entries or failed:
+              sys.exit('EXTRACTION INCOMPLETE: inspect output/provenance.json; do not deploy')
+          PY
+          python3 /tmp/build_food_lexicon.py
+      - name: Upload raw data, lexicon and report for review (no commit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikidata-food-lexicon-audit
+          path: output/
+          if-no-files-found: warn
+          retention-days: 14

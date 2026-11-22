@@ -1,0 +1,237 @@
+
+name: Finalize offline lexicon on feature branch
+on:
+  push:
+    branches: [feature/offline-food-lexicon-cc0]
+    paths: [.github/workflows/finalize-food-lexicon.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Download audited V2 artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ID=$(gh api 'repos/${{ github.repository }}/actions/artifacts?per_page=100' --jq '[.artifacts[] | select(.name=="wikidata-food-lexicon-v2-audit" and .expired==false)][0].workflow_run.id // empty')
+          test -n "$ID" || { echo 'V2 artifact not found'; exit 1; }
+          mkdir -p /tmp/lexicon-artifact
+          gh run download "$ID" --repo '${{ github.repository }}' --name wikidata-food-lexicon-v2-audit --dir /tmp/lexicon-artifact
+      - name: Filter and integrate without changing main
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/finalize.py <<'PY'
+          import json, hashlib, pathlib, re, sys
+          BASE = pathlib.Path('.')
+          SOURCE = pathlib.Path('/tmp/lexicon-artifact/food-lexicon-it-en-v2.json')
+          EXPECTED = '8af62359f6c622c2417298b9dd385fdef9229e54ac7e333337e91f82436e21d9'
+          if not SOURCE.is_file(): raise SystemExit('JSON V2 missing from artifact')
+          raw = SOURCE.read_bytes()
+          if hashlib.sha256(raw).hexdigest() != EXPECTED: raise SystemExit('Artifact SHA256 mismatch; refusing to publish')
+          data = json.loads(raw)
+          if data.get('source') != 'wikidata-structured-data' or data.get('license') != 'CC0-1.0':
+              raise SystemExit('Unknown lexicon source / license')
+          entries = data.get('entries')
+          if not isinstance(entries, list) or len(entries) < 15000: raise SystemExit('Unexpected V2 data content')
+          # Curated exclusions after inspection of the 2026-11-22 extraction.
+          bad_ids = {'Q2142043','Q1432535','Q80008054','Q1501244','Q178024','Q11587','Q912226','Q2845','Q151980','Q418157','Q1303753','Q8646930'}
+          bad_fragments = ('cannabis','hashish','farmaco','medicinale','detergente','candeggina',
+                           'olio essenziale','olio di ricino','turpentine','dieta ','buffer',
+                           'sistema tampone','miscela di gomma','medicina','medicinal')
+          # Trust only main Italian label; add a handful of manually reviewed aliases.
+          checked_aliases = {
+              'Q864693': ['pollo'],
+              'Q93189': ['uova'],
+              'Q651829': [],
+              'Q13186': ['uvetta'],
+              'Q2987371': ['fagiolini'],
+              'Q2370943': ["foglie di alloro", "foglia di alloro"],
+          }
+          checked_en = {
+              'Q864693': ['chicken', 'chicken meat'],
+              'Q93189': ['egg', 'eggs'],
+              'Q651829': ['chickpea flour', 'gram flour'],
+              'Q2987371': ['green bean', 'green beans'],
+          }
+
+          def norm(t):
+              import unicodedata
+              s=unicodedata.normalize('NFD',str(t).casefold())
+              s=''.join(x for x in s if unicodedata.category(x)!='Mn')
+              return re.sub(r'\s+',' ',s.strip())
+
+          safe=[]
+          for row in entries:
+              qid=str(row.get('qid',''))
+              it=str(row.get('it','')).strip()
+              en=(row.get('en') or [''])[0]
+              if not isinstance(en,str): continue
+              en=en.strip()
+              if not re.fullmatch(r'Q[1-9]\d*',qid) or qid in bad_ids: continue
+              if not (2 <= len(it) <= 70 and 2 <= len(en) <= 70): continue
+              if norm(it)==norm(en) and qid not in checked_en: continue
+              if any(x in norm(it) for x in bad_fragments): continue
+              if re.search(r'[\d\[\]<>]|(?:\bDOP\b|\bIGP\b|\bDOCG?\b|\bPDO\b|\bPGI\b)',it,re.I): continue
+              if re.search(r'\([^)]*\)',it): continue
+              if len(it.split())>6 or len(en.split())>7: continue
+              if len(it)==1 or len(en)==1: continue
+              # The English Wikidata primary label is used by default; manually checked extra aliases only.
+              names=[en,*checked_en.get(qid,[])]
+              aliases=checked_aliases.get(qid,[])
+              safe.append({'qid':qid,'it':it,'en':list(dict.fromkeys(names)),
+                           'aliases_it':aliases,'aliases_en':[]})
+
+          # Exclude collisions globally rather than trusting the first matching item.
+          from collections import defaultdict
+          byterm=defaultdict(set)
+          for row in safe:
+              for word in [row['it'],*row['aliases_it']]: byterm[norm(word)].add(row['qid'])
+          blocked={x for x,ids in byterm.items() if len(ids)!=1}
+          blocked.update({'frutta secca','pasta','brodo di pollo','cima di rapa','spaghetti di zucchine'})
+          filtered=[]
+          for row in safe:
+              if norm(row['it']) in blocked:continue
+              row['aliases_it']=[x for x in row['aliases_it'] if norm(x) not in blocked]
+              filtered.append(row)
+          assert len(filtered)>500, ('Too few usable entries',len(filtered))
+          lex={'source':'wikidata-structured-data','license':'CC0-1.0','version':data.get('version','2026-11-22'),
+               'entries':filtered}
+          out=BASE/'data'/'food-lexicon-it-en.json'
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_text(json.dumps(lex,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+
+          # Strict replacements: stop if repository code has changed unexpectedly.
+          def replace_one(path,old,new):
+              file=BASE/path
+              content=file.read_text(encoding='utf-8')
+              count=content.count(old)
+              if count!=1:raise SystemExit(f'Unsafe patch: {path} expected one anchor, found {count}: {old[:65]}')
+              file.write_text(content.replace(old,new,1),encoding='utf-8')
+
+          replace_one('app.js',"  const [quickAiResult,setQuickAiResult]=useState(null);",
+          "  const [quickAiResult,setQuickAiResult]=useState(null);\n  const [foodLexicon,setFoodLexicon]=useState(null);")
+
+          anchor="  useEffect(()=>{const t=setTimeout(()=>setQuickSearchQuery(quickQuery),220);return()=>clearTimeout(t);},[quickQuery]);"
+          replace_one('app.js',anchor,anchor+'''
+            useEffect(()=>{
+              let active=true;
+              const provider=window.NutriTraceFoodLexicon;
+              if(provider?.load){
+                provider.load('./data/food-lexicon-it-en.json')
+                  .then(lex=>{if(active)setFoodLexicon(lex);})
+                  .catch(()=>{if(active)setFoodLexicon(null);});
+              }
+              return()=>{active=false;};
+            },[]);''')
+
+          original_quick='''  const regular=[
+              ...searchPersonalFoods(q,foods,4),
+              ...searchMasterIndex(q,masterIndex,8),
+              ...searchLocalDataset(q,datasets,4)
+                .map(f=>({...f,resultType:'local'}))
+            ];'''
+          replace_one('app.js',original_quick,'''  const originalSearch=term=>[
+              ...searchPersonalFoods(term,foods,4),
+              ...searchMasterIndex(term,masterIndex,8),
+              ...searchLocalDataset(term,datasets,4)
+                .map(f=>({...f,resultType:'local'}))
+            ];
+            const bridge=window.NutriTraceFoodSearchBridge;
+            const regular=bridge?.search
+              ? bridge.search(q,originalSearch,foodLexicon,10)
+              : originalSearch(q).slice(0,10);''')
+          replace_one('app.js',"  recentIds,masterIndex,quickAiResult\n]);",
+          "  recentIds,masterIndex,quickAiResult,foodLexicon\n]);")
+
+          old_search="  async function searchFoods(){ if(!query.trim()) return; setSearching(true); setSearchError(''); try{ const master=searchMasterIndex(query,masterIndex,30); const local=searchLocalDataset(query,datasets,12).map(f=>({...f,resultType:'local'})); setResults([...master,...local].slice(0,40)); if(!master.length&&!local.length) setSearchError(ui('search.notFound','Nessun risultato nel Master DB o nei database personali.')); } finally{ setSearching(false); } }"
+          new_search='''  async function searchFoods(){
+              if(!query.trim())return;
+              setSearching(true);setSearchError('');
+              try{
+                const originalSearch=term=>[
+                  ...searchMasterIndex(term,masterIndex,30),
+                  ...searchLocalDataset(term,datasets,12).map(f=>({...f,resultType:'local'}))
+                ];
+                const bridge=window.NutriTraceFoodSearchBridge;
+                const found=bridge?.search
+                  ? bridge.search(query,originalSearch,foodLexicon,40)
+                  : originalSearch(query).slice(0,40);
+                setResults(found);
+                if(!found.length)setSearchError(ui('search.notFound','Nessun risultato nel Master DB o nei database personali.'));
+              }finally{setSearching(false);}
+            }'''
+          replace_one('app.js',old_search,new_search)
+
+          replace_one('sw.js',"const CACHE = 'nutritrace-v3-offline-lexicon-v2';",
+          "const CACHE = 'nutritrace-v3-offline-lexicon-v3';")
+          replace_one('sw.js',"  './food-search-bridge.js',",
+          "  './food-search-bridge.js',\n  './data/food-lexicon-it-en.json',")
+          # Bridge: don't allow low-quality English matches to enter results.
+          bridge_path=BASE/'food-search-bridge.js'
+          bridge=bridge_path.read_text(encoding='utf-8')
+          pattern=r'(for\s*\(\s*const row of originalSearch\(translated\)\s*\|\|\s*\[\]\s*\)\s*\{)'
+          if len(re.findall(pattern,bridge))!=1:raise SystemExit('Bridge safety anchor missing')
+          bridge=re.sub(pattern,r'\1\n        if(Number(row.score)<90)continue;',bridge,count=1)
+          bridge_path.write_text(bridge,encoding='utf-8')
+          report={'source_sha256':EXPECTED,'raw_entries':len(entries),'retained_entries':len(filtered),
+                  'blocked_collision_labels':len(blocked),'index_bytes':out.stat().st_size,
+                  'notes':'Conservative machine-filtered subset, NOT individually validated; source extraction is incomplete. No AI used.'}
+          (BASE/'data'/'food-lexicon-audit.json').write_text(json.dumps(report,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          print(json.dumps(report,ensure_ascii=False))
+          PY
+          python3 /tmp/finalize.py
+          node --check app.js
+          node --check sw.js
+          node --check food-lexicon.js
+          node --check food-search-bridge.js
+          git diff --check
+          python3 - <<'PY'
+          import json
+          d=json.load(open('data/food-lexicon-it-en.json'))
+          look={x['it'].lower():x['en'] for x in d['entries']}
+          assert 'mela' in look and 'apple' in look['mela']
+          assert 'farina di ceci' in look and 'chickpea flour' in look['farina di ceci']
+          for key in ['frutta secca','spaghetti di zucchine','cima di rapa','brodo di pollo']:
+              assert key not in look, key
+          print('Pre-release dataset smoke tests passed')
+          PY
+          node - <<'JS'
+          const fs=require('fs'),vm=require('vm');
+          const data=JSON.parse(fs.readFileSync('data/food-lexicon-it-en.json'));
+          const ctx={window:{},fetch:async()=>({ok:true,json:async()=>data})};
+          vm.createContext(ctx);
+          vm.runInContext(fs.readFileSync('food-lexicon.js','utf8'),ctx);
+          vm.runInContext(fs.readFileSync('food-search-bridge.js','utf8'),ctx);
+          (async()=>{
+            const lex=await ctx.window.NutriTraceFoodLexicon.load('./data/food-lexicon-it-en.json');
+            const search=ctx.window.NutriTraceFoodSearchBridge.search;
+            if(!Array.from(lex.variants('mela')).includes('apple'))throw Error('Missing translation');
+            if(Array.from(lex.variants('frutta secca')).length)throw Error('Ambiguous food');
+            const original=q=>q==='mela'?[{id:1,name:'Mela',score:400,resultType:'master'}]:[];
+            if(search('mela',original,lex,12).length!==1)throw Error('Original priority');
+            const english=q=>q==='apple'?[{id:2,name:'Apple',score:400,resultType:'master'}]:[];
+            if(search('mela',english,lex,12).length!==1)throw Error('English fallback');
+            const low=q=>q==='apple'?[{id:3,name:'Apple soup',score:15,resultType:'master'}]:[];
+            if(search('mela',low,lex,12).length)throw Error('Low-confidence candidate');
+            console.log('Search compatibility tests passed');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+      - name: Commit final files only to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'feature/offline-food-lexicon-cc0'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js sw.js food-search-bridge.js data/food-lexicon-it-en.json data/food-lexicon-audit.json
+          git commit -m 'feat: integrate conservative offline Wikidata CC0 food lexicon'
+          git push origin HEAD:feature/offline-food-lexicon-cc0

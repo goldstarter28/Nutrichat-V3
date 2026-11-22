@@ -1,0 +1,90 @@
+
+name: Build food lexicon v2 CC0
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/offline-food-lexicon-cc0]
+    paths: [.github/workflows/build-food-lexicon-v2.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Extract labels and aliases from Wikidata
+        shell: bash
+        run: |
+          mkdir -p output
+          cat > /tmp/build.py <<'PY'
+          import collections,json,time,datetime,urllib.request,urllib.parse,re,pathlib,hashlib
+          OUT=pathlib.Path('output')
+          UA='NutriTraceLexicon/0.3 (https://github.com/goldstarter28/Nutrichat-V3)'
+          ROOTS={'food':'Q2095','dish':'Q746549','ingredient':'Q25403900','vegetable':'Q11004','fruit':'Q3314483'}
+          found={}; failed=[]; truncated=[]; counts={}
+          def request(url,params,post=False):
+              target=url if post else url+'?'+urllib.parse.urlencode(params)
+              data=urllib.parse.urlencode(params).encode() if post else None
+              for attempt in range(4):
+                  try:
+                      req=urllib.request.Request(target,data=data,headers={'User-Agent':UA,'Accept':'application/json'})
+                      with urllib.request.urlopen(req,timeout=85) as response:return json.load(response)
+                  except Exception as exc:
+                      if attempt==3:raise RuntimeError(str(exc))
+                      time.sleep(5*(attempt+1))
+          for category,root in ROOTS.items():
+              total=0;complete=False
+              for page in range(40):
+                  query=f'''SELECT DISTINCT ?item WHERE {{ {{ ?item wdt:P31/wdt:P279* wd:{root} }} UNION {{ ?item wdt:P279+ wd:{root} }} }} ORDER BY ?item LIMIT 250 OFFSET {page*250}'''
+                  try:payload=request('https://query.wikidata.org/sparql',{'query':query,'format':'json'})
+                  except Exception as exc:failed.append(f'{category} page {page+1}: {exc}');break
+                  batch=payload.get('results',{}).get('bindings',[])
+                  for x in batch:
+                      qid=x.get('item',{}).get('value','').split('/')[-1]
+                      if re.fullmatch(r'Q[1-9][0-9]*',qid):found.setdefault(qid,set()).add(category);total+=1
+                  print(category,page+1,len(batch),flush=True)
+                  if len(batch)<250:complete=True;break
+                  time.sleep(1.5)
+              counts[category]=total
+              if not complete:truncated.append(category)
+          rows=[]; ids=sorted(found,key=lambda q:int(q[1:]))
+          for offset in range(0,len(ids),50):
+              part=ids[offset:offset+50]
+              try:payload=request('https://www.wikidata.org/w/api.php',{'action':'wbgetentities','format':'json','ids':'|'.join(part),'props':'labels|aliases','languages':'it|en','languagefallback':'0'},True)
+              except Exception as exc:failed.append(f'labels batch {offset}: {exc}');break
+              for qid in part:
+                  entity=payload.get('entities',{}).get(qid,{})
+                  labels=entity.get('labels',{});it=labels.get('it',{}).get('value','').strip();en=labels.get('en',{}).get('value','').strip()
+                  if not (it and en):continue
+                  aliases=entity.get('aliases',{})
+                  ai=sorted({x.get('value','').strip() for x in aliases.get('it',[]) if x.get('value','').strip()})
+                  ae=sorted({x.get('value','').strip() for x in aliases.get('en',[]) if x.get('value','').strip()})
+                  rows.append({'qid':qid,'it':it,'en':[en],'aliases_it':ai,'aliases_en':ae,'categories':sorted(found[qid])})
+              if offset%500==0:print('labels',offset+len(part),'/',len(ids),flush=True)
+              time.sleep(0.5)
+          norm=lambda s:' '.join(s.casefold().split())
+          concepts=collections.defaultdict(set)
+          for row in rows:
+              for label in [row['it'],*row['aliases_it']]:concepts[norm(label)].add(row['qid'])
+          ambiguous={label for label,items in concepts.items() if len(items)>1}|{'frutta secca'}
+          entries=[]
+          for row in rows:
+              if norm(row['it']) in ambiguous:continue
+              row['aliases_it']=[s for s in row['aliases_it'] if norm(s) not in ambiguous]
+              entries.append(row)
+          result={'source':'wikidata-structured-data','license':'CC0-1.0','version':datetime.date.today().isoformat(),'entries':entries}
+          path=OUT/'food-lexicon-it-en-v2.json';path.write_text(json.dumps(result,ensure_ascii=False,separators=(',',':')))
+          report={'discovered_qids':len(ids),'bilingual_rows':len(rows),'review_entries':len(entries),'ambiguous_labels':len(ambiguous),'category_counts':counts,'json_bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'failed':failed,'truncated':truncated,'coverage_test':'NOT MEASURED','publishable':False}
+          (OUT/'report-v2.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
+          (OUT/'provenance-v2.json').write_text(json.dumps({'source':'Wikidata structured data','license':'CC0-1.0','url':'https://www.wikidata.org/wiki/Wikidata:Licensing','roots':ROOTS,'retrieved_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'report':report},indent=2,ensure_ascii=False))
+          print(json.dumps(report,ensure_ascii=False),flush=True)
+          if failed or truncated or not entries:raise SystemExit('Dataset incomplete. Review artifacts, do not publish.')
+          PY
+          python3 /tmp/build.py
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikidata-food-lexicon-v2-audit
+          path: output/
+          retention-days: 14
