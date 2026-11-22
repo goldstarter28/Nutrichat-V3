@@ -268,60 +268,221 @@ if (base !== null && base > 0 && value !== null) {
     });
   }
 
-  function InteractiveChart({
-    labels, series, chartType, comparisonMode, limit
-  }) {
-    const [active, setActive] = React.useState(null);
+function InteractiveChart({
+  labels, series, chartType, comparisonMode, limit
+}) {
+  const [active, setActive] = React.useState(null);
+  const [viewport, setViewport] = React.useState({
+    start: 0,
+    count: null
+  });
 
-    const W = 880;
-    const H = 326;
-    const L = 56;
-    const R = comparisonMode === 'metrics' ? 60 : 18;
-    const T = 22;
-    const B = 57;
-    const plotWidth = W - L - R;
-    const plotHeight = H - T - B;
+  const total = labels.length;
 
-    const allValues = series.flatMap(item =>
-      item.data.map(point => point.value)
-        .filter(value => value !== null)
+  const count = Math.min(
+    total,
+    Math.max(1, viewport.count ?? total)
+  );
+
+  const start = Math.max(
+    0,
+    Math.min(viewport.start, total - count)
+  );
+
+  function changeZoom(factor) {
+    if (total < 2) return;
+
+    const next = Math.min(
+      total,
+      Math.max(2, Math.round(count * factor))
     );
 
-    const axisMax = (values, target) =>
-      Math.max(1, target || 0, ...values) * 1.12;
+    if (next === count) return;
 
-    const maximums = comparisonMode === 'metrics'
-      ? series.map(item => axisMax(
-          item.data.map(point => point.value)
+    const center = start + (count - 1) / 2;
+
+    const nextStart = Math.max(
+      0,
+      Math.min(
+        total - next,
+        Math.round(center - (next - 1) / 2)
+      )
+    );
+
+    setViewport({
+      start: nextStart,
+      count: next
+    });
+
+    setActive(null);
+  }
+
+  function moveWindow(direction) {
+    const jump = Math.max(
+      1,
+      Math.floor(count * 0.7)
+    );
+
+    const nextStart = Math.max(
+      0,
+      Math.min(
+        total - count,
+        start + direction * jump
+      )
+    );
+
+    setViewport({
+      start: nextStart,
+      count
+    });
+
+    setActive(null);
+  }
+
+  // Mantiene i dati originali.
+  // Cambia soltanto la finestra visibile.
+  const allLabels = labels;
+
+  labels = allLabels.slice(
+    start,
+    start + count
+  );
+
+  series = series.map(item => ({
+    ...item,
+    data: item.data.slice(
+      start,
+      start + count
+    )
+  }));
+
+  const W = 880;
+  const H = 326;
+  const L = 56;
+  const R = comparisonMode === 'metrics' ? 60 : 18;
+  const T = 22;
+  const B = 57;
+
+  const plotWidth = W - L - R;
+  const plotHeight = H - T - B;
+
+  const allValues = series.flatMap(item =>
+    item.data
+      .map(point => point.value)
+      .filter(value => value !== null)
+  );
+
+  const axisMax = (values, target) =>
+    Math.max(1, target || 0, ...values) * 1.12;
+
+  const maximums = comparisonMode === 'metrics'
+    ? series.map(item =>
+        axisMax(
+          item.data
+            .map(point => point.value)
             .filter(value => value !== null),
           null
-        ))
-      : [axisMax(allValues, limit)];
+        )
+      )
+    : [axisMax(allValues, limit)];
 
-    const y = (value, index = 0) =>
-      T + plotHeight -
-      value / maximums[
-        comparisonMode === 'metrics' ? index : 0
-      ] * plotHeight;
+  const y = (value, index = 0) =>
+    T + plotHeight -
+    value / maximums[
+      comparisonMode === 'metrics' ? index : 0
+    ] * plotHeight;
 
-    const step = plotWidth / Math.max(labels.length, 1);
-    const x = index => L + (index + 0.5) * step;
+  const step = plotWidth /
+    Math.max(labels.length, 1);
 
-    function pickPoint(event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const pos = (event.clientX - rect.left) /
-        rect.width * W;
+  const x = index =>
+    L + (index + 0.5) * step;
 
-      setActive(Math.max(
+  function pickPoint(event) {
+    if (!labels.length) return;
+
+    const rect = event.currentTarget
+      .getBoundingClientRect();
+
+    const pos =
+      (event.clientX - rect.left) /
+      rect.width * W;
+
+    setActive(
+      Math.max(
         0,
         Math.min(
           labels.length - 1,
           Math.floor((pos - L) / step)
         )
-      ));
-    }
+      )
+    );
+  }
 
-    return h('div', null,
+  return h('div', null,
+
+    h('div', {
+      style: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '8px',
+        alignItems: 'center',
+        margin: '10px 0'
+      }
+    },
+
+      h('button', {
+        type: 'button',
+        className: 'ghost',
+        disabled: count <= 2,
+        onClick: () => changeZoom(0.5)
+      }, '＋ Zoom'),
+
+      h('button', {
+        type: 'button',
+        className: 'ghost',
+        disabled: count >= total,
+        onClick: () => changeZoom(2)
+      }, '－ Zoom'),
+
+      h('button', {
+        type: 'button',
+        className: 'ghost',
+        disabled: start <= 0,
+        onClick: () => moveWindow(-1)
+      }, '← Precedente'),
+
+      h('button', {
+        type: 'button',
+        className: 'ghost',
+        disabled: start + count >= total,
+        onClick: () => moveWindow(1)
+      }, 'Successivo →'),
+
+      h('button', {
+        type: 'button',
+        className: 'ghost',
+        disabled: count >= total,
+        onClick: () => {
+          setViewport({
+            start: 0,
+            count: null
+          });
+
+          setActive(null);
+        }
+      }, 'Tutto'),
+
+      h('small', {
+        className: 'muted'
+      },
+        labels.length
+          ? labels[0] + ' → ' +
+            labels[labels.length - 1] +
+            ' (' + count + '/' + total + ' punti)'
+          : 'Nessun punto'
+      )
+    ),
 
       h('div', {
         style: { overflowX: 'auto', touchAction: 'pan-y' }
