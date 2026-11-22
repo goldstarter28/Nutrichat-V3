@@ -1,0 +1,8 @@
+{
+  "source_sha256": "8af62359f6c622c2417298b9dd385fdef9229e54ac7e333337e91f82436e21d9",
+  "raw_entries": 18714,
+  "retained_entries": 1705,
+  "blocked_collision_labels": 5,
+  "index_bytes": 165441,
+  "notes": "Conservative machine-filtered subset, NOT individually validated; source extraction is incomplete. No AI used."
+}

@@ -1263,6 +1263,7 @@ useEffect(()=>{
   const [appConfig,setAppConfig]=useState(DEFAULT_APP_CONFIG);
   const [quickSearchQuery,setQuickSearchQuery]=useState('');
   const [quickAiResult,setQuickAiResult]=useState(null);
+  const [foodLexicon,setFoodLexicon]=useState(null);
   const [candidateBrowserIndex,setCandidateBrowserIndex]=useState(null), [candidatePreview,setCandidatePreview]=useState(null), [candidatePreviewBusy,setCandidatePreviewBusy]=useState(false);
   const [reportMode,setReportMode]=useState('week'), [reportAnchor,setReportAnchor]=useState(dateKey()), [reportFrom,setReportFrom]=useState(dateKey()), [reportTo,setReportTo]=useState(dateKey());
 
@@ -1290,6 +1291,16 @@ useEffect(()=>{
   },[]);
   useEffect(()=>{let alive=true;loadAppConfig().then(c=>{if(alive)setAppConfig(c||DEFAULT_APP_CONFIG)});return()=>{alive=false};},[]);
   useEffect(()=>{const t=setTimeout(()=>setQuickSearchQuery(quickQuery),220);return()=>clearTimeout(t);},[quickQuery]);
+  useEffect(()=>{
+    let active=true;
+    const provider=window.NutriTraceFoodLexicon;
+    if(provider?.load){
+      provider.load('./data/food-lexicon-it-en.json')
+        .then(lex=>{if(active)setFoodLexicon(lex);})
+        .catch(()=>{if(active)setFoodLexicon(null);});
+    }
+    return()=>{active=false;};
+  },[]);
   useEffect(() => {
   if (!loaded) return;
 
@@ -1337,12 +1348,16 @@ useEffect(()=>{
 
   if(norm(q).length<2)return [];
 
-  const regular=[
-    ...searchPersonalFoods(q,foods,4),
-    ...searchMasterIndex(q,masterIndex,8),
-    ...searchLocalDataset(q,datasets,4)
+  const originalSearch=term=>[
+    ...searchPersonalFoods(term,foods,4),
+    ...searchMasterIndex(term,masterIndex,8),
+    ...searchLocalDataset(term,datasets,4)
       .map(f=>({...f,resultType:'local'}))
   ];
+  const bridge=window.NutriTraceFoodSearchBridge;
+  const regular=bridge?.search
+    ? bridge.search(q,originalSearch,foodLexicon,10)
+    : originalSearch(q).slice(0,10);
 
   if(
     !quickAiResult ||
@@ -1367,7 +1382,7 @@ useEffect(()=>{
 
 },[
   quickSearchQuery,foods,datasets,
-  recentIds,masterIndex,quickAiResult
+  recentIds,masterIndex,quickAiResult,foodLexicon
 ]);
   const macroPreview=useMemo(()=>computeMacroPlan(profile),[profile]);
   const pinnedGoals=goals.filter(g=>g.group!=='Energia e macro'&&g.pinned);
@@ -1692,7 +1707,22 @@ function saveFood() {
     if(r.resultType!=='master'){openImported(r,alias);return;}
     setSearching(true);setSearchError('');try{const existing=foods.find(f=>String(f.masterId||'')===String(r.id));setFoodDraft(existing?structuredClone(existing):await masterFoodFromResult(r,alias));setTab('alimenti');}catch(e){setSearchError(e.message)}finally{setSearching(false)}
   }
-  async function searchFoods(){ if(!query.trim()) return; setSearching(true); setSearchError(''); try{ const master=searchMasterIndex(query,masterIndex,30); const local=searchLocalDataset(query,datasets,12).map(f=>({...f,resultType:'local'})); setResults([...master,...local].slice(0,40)); if(!master.length&&!local.length) setSearchError(ui('search.notFound','Nessun risultato nel Master DB o nei database personali.')); } finally{ setSearching(false); } }
+  async function searchFoods(){
+    if(!query.trim())return;
+    setSearching(true);setSearchError('');
+    try{
+      const originalSearch=term=>[
+        ...searchMasterIndex(term,masterIndex,30),
+        ...searchLocalDataset(term,datasets,12).map(f=>({...f,resultType:'local'}))
+      ];
+      const bridge=window.NutriTraceFoodSearchBridge;
+      const found=bridge?.search
+        ? bridge.search(query,originalSearch,foodLexicon,40)
+        : originalSearch(query).slice(0,40);
+      setResults(found);
+      if(!found.length)setSearchError(ui('search.notFound','Nessun risultato nel Master DB o nei database personali.'));
+    }finally{setSearching(false);}
+  }
   async function createWithAI(name){ setAiBusy('search'); setAiMsg(''); try{ let f={...emptyFood(),name:name.trim(),aliases:[name.trim()]}; const ai=await aiEnrich(f,SAFE_AI_DEFAULT); f=mergeAiFood(f,ai); for(const x of MICRO_CATALOG) if(!f.nutrientStatus[x.name])f.nutrientStatus[x.name]={status:'nd',reason:'N/D: non stimato in assenza di una fonte strutturata'}; setFoodDraft(f); setTab('alimenti'); }catch(e){ setAiMsg(e.message); }finally{ setAiBusy(''); } }
   
 async function enrichDraft(initialFood=foodDraft){

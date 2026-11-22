@@ -61,6 +61,7 @@
       if(norm(translated)===norm(query))continue;
 
       for(const row of originalSearch(translated)||[]){
+        if(Number(row.score)<90)continue;
         const key=identity(row);
 
         if(seen.has(key))continue;
