@@ -203,14 +203,13 @@
     ]);
 
     return [...ids].map(id => {
-      const base = number(food.servingGrams);
-const value = foodValue(food, metric);
+      const currentMeal = current.meals.find(
+  meal => meal.mealId === id
+);
 
-if (base !== null && base > 0 && value !== null) {
-  row.value += value * grams / base;
-  row.knownWeight += grams;
-}
-
+const previousMeal = previous.meals.find(
+  meal => meal.mealId === id
+);
       const now = currentMeal?.averages?.[field] ?? null;
       const before = previousMeal?.averages?.[field] ?? null;
 
