@@ -149,3 +149,70 @@ html[data-theme=dark] .v5-estimate { background:#433a20;color:#e3cb83 }
 
 .v5-sticky-action>.ghost { width:100%;margin-bottom:8px }
 .v5-sources p { font-size:14px;line-height:1.6;overflow-wrap:anywhere }.v5-source-principles { display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:18px 0 }.v5-source-principles p { background:var(--bg);border:1px solid var(--line);padding:16px;border-radius:16px;margin:0 }.v5-source-links { display:flex;gap:8px 16px;flex-wrap:wrap }.v5-source-links a { font-size:13px;color:var(--accent);text-decoration:underline;overflow-wrap:anywhere }.v5-source-row { padding:15px 0;border-bottom:1px solid var(--line) }.v5-source-row h3 { margin-top:0 }.v5-sources details { margin:16px 0 }.v5-sources summary { min-height:44px;padding:10px 0;cursor:pointer;font-weight:700 }
+
+/* V5.7.1: targeted diary usability and night-theme corrections only. */
+.v5-meal-destination{display:flex;align-items:center;gap:8px;color:var(--ink);min-width:0;font-size:16px;line-height:1.25}
+.v5-meal-destination strong{overflow-wrap:anywhere;font-weight:800}
+.v5-clear-meal,.v5-day-remove{display:grid;place-items:center;flex:none;min-width:44px;min-height:44px;padding:0;background:transparent;border:1px solid var(--line);border-radius:12px;color:var(--muted);font-size:23px;line-height:1}
+.v5-dialog .v5-composer-heading{justify-content:space-between}
+.v5-dialog .v5-composer-heading>div:first-child{display:block}
+.v5-dialog .v5-composer-heading h2{display:none}
+.v5-composer-heading>div:first-child{min-width:0}
+.aurora-app .v5-search-list,.v5-dialog .v5-search-list{display:grid!important;grid-template-columns:minmax(0,1fr);gap:6px;margin:0}
+.v5-quick-diary .quickChoice b,.v5-quick-diary .quickChoice small{white-space:normal!important;overflow:visible;text-overflow:clip;max-width:none!important;overflow-wrap:anywhere}
+.v5-quick-diary .quickChoice>span{flex:1;min-width:0;align-items:flex-start}
+.v5-quick-diary .v5-search-list .quickChoice>span{flex-direction:column;gap:2px}
+.v5-quick-diary .v5-recent-list .quickChoice{min-height:44px!important;padding:5px 9px!important;gap:5px!important}
+.v5-quick-diary .v5-recent-list .quickChoice b{font-size:12px;line-height:1.2}
+.v5-quick-diary .v5-recent-list .quickChoice small{font-size:10.5px;line-height:1.2;margin:0}
+.v5-quick-diary .v5-recent-list .quickChoice>strong{font-size:18px!important}
+.v5-meal-details{margin-top:6px}
+.v5-meal-summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;min-height:32px;color:var(--muted)}
+.v5-meal-summary::-webkit-details-marker{display:none}
+.v5-meal-inline-names{flex:1;min-width:0;font-size:12px;line-height:1.4;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.v5-meal-expand{flex:none;font-size:10px;font-weight:750;color:var(--accent)}
+.v5-meal-details[open] .v5-meal-inline-names{-webkit-line-clamp:unset;overflow:visible}
+.v5-meal-details[open] .v5-meal-expand{display:none}
+.v5-meal-details[open] .v5-meal-summary:after{content:'Chiudi ▴';font-size:10px;color:var(--accent);font-weight:750}
+.v5-day-food-main{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 8px;align-items:center}
+.v5-day-remove{color:var(--danger);grid-column:3;grid-row:1;min-width:36px;min-height:36px}
+.v5-day-food-main>span{grid-column:2}
+.v5-weekly .a-kicker{font-size:14px;letter-spacing:.055em}
+.v5-hydration-compact{margin-top:12px}
+.aurora-app .v5-hydration-compact>.card{padding:11px 13px!important;margin:0!important;border-radius:16px;box-shadow:none;background:var(--card)}
+.v5-hydration-compact .card h2{font-size:16px!important}
+.v5-hydration-compact .card .ghost{min-height:38px;padding:6px 8px;font-size:12px}
+.v5-hydration-compact .card input{min-height:40px!important;padding:7px 9px!important}
+.v5-hydration-compact .card label{margin-bottom:6px}
+.v5-hydration-compact .card p{font-size:10px}
+.v5-meal-picker{color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;max-height:85dvh;width:min(92vw,460px);overflow:auto;box-shadow:0 22px 72px #0004;z-index:2000}
+.v5-meal-picker::backdrop{background:rgba(5,25,16,.55)}
+.v5-meal-picker header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.v5-meal-picker h2{font-size:20px;margin:3px 0;line-height:1.3;letter-spacing:-.025em}
+.v5-meal-picker-list{display:grid;gap:7px}
+.v5-meal-picker-list button{color:var(--ink);background:var(--bg);text-align:left;min-height:44px;padding:10px 13px;border-color:var(--line)}
+.v5-coach-settings-compact{padding:0;border:0;background:transparent}
+.v5-coach-settings-toggle{width:100%;text-align:left;font-size:12px;min-height:38px!important;color:var(--muted)}
+.v5-coach-settings-compact .v5-coach-sharing{margin-top:8px;padding:12px;box-shadow:none;border-radius:14px}
+.v5-coach-settings-compact .coach-consent-row{margin-top:8px}
+.v5-coach-sharing-done{margin-top:9px}
+.v5-coach-profile-invite{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:12px;font-size:13px}
+.v5-coach-profile-invite p{margin:5px 0;color:var(--muted)}
+.v5-wizard-outcome{flex-basis:100%;overflow-wrap:anywhere}
+@media(max-width:600px){.v5-meal-destination{font-size:15px}.v5-quick-diary .v5-recent-list .quickChoice>span{flex-wrap:wrap;align-items:baseline;gap:3px 8px}.v5-day-food-main{grid-template-columns:minmax(0,1fr) 36px}.v5-day-food-main>span{grid-column:1;grid-row:2;margin:0}.v5-day-remove{grid-column:2;grid-row:1 / 3}.v5-hydration-compact .card .ghost{min-height:40px}}
+/* These overrides only apply to dark mode. Keep Aurora's light palette unchanged. */
+html[data-theme=dark] .aurora-app :is(.sourceGroups details,.recipeReview,.recipeIngredient,.candidateBrowser,.pinnedMicro,.ndPanel,.ndItem,.qualityNotice,.emptyAction,.aiFallback,.deficitItem,.historyRow,.officialName,.planPreview,.goalGroup,.goalGroup>summary,.previewMacroGrid>div,.candidateDetailGrid>div,.labelImportRow,.labelImportCard,.addDbCard,.reportControls,.dateNavigator,.notice){background:var(--card);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] .aurora-app :is(.recipeErrors,.recipeIngredient.problem,.coverageTag.warn,.mergeWarning){background:#42351f;color:#f3dca7;border-color:#886a39}
+html[data-theme=dark] .aurora-app :is(.sourcePills span,.sourceBadges span,.masterBadge,.coverageTag,.aiRole,.chips span){background:var(--accent2);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] :is(.aurora-app,.v5-dialog) :is(.a-kicker,.v5-segmented button[aria-pressed=true],.v5-meal-expand,.v5-icon-button,.v5-day-foods-heading>span:first-child,.v5-week-metrics span,.v5-micro-gap>b,.v5-recipe-select,.v5-coach-sharing-badge){color:#c1e8b7}
+html[data-theme=dark] .v5-dialog :is(.card,.recipeIngredient,.v5-ingredient,.v5-recipe-yield,.v5-saved-recipe){background:var(--card);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] .v5-dialog .ghost{color:#c1e8b7}
+html[data-theme=dark] .v5-dialog .errorText,html[data-theme=dark] .aurora-app .errorText{color:#ffb2b8}
+html[data-theme=dark] .aurora-app :is(.a-macro-bottom,.a-energy-percent,.a-goal-value,.a-analysis-sub,.a-micro-card small,.a-action-tile:not(.a-action-ai) small,.a-ring-inner small,.a-macro-amount span,.a-energy-status>span){color:#b8c9bb}
+html[data-theme=dark] .aurora-app :is(.a-macro-heading,.a-action-tile:not(.a-action-ai),.a-goal-identity,.a-ring-inner,.a-micro-card){color:var(--ink)}
+html[data-theme=dark] .aurora-app .a-micro-card strong{color:#c1e8b7}
+html[data-theme=dark] .aurora-app .pinBtn{background:var(--accent2);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] .aurora-app .pinBtn.pinned{background:#443d26;color:#f2d785;border-color:#746341}
+html[data-theme=dark] .v5-dialog .v5-capture-buttons .v5-icon-button{color:white}
+html[data-theme=dark] .v5-toast .v5-icon-button{color:white}
+html[data-theme=dark] .v5-wizard-backdrop input:not([type=radio]):not([type=checkbox]){background:var(--vw-card);color:var(--vw-ink);border-color:var(--vw-border)}

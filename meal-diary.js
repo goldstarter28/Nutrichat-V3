@@ -60,7 +60,9 @@
         !isUnassigned && h('button',{type:'button',className:'v5-meal-add',onClick:()=>onAdd(meal.id),'aria-label':'Aggiungi a '+meal.name},'+')),
       h(MacroLine,{data}),
       partial && h('small',{className:'v5-meal-partial'},'* Totale parziale. N/D: dato non disponibile.'),
-      h('div',{className:'v5-meal-foods'},...logs.map(log=>{
+      logs.length>0&&h('details',{className:'v5-meal-details'},
+        h('summary',{className:'v5-meal-summary'},h('span',{className:'v5-meal-inline-names'},logs.map(log=>foods.find(f=>f.id===log.foodId)?.name||'Alimento non trovato').join(' · ')),h('span',{className:'v5-meal-expand'},'Dettagli ▾')),
+        h('div',{className:'v5-meal-foods'},...logs.map(log=>{
         const food=foods.find(f=>f.id===log.foodId), single=totals([log],foods);
         return h('div',{className:'v5-meal-food',key:log.id},
           h('div',{className:'v5-meal-food-main'},
@@ -73,7 +75,7 @@
                 h('option',{value:''},'Senza pasto'),...meals.map(target=>h('option',{key:target.id,value:target.id},target.name)))),
             !isUnassigned && food && h('button',{type:'button',className:'v5-meal-action',title:'Salva porzione nei preferiti','aria-label':'Salva '+food.name+' nei preferiti di '+meal.name,onClick:()=>onAddFavorite(meal.id,log.id)},'☆',h('span',null,'Preferito')),
             h('button',{type:'button',className:'v5-meal-action v5-meal-remove',title:'Rimuovi alimento','aria-label':'Rimuovi '+(food?.name||'alimento')+' da '+meal.name,onClick:()=>onRemove(log.id)},'×',h('span',null,'Rimuovi'))));
-      })),
+      }))),
       !isUnassigned && h('footer',{className:'v5-meal-footer'},
         h('button',{type:'button',className:'v5-meal-copy',onClick:()=>onCopyYesterday(meal.id)},h('span',{'aria-hidden':'true'},'↺'),'Copia '+meal.name.toLowerCase()+' di ieri'),
         mealFavorites.length > 0 && h('div',{className:'v5-meal-favorites','aria-label':'Porzioni preferite di '+meal.name},
@@ -84,14 +86,14 @@
               h('button',{type:'button',className:'v5-meal-favorite-remove','aria-label':'Rimuovi '+name+' dai preferiti',onClick:()=>onRemoveFavorite(favorite.id)},'×'));
           }))));
   }
-  function DayFoods({logs,foods,meals}) {
+  function DayFoods({logs,foods,meals,onRemove=()=>{}}) {
     return h('section',{className:'card v5-day-foods','aria-labelledby':'v5-day-foods-title'},
       h('div',{className:'v5-day-foods-heading'},h('span',{'aria-hidden':'true'},'▤'),h('h3',{id:'v5-day-foods-title'},'Alimenti del giorno'),h('span',{className:'v5-day-foods-count'},logs.length)),
       logs.length===0 ? h('p',{className:'muted'},'Gli alimenti che registri compaiono qui, in un unico elenco.') :
       h('ul',null,...logs.map(log=>{
         const food=foods.find(f=>f.id===log.foodId), meal=meals.find(m=>m.id===log.mealId), data=totals([log],foods);
         return h('li',{key:log.id},
-          h('div',{className:'v5-day-food-main'},h('strong',null,food?.name||'Alimento non trovato'),h('span',null,amountText(log)+' · '+(meal?.name||'Senza pasto'))),
+          h('div',{className:'v5-day-food-main'},h('strong',null,food?.name||'Alimento non trovato'),h('span',null,amountText(log)+' · '+(meal?.name||'Senza pasto')),h('button',{type:'button',className:'v5-day-remove','aria-label':'Rimuovi '+(food?.name||'alimento')+' dal diario',onClick:()=>onRemove(log.id)},'×')),
           h('div',{className:'v5-day-food-metrics'},h('span',null,metricValue(data,'kcal',0)+' kcal'),...METRICS.map(([key,short,label])=>h('span',{key,title:label},short+' '+metricValue(data,key)+' g'))));
       })));
   }
@@ -106,7 +108,7 @@
         h('button',{type:'button',className:'v5-meal-manage',onClick:onConfigure},'Gestisci pasti')),
       h('div',{className:'v5-meal-grid'},...groups.map(group=>h(MealCard,{key:group.meal.id,...group,foods,meals,favorites,onAdd,onAssign,onRemove,onAddFavorite,onRemoveFavorite,onQuickFavorite,onCopyYesterday}))),
       !groups.length && h('p',{className:'muted'},'Configura almeno un pasto per iniziare.'),
-      showDayFoods && h(DayFoods,{logs,foods,meals}));
+      showDayFoods && h(DayFoods,{logs,foods,meals,onRemove}));
   }
   MealDiary.totals=totals;
   MealDiary.amountText=amountText;

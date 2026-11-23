@@ -133,7 +133,7 @@
         pct===null?'Target non impostato':`${pct}% del target`,
         metric.coverage!==undefined&&metric.coverage<.999?h('small',null,`Dati parziali (${Math.round(metric.coverage*100)}%)`):null));
   }
-  function DailyOverview({metrics,onAdd,onSearch,onCoach}) {
+  function DailyOverview({metrics,onAdd,onSearch,onCoach,hydration}) {
     const energy=metrics.find(item=>item.id==='kcal')||{};
     const goal=Number(energy.target)||0;
     const kcal=Number(energy.value)||0;
@@ -159,6 +159,7 @@
               pct===null?'Nessun target':`${pct}% del tuo obiettivo`),
             energy.coverage!==undefined&&energy.coverage<.999?h('small',{className:'a-warning'},`Dati nutrizionali parziali: copertura ${Math.round(energy.coverage*100)}%`):null)),
         h('div',{className:'a-macros'},metrics.filter(m=>m.id!=='kcal').map(m=>h(MetricTile,{key:m.id,metric:m})))),
+      hydration,
       h('div',{className:'a-overview-actions'},
         h('button',{type:'button',className:'a-button-primary',onClick:onAdd},h(Icon,{name:'plus',size:20}),'Aggiungi un alimento'),
         h('button',{type:'button',className:'a-button-outline',onClick:onSearch},h(Icon,{name:'search',size:19}),'Cerca nel database'),

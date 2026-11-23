@@ -7,6 +7,8 @@ const previous=root.NutriTraceAICoach;
 if(!previous)throw Error('AI Coach base mancante');
 const STORAGE='nutritrace_coach_threads_v3';
 const CONSENT='nutritrace_coach_consent_v3';
+const PROFILE_INVITE='nutritrace_coach_profile_invite_v5';
+const SETTINGS_COMPACT='nutritrace_coach_compact_v5';
 const mkid=()=>root.crypto?.randomUUID?.()||('id-'+Date.now()+'-'+Math.random().toString(36).slice(2));
 const initial=()=>({id:mkid(),title:'Nuova conversazione',createdAt:Date.now(),updatedAt:Date.now(),messages:[]});
 function read(){
@@ -52,6 +54,10 @@ function View(props){
  const [error,setError]=useState('');
  const [consent,setConsent]=useState(()=>{try{return localStorage.getItem(CONSENT)==='yes';}catch{return false;}});
  const [share,setShare]=useState(false);
+ const [compact,setCompact]=useState(()=>{try{return localStorage.getItem(SETTINGS_COMPACT)==='yes';}catch{return false;}});
+ const [settingsOpen,setSettingsOpen]=useState(false);
+ const [profileInvite,setProfileInvite]=useState(false);
+ const inviteShown=useRef(false);
  const [shareProfile,setShareProfile]=useState(false);
  const [weight,setWeight]=useState(false);
  const [editing,setEditing]=useState(null);
@@ -81,6 +87,12 @@ function View(props){
   setData(prev=>{const rest=prev.threads.filter(t=>t.id!==id);const all=rest.length?rest:[initial()];return {threads:all,active:prev.active===id?all[0].id:prev.active};});}
  function exportChat(){const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),threads:data.threads},null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='nutritrace-coach-chat.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ function collapseSettings(){setCompact(true);setSettingsOpen(false);try{localStorage.setItem(SETTINGS_COMPACT,'yes');}catch{}}
+ function offerProfileOnce(){
+  if(!profileContext||shareProfile||inviteShown.current)return;
+  try{if(localStorage.getItem(PROFILE_INVITE)==='yes')return;localStorage.setItem(PROFILE_INVITE,'yes');}catch{}
+  inviteShown.current=true;setProfileInvite(true);
+ }
  function context(){
   if(!share)return{};
   let weightData=null;
@@ -101,6 +113,7 @@ function View(props){
    const answer=String(json.answer||'');
    updateThread(threadId,t=>({...t,messages:[...t.messages,{id:mkid(),role:'assistant',content:answer,
     truncated:Boolean(json.truncated),finishReason:json.finishReason,createdAt:Date.now()}].slice(-100)}));
+   if(mode==='new')offerProfileOnce();
   }catch(e){setError(e.message||'Servizio AI non disponibile');}
   finally{setBusy(false);setSending(false);}
  }
@@ -120,6 +133,7 @@ function View(props){
   const msg={id:mkid(),role:'user',content:question,createdAt:Date.now(),sharedScopes:share?['statistiche',...(weight?['peso']:[]),...(shareProfile&&profileContext?['preferenze']:[])]:[]};
   updateThread(id,t=>({...t,title:t.messages.length===0?question.slice(0,58):t.title,messages:[...messages,msg].slice(-100)}));
   setDraft('');setEditing(null);
+  collapseSettings();
   ask(question,messages,id);
  }
  function continueAnswer(){
@@ -169,16 +183,7 @@ function View(props){
    r.onend=()=>setListening(false);r.start();setListening(true);
   }catch{setError('Impossibile avviare il microfono.');}
  }
- return h('section',{className:'nutritrace-ai-coach coach-v3 v5-coach'},
-  h('header',{className:'coach-head'},
-   h('div',null,h('span',{className:'v5-coach-kicker'},'UNO SPAZIO PER LE TUE DOMANDE'),h('h2',null,'✦ NutriTrace Coach'),h('p',null,'Rifletti sulle tue abitudini, un messaggio alla volta.')),
-   h('div',{className:'coach-head-actions'},btn('Conversazioni',()=>setSidebar(x=>!x)),btn('+ Nuova chat',newThread,busy,'coach-btn coach-primary'))),
-  sidebar&&h('nav',{className:'coach-thread-list','aria-label':'Conversazioni salvate'},
-   ...data.threads.map(t=>h('div',{className:'coach-thread',key:t.id},
-    btn(t.title,()=>selectThread(t.id),busy,'coach-btn coach-thread-title'),
-    btn('Elimina',()=>deleteThread(t.id),busy))),
-   btn('Esporta JSON',exportChat)),
-  h('section',{className:'v5-coach-sharing','aria-label':'Condivisione facoltativa con il Coach'},
+ const sharingPanel=h('section',{className:'v5-coach-sharing','aria-label':'Condivisione facoltativa con il Coach'},
    h('label',{className:'v5-coach-sharing-main'},
     h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked){setWeight(false);setShareProfile(false);}}}),
     h('span',null,h('strong',null,'Condividi informazioni nutrizionali'),h('small',null,'Facoltativo · invia le medie e gli obiettivi degli ultimi 7 giorni insieme alla prossima domanda.')),
@@ -188,8 +193,25 @@ function View(props){
     h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>setShareProfile(e.target.checked)}),h('span',null,'Includi le preferenze e le abitudini del percorso obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
     h('small',null,'Le risposte cliniche, età e sesso del questionario non sono incluse. Puoi spegnere la condivisione in qualsiasi momento.')),
    h('p',{className:'v5-coach-sharing-note'},share?'Queste informazioni saranno inviate a GroqCloud solo quando invii un messaggio autorizzato.':'Il diario rimane sul dispositivo. Puoi usare la chat anche senza condividere le statistiche.'),
+   share&&h('button',{type:'button',className:'ghost v5-coach-sharing-done',onClick:collapseSettings},'Fatto'),
    h('details',{className:'v5-coach-privacy-note'},h('summary',null,'Come funziona la privacy della chat'),
-    h('p',null,'L’autorizzazione ai messaggi è separata dalla condivisione del diario. Ogni invio comprende gli ultimi messaggi della conversazione. Spegnere la condivisione interrompe i nuovi riepiloghi; informazioni già scritte nella chat possono restare nella sua cronologia. Per un contesto nuovo avvia una nuova chat.'))),
+    h('p',null,'L’autorizzazione ai messaggi è separata dalla condivisione del diario. Ogni invio comprende gli ultimi messaggi della conversazione. Spegnere la condivisione interrompe i nuovi riepiloghi; informazioni già scritte nella chat possono restare nella sua cronologia. Per un contesto nuovo avvia una nuova chat.')));
+ const consentControl=h('label',{className:'coach-consent-row'},
+    h('input',{type:'checkbox',checked:consent,onChange:e=>{
+      setConsent(e.target.checked);
+      if(e.target.checked)setError('');
+    }}),
+    h('span',null,'Autorizzo l’invio delle mie domande e degli ultimi messaggi della chat a GroqCloud.'));
+ return h('section',{className:'nutritrace-ai-coach coach-v3 v5-coach'},
+  h('header',{className:'coach-head'},
+   h('div',null,h('span',{className:'v5-coach-kicker'},'UNO SPAZIO PER LE TUE DOMANDE'),h('h2',null,'✦ NutriTrace Coach'),h('p',null,'Rifletti sulle tue abitudini, un messaggio alla volta.')),
+   h('div',{className:'coach-head-actions'},btn('Conversazioni',()=>setSidebar(x=>!x)),btn('+ Nuova chat',newThread,busy,'coach-btn coach-primary'))),
+  sidebar&&h('nav',{className:'coach-thread-list','aria-label':'Conversazioni salvate'},
+   ...data.threads.map(t=>h('div',{className:'coach-thread',key:t.id},
+    btn(t.title,()=>selectThread(t.id),busy,'coach-btn coach-thread-title'),
+    btn('Elimina',()=>deleteThread(t.id),busy))),
+   btn('Esporta JSON',exportChat)),
+  !compact&&sharingPanel,
   h('details',{className:'coach-details'},h('summary',null,'Osservazioni sul dispositivo · '+analysis.trackedDays+'/7 giorni registrati'),
    h('div',{className:'coach-stats'},...analysis.metrics.map(m=>h('div',{className:'coach-stat',key:m.key},
     h('small',null,m.name),h('strong',null,m.avg==null?'N/D':Number(m.avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
@@ -209,12 +231,7 @@ function View(props){
    busy&&h('p',{className:'coach-wait',role:'status'},'Il Coach sta preparando la risposta…'),
    h('div',{ref:bottom})),
   h('form',{className:'coach-composer',onSubmit:send},
-   h('label',{className:'coach-consent-row'},
-    h('input',{type:'checkbox',checked:consent,onChange:e=>{
-      setConsent(e.target.checked);
-      if(e.target.checked)setError('');
-    }}),
-    h('span',null,'Autorizzo l’invio delle mie domande e degli ultimi messaggi della chat a GroqCloud.')),
+   (!compact||!consent)&&consentControl,
    editing&&h('p',{className:'coach-editing'},'Modifica messaggio · ',btn('Annulla',()=>{setEditing(null);setDraft('');setError('');})),
    h('textarea',{value:draft,maxLength:3000,rows:3,onChange:e=>setDraft(e.target.value),placeholder:'Scrivi un messaggio…','aria-label':'Messaggio al Coach'}),
    !consent&&h('p',{className:'coach-notice coach-inline-notice',role:'status'},
@@ -224,6 +241,8 @@ function View(props){
     btn(listening?'Ferma microfono':'🎙 Detta',dictate,busy),
     h('span',{className:'v5-coach-input-count','aria-live':'off'},draft.length+'/3000'),
     h('button',{type:'submit',className:'coach-btn coach-primary',disabled:busy||!draft.trim()},busy?'Invio…':editing?'Salva e rigenera':'Invia ↗'))),
+  profileInvite&&h('article',{className:'v5-coach-profile-invite',role:'status'},h('strong',null,'Vuoi includere anche le preferenze e le abitudini del tuo percorso?'),h('p',null,'È facoltativo: le risposte restano locali finché non autorizzi la condivisione.'),h('div',{className:'v5-action-row'},btn('Apri impostazioni',()=>{setCompact(true);setSettingsOpen(true);setProfileInvite(false);}),btn('No, grazie',()=>setProfileInvite(false)))),
+  compact&&h('section',{className:'v5-coach-settings-compact'},h('button',{type:'button',className:'ghost v5-coach-settings-toggle','aria-expanded':settingsOpen,onClick:()=>setSettingsOpen(v=>!v)},'Condivisione e privacy · '+(share?'Statistiche attive':'Statistiche spente')+(share&&shareProfile?' · Preferenze attive':'')+(settingsOpen?' ▴':' ▾')),settingsOpen&&h('div',null,sharingPanel,consent&&consentControl,btn('Chiudi impostazioni',()=>setSettingsOpen(false)))),
   storageError&&h('p',{className:'coach-error',role:'alert'},storageError),
   h('small',{className:'coach-disclaimer'},'Conversazioni salvate su questo dispositivo/browser. Per registrare un alimento da foto usa Foto in Oggi. Dettatura e lettura vocale dipendono dal browser. Le risposte del Coach sono informative e non sostituiscono indicazioni cliniche.')
  );

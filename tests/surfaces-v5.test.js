@@ -38,13 +38,14 @@ test('meal amounts preserve explicit quantity/unit without contaminating food de
  assert.equal(env.NutriTraceMealDiary.amountText({grams:155,quantity:150,unit:'ml'}),'150 ml · 155 g');
  assert.equal(env.NutriTraceMealDiary.amountText({grams:80}),'80 g');
 });
-test('food rows and copy action are directly visible in their meal, callbacks keep identifiers',()=>{
+test('meal has compact inline names, expandable details, copy action and working callbacks',()=>{
  const env=load(environment(),'meal-diary.js');
  const calls=[];
  const tree=env.NutriTraceMealDiary({meals:[{id:'breakfast',name:'Colazione'}],logs:[{id:'l1',foodId:'a',grams:100,mealId:'breakfast'}],
   foods:[{id:'a',name:'Yogurt',servingGrams:100,label:{kcal:70,protein:9,carbs:4,fat:2,fiber:0}}],
   onCopyYesterday:id=>calls.push(['copy',id]),onRemove:id=>calls.push(['remove',id]),onAdd:id=>calls.push(['add',id]),onAssign:(id,meal)=>calls.push(['move',id,meal])});
- assert.equal(nodes(tree,'details').length,0);
+ assert.equal(nodes(tree,'details').length,1);
+ assert.match(text(cls(tree,'v5-meal-inline-names')[0]),/Yogurt/);
  assert.equal(cls(tree,'v5-meal-card').length,1);
  assert.equal(cls(tree,'v5-meal-food').length,1);
  assert.equal(cls(tree,'v5-day-foods').length,1);
@@ -52,8 +53,9 @@ test('food rows and copy action are directly visible in their meal, callbacks ke
  cls(tree,'v5-meal-copy')[0].props.onClick();
  cls(tree,'v5-meal-add')[0].props.onClick();
  cls(tree,'v5-meal-remove')[0].props.onClick();
+ cls(tree,'v5-day-remove')[0].props.onClick();
  nodes(tree,'select')[0].props.onChange({target:{value:''}});
- assert.deepEqual(calls,[['copy','breakfast'],['add','breakfast'],['remove','l1'],['move','l1',null]]);
+ assert.deepEqual(calls,[['copy','breakfast'],['add','breakfast'],['remove','l1'],['remove','l1'],['move','l1',null]]);
 });
 test('Altro contains only destinations absent from the primary bar, including Micro',()=>{
  const env=load(environment({more:true}),'aurora-components.js');

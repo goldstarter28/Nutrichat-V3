@@ -11,6 +11,7 @@
       if (app) app.inert = true; document.body.style.overflow = 'hidden';
       var timer = setTimeout(function () { if (ref.current) ref.current.focus(); }, 20);
       function onKey(e) {
+        if(document.querySelector('.v5-meal-picker[open]'))return;
         if (e.key === 'Escape') { e.preventDefault(); if (closeRef.current) closeRef.current(); }
         if (e.key !== 'Tab' || !ref.current) return;
         var nodes = Array.from(ref.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]')).filter(function (el) { return el.getClientRects().length && !el.closest('[hidden]'); });
@@ -26,11 +27,18 @@
       h('header', { className: 'v5-dialog-head' }, h('div', null, h('span', { className: 'a-kicker' }, props.kicker || 'IL TUO DIARIO'), h('h2', { id: id }, props.title), props.subtitle && h('p', null, props.subtitle)), h('button', { type: 'button', className: 'v5-icon-button', onClick: props.onClose, 'aria-label': 'Chiudi ' + props.title }, '×')),
       h('div', { className: 'v5-dialog-body' }, props.children))), document.body);
   }
+  function MealPicker({meals,onChoose,onClose}) {
+    const ref=React.useRef(null);
+    React.useEffect(()=>{const el=ref.current;if(el?.showModal){el.showModal();}else if(el)el.setAttribute('open','');return()=>{if(el?.open&&el.close)el.close();};},[]);
+    return root.ReactDOM.createPortal(h('dialog',{ref,className:'v5-meal-picker','aria-labelledby':'v5-meal-picker-title',onCancel:e=>{e.preventDefault();onClose();},onKeyDown:e=>{e.stopPropagation();if(e.key==='Escape'){e.preventDefault();onClose();}}},
+      h('header',null,h('h2',{id:'v5-meal-picker-title'},'A quale pasto lo vuoi aggiungere?'),h('button',{type:'button',className:'v5-icon-button','aria-label':'Annulla scelta del pasto',onClick:onClose},'×')),
+      meals.length?h('div',{className:'v5-meal-picker-list'},...meals.map(m=>h('button',{type:'button',className:'ghost',key:m.id,onClick:()=>onChoose(m.id)},m.name))):h('p',null,'Non hai ancora configurato pasti. Chiudi e usa Gestisci pasti.')),document.body);
+  }
   function ProductReview(props) {
     var pair = React.useMemo(function () { return D.productFood(props.product, props.foods, 'preview'); }, [props.product, props.foods]);
     var state = React.useState(''), grams = state[0], setGrams = state[1], pending = React.useState(false), busy = pending[0], setBusy = pending[1], error = React.useState(''), message = error[0], setMessage = error[1];
-    async function submit(e) { e.preventDefault(); if (!D.positive(grams)) { setMessage('Inserisci la quantità consumata in grammi (massimo 10.000).'); return; } if (busy) return; setBusy(true); try { await props.onConfirm(props.product, Number(grams)); } catch (err) { setMessage(err.message || 'Inserimento non riuscito.'); setBusy(false); } }
-    return h('form', { className: 'v5-product-review', onSubmit: submit },
+    async function submit(e) { e.preventDefault(); if (!D.positive(grams)) { setMessage('Inserisci la quantità consumata in grammi (massimo 10.000).'); return; } if (busy) return; setBusy(true); try { const result=await props.onConfirm(props.product, Number(grams));if(result===false)setBusy(false); } catch (err) { setMessage(err.message || 'Inserimento non riuscito.'); setBusy(false); } }
+    return h('form', { className: 'v5-product-review', onSubmit: submit, noValidate:true },
       h('div', { className: 'v5-product-mark' }, h(Icon, { name: 'food', size: 28 })), h('span', { className: 'a-kicker' }, 'PRONTO PER IL DIARIO'), h('h3', null, pair.food.name), pair.food.brand && h('p', { className: 'muted' }, pair.food.brand),
       h('p', { className: 'v5-note' }, pair.existing ? 'Usiamo la scheda già presente nel tuo archivio, conservando i suoi valori.' : 'Controlla il prodotto e i valori per 100 g. Dopo la conferma sarà disponibile anche nel tuo archivio.'),
       h('p', { className: 'v5-note' }, 'Valori della scheda per ' + D.format(pair.food.servingGrams || 100) + ' g'),
@@ -49,6 +57,7 @@
         h('label', null, 'Alimento del database', h('select', { value: ing.selectedKey || '', onChange: function (e) { ingredient(i, { selectedKey: e.target.value, ambiguity: e.target.value ? 'none' : ing.ambiguity }); } }, h('option', { value: '' }, 'Scegli la corrispondenza'), (ing.candidates || []).map(function (c) { return h('option', { value: c.candidateKey, key: c.candidateKey }, c.name + (c.resultType === 'personal' ? ' · archivio' : ' · database')); }))),
         ing.portion_assumption && h('small', { className: 'v5-note' }, ing.portion_assumption), ing.ambiguity_reason && h('p', { className: 'errorText' }, ing.ambiguity_reason),
         h('div', { className: 'v5-action-row' }, h('button', { type: 'button', className: 'ghost', onClick: function () { props.onFind(i); } }, 'Cerca corrispondenze'), h('button', { type: 'button', className: 'ghost', disabled: Boolean(props.busy), onClick: function () { props.onAI(i); } }, props.busy === 'ai-' + i ? 'Ricerca…' : 'Aiuto AI'))); }),
+      props.allowRecipe && review.mode !== 'recipe' && h('button',{type:'button',className:'ghost v5-make-recipe',onClick:()=>set({...review,mode:'recipe',saveRecipe:true})},'Salva come ricetta'),
       review.mode === 'recipe' && h('div', { className: 'v5-recipe-yield' }, h('h3', null, 'Ricetta e porzione'), h('div', { className: 'v5-two-fields' },
         h('label', null, 'Peso finale della ricetta · g', h('input', { type: 'number', inputMode: 'decimal', min: '.1', max: 10000, step: 'any', placeholder: 'Dopo la cottura', value: review.yieldOverride || '', onChange: function (e) { set(Object.assign({}, review, { yieldOverride: e.target.value })); } })),
         h('label', null, 'Quanti grammi hai mangiato?', h('input', { type: 'number', inputMode: 'decimal', min: '.1', max: 10000, step: 'any', value: review.consumed_grams || '', onChange: function (e) { set(Object.assign({}, review, { consumed_grams: e.target.value })); } }))),
@@ -61,7 +70,7 @@
   function Recipes(props) {
     var selected = React.useState(null), id = selected[0], select = selected[1], quantity = React.useState(''), grams = quantity[0], setGrams = quantity[1], err = React.useState(''), message = err[0], setMessage = err[1], busyState = React.useState(false), busy = busyState[0], setBusy = busyState[1];
     var current = props.recipes.find(function (r) { return r.id === id; });
-    async function add() { if (busy) return; setBusy(true); try { await props.onAdd(current, grams); select(null); setGrams(''); setMessage(''); } catch (e) { setMessage(e.message); } finally { setBusy(false); } }
+    async function add() { if (busy) return; setBusy(true); try { const result=await props.onAdd(current, grams); if(result===false)return; select(null); setGrams(''); setMessage(''); } catch (e) { setMessage(e.message); } finally { setBusy(false); } }
     return h('div', { className: 'v5-recipes' }, h('div', { className: 'cardTitle' }, h('div', null, h('h3', null, 'Le tue ricette'), h('p', null, 'Ingredienti pronti, porzione scelta ogni volta.')), h('button', { className: 'ghost', onClick: props.onNew }, '+ Crea')),
       !props.recipes.length ? h('p', { className: 'empty' }, 'Scrivi gli ingredienti in Voce / ricetta e attiva “Salva la ricetta” nel riepilogo.') : props.recipes.map(function (r) { return h('article', { className: 'v5-saved-recipe', key: r.id },
         h('div', { className: 'v5-saved-recipe-head' }, h('button', { className: 'v5-recipe-select', onClick: function () { select(id === r.id ? null : r.id); setGrams(''); setMessage(''); } }, h('b', null, r.name), h('small', null, r.ingredients.length + ' ingredienti · ' + D.format(r.yieldGrams) + ' g totali')), h('button', { className: 'ghost', onClick: function () { props.onEdit(r); } }, 'Modifica'), h('button', { className: 'v5-icon-button', 'aria-label': 'Elimina ricetta ' + r.name, onClick: function () { props.onRemove(r.id); } }, '×')),
@@ -112,5 +121,5 @@
     return h('article', { className: 'card v5-weekly' }, h('div', { className: 'cardTitle' }, h('div', null, h('span', { className: 'a-kicker' }, 'UNO SGUARDO ALLA SETTIMANA'), h('h2', null, 'La tua media giornaliera'), h('p', null, props.label))),
       h('div', { className: 'v5-week-metrics' }, [['kcal', 'Energia', 'kcal'], ['protein', 'Proteine', 'g'], ['carbs', 'Carboidrati', 'g'], ['fat', 'Grassi', 'g'], ['fiber', 'Fibre', 'g']].map(function (item) { var s = D.stats(props.logs, props.foods, { id: item[0] }); return h('div', { key: item[0] }, h('small', null, item[1]), h('strong', null, D.format(s.average, item[0] === 'kcal' ? 0 : 2)), h('span', null, item[2] + '/giorno'), h('small', null, s.knownDays + ' giorni · copertura ' + D.format(s.coverage * 100, 0) + '%')); })), h('p', { className: 'v5-note' }, 'Media dei giorni con valori disponibili per ogni nutriente. I giorni non registrati sono esclusi; i totali possono essere parziali.'));
   }
-  root.NutriTraceV5 = Object.freeze({ Dialog: Dialog, ProductReview: ProductReview, RecipeReview: RecipeReview, Recipes: Recipes, MicroCard: MicroCard, MicroPage: MicroPage, WeeklyOverview: WeeklyOverview });
+  root.NutriTraceV5 = Object.freeze({ Dialog: Dialog, MealPicker:MealPicker, ProductReview: ProductReview, RecipeReview: RecipeReview, Recipes: Recipes, MicroCard: MicroCard, MicroPage: MicroPage, WeeklyOverview: WeeklyOverview });
 })(window);
