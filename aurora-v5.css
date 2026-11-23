@@ -170,10 +170,10 @@ html[data-theme=dark] .v5-estimate { background:#433a20;color:#e3cb83 }
 .v5-meal-summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;min-height:32px;color:var(--muted)}
 .v5-meal-summary::-webkit-details-marker{display:none}
 .v5-meal-inline-names{flex:1;min-width:0;font-size:12px;line-height:1.4;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.v5-meal-expand{flex:none;font-size:12px;font-weight:750;color:var(--accent)}
+.v5-meal-expand{flex:none;font-size:14px;font-weight:750;color:var(--accent)}
 .v5-meal-details[open] .v5-meal-inline-names{-webkit-line-clamp:unset;overflow:visible}
 .v5-meal-details[open] .v5-meal-expand{display:none}
-.v5-meal-details[open] .v5-meal-summary:after{content:'Chiudi ▴';font-size:12px;color:var(--accent);font-weight:750}
+.v5-meal-details[open] .v5-meal-summary:after{content:'Chiudi ▴';font-size:14px;color:var(--accent);font-weight:750}
 .v5-day-food-main{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 8px;align-items:center}
 .v5-day-remove{color:var(--danger);grid-column:3;grid-row:1;min-width:36px;min-height:36px}
 .v5-day-food-main>span{grid-column:2}

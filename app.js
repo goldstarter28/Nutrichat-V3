@@ -1629,15 +1629,18 @@ const draftNdRows=draftCatalogRows.filter(
     const next=savedRecipes.filter(r=>r.id!==id);try{localStorage.setItem('nutritrace_recipes_v5',JSON.stringify(next));setSavedRecipes(next);}catch{setRecipeMsg('Ricette non salvate: spazio insufficiente.');}
   }
   function applyWizardResult(result){
-    const before={profile,goals},rawProfile=localStorage.getItem('nutritrace_profile_v23'),rawGoals=localStorage.getItem('nutritrace_goals_v23');
-    localStorage.setItem('nutritrace_goals_before_wizard_v5',JSON.stringify(before));
-    try{localStorage.setItem('nutritrace_profile_v23',JSON.stringify(result.profile));localStorage.setItem('nutritrace_goals_v23',JSON.stringify(result.goals));}
-    catch(error){try{rawProfile===null?localStorage.removeItem('nutritrace_profile_v23'):localStorage.setItem('nutritrace_profile_v23',rawProfile);rawGoals===null?localStorage.removeItem('nutritrace_goals_v23'):localStorage.setItem('nutritrace_goals_v23',rawGoals);}catch{}throw new Error('Impossibile salvare gli obiettivi sul dispositivo.');}
-    setProfile(result.profile);setGoals(result.goals);setWizardOpen(false);setWizardUndo(true);setV5Notice({text:result.summary?.eligible===false?'Preferenze salvate. Obiettivi invariati: '+result.summary.reason:'Obiettivi aggiornati. Puoi modificarli in qualsiasi momento.'});
+    const before={profile,goals,meals};
+    const nextMeals=Array.isArray(result.meals)?window.NutriTraceMealConfig.normalize(result.meals):null;
+    const writes=[['nutritrace_goals_before_wizard_v5',JSON.stringify(before)],['nutritrace_profile_v23',JSON.stringify(result.profile)],['nutritrace_goals_v23',JSON.stringify(result.goals)]];
+    if(nextMeals)writes.push(['nutritrace_meals_v3',JSON.stringify(nextMeals)]);
+    const previous=writes.map(([key])=>[key,localStorage.getItem(key)]);
+    try{for(const [key,value] of writes)localStorage.setItem(key,value);}
+    catch(error){for(const [key,value] of previous){try{value===null?localStorage.removeItem(key):localStorage.setItem(key,value);}catch{}}throw new Error('Impossibile salvare gli obiettivi e la configurazione sul dispositivo.');}
+    setProfile(result.profile);setGoals(result.goals);if(nextMeals)setMeals(nextMeals);setWizardOpen(false);setWizardUndo(true);setV5Notice({text:(result.summary?.eligible===false?'Preferenze salvate. Obiettivi invariati: '+result.summary.reason:'Obiettivi aggiornati. Puoi modificarli in qualsiasi momento.')+(nextMeals?' Configurazione pasti aggiornata.':'')});
   }
   function undoWizard(){
     try{const previous=JSON.parse(localStorage.getItem('nutritrace_goals_before_wizard_v5')||'null');if(!previous?.profile||!Array.isArray(previous.goals))throw new Error('Nessun ripristino disponibile.');
-      applyWizardResult(previous);setV5Notice({text:'Ripristinati gli obiettivi precedenti.'});
+      applyWizardResult(previous);setV5Notice({text:Array.isArray(previous.meals)?'Ripristinati gli obiettivi e i pasti precedenti.':'Ripristinati gli obiettivi precedenti.'});
     }catch(e){setV5Notice({text:e.message});}
   }
 
@@ -3296,7 +3299,6 @@ function importBackup(event) {
   }
 }),
       !entryOpen&&!directCapture&&composer,
-      h(window.NutriTraceMealDiary.DayFoods,{logs:dayLogs,foods,meals,onRemove:logId=>setLogs(previous=>previous.filter(l=>l.id!==logId))}),
       h(V5.WeeklyOverview,{logs:weekLogs,foods,label:shortDate(weekStart)+' – '+shortDate(weekEnd)}),
       h('article',{className:'card v5-micro-home'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,'I tuoi micronutrienti'),h('p',null,'Quantità registrate e scarto dai tuoi obiettivi.')),h('button',{className:'ghost',onClick:()=>setTab('micro')},'Apri Micro')),
         pinnedGoals.length?h('div',{className:'v5-micro-grid'},pinnedGoals.slice(0,3).map(g=>h(V5.MicroCard,{key:g.id,goal:g,weight:profile.weight,stats:DiaryV5.stats(dayLogs,foods,g)}))):h('p',{className:'v5-note'},'Trovi il dettaglio del giorno, le medie e l’andamento in Altro → Micro. Aggiungi una stella ai nutrienti che vuoi vedere qui.')),
@@ -3405,8 +3407,8 @@ function importBackup(event) {
       );
     }
   },'+ Aggiungi pasto')
-)
-
+),
+      h(window.NutriTraceMealDiary.DayFoods,{logs:dayLogs,foods,meals,onRemove:logId=>setLogs(previous=>previous.filter(l=>l.id!==logId))})
     ),
 
     tab==='micro'&&h(V5.MicroPage,{logs,foods,goals,profile,date:selectedDate,weekStart,weekEnd,dateNavigator,onGoals:()=>setTab('obiettivi'),onSources:()=>{setTab('dati');requestAnimationFrame(()=>document.getElementById('v5-scientific-sources')?.scrollIntoView({behavior:'smooth'}));},onPin:id=>setGoals(gs=>gs.map(g=>g.id===id?{...g,pinned:!g.pinned}:g))}),
@@ -3712,7 +3714,7 @@ h('div',{className:'card labelImportCard'},
     ),
 
     tab==='obiettivi'&&h('section',{className:'aurora-goals'},
-      h('article',{className:'v5-wizard-launch card'},h('div',null,h('span',{className:'a-kicker'},'UN PERCORSO SU MISURA'),h('h2',null,'Personalizza i miei obiettivi'),h('p',null,'Un passo alla volta, fino a 20 domande. Le risposte restano sul dispositivo e decidi tu se condividerle con il Coach. Gli obiettivi rimangono sempre modificabili.')),h('div',{className:'v5-action-row'},h('button',{className:'cta',onClick:()=>setWizardOpen(true)},profile.wizardV5?'Rivedi il percorso':'Inizia il percorso'),wizardUndo&&h('button',{className:'ghost',onClick:undoWizard},'Ripristina obiettivi precedenti')),profile.wizardV5?.calculation&&h('p',{className:'v5-note v5-wizard-outcome',role:'status'},profile.wizardV5.calculation.eligible?'Ultimo percorso: calcolo applicato · '+fmt(profile.wizardV5.calculation.kcal,0)+' kcal/giorno (modificabile sotto).':'Ultimo percorso: preferenze salvate, obiettivi invariati. '+profile.wizardV5.calculation.reason)),
+      h('article',{className:'v5-wizard-launch card'},h('div',null,h('span',{className:'a-kicker'},'UN PERCORSO SU MISURA'),h('h2',null,'Personalizza i miei obiettivi'),h('p',null,'Un passo alla volta, fino a 20 domande. Le risposte restano sul dispositivo e decidi tu se condividerle con il Coach. Gli obiettivi rimangono sempre modificabili.')),h('div',{className:'v5-action-row'},h('button',{className:'cta',onClick:()=>setWizardOpen(true)},profile.wizardV5?'Rivedi il percorso':'Inizia il percorso'),wizardUndo&&h('button',{className:'ghost',onClick:undoWizard},'Ripristina obiettivi e pasti precedenti')),profile.wizardV5?.calculation&&h('p',{className:'v5-note v5-wizard-outcome',role:'status'},profile.wizardV5.calculation.eligible?'Ultimo percorso: calcolo applicato · '+fmt(profile.wizardV5.calculation.kcal,0)+' kcal/giorno (modificabile sotto).':'Ultimo percorso: preferenze salvate, obiettivi invariati. '+profile.wizardV5.calculation.reason)),
       h(window.NutriTraceAurora.GoalsHero,{
         metrics:[
     ['kcal','Calorie','kcal'],
@@ -3889,7 +3891,7 @@ tab==='peso'&&h('section',{className:'aurora-peso'},
       directCapture.review?recipeReviewView:
       directCapture.mode==='photo'?h(window.NutriTraceFoodCamera,{onLabel:captureLabel,onDish:captureDish,confirmLabel:'Controlla la porzione'}):h(window.NutriTraceBarcodeScanner,{onProduct:product=>setDirectCapture(prev=>prev?{...prev,product}:prev)})),
     mealPicker&&h(V5.MealPicker,{meals,onChoose:finishMealChoice,onClose:()=>finishMealChoice(null)}),
-    wizardOpen&&h(window.NutriTraceGoalsWizard.View,{profile,goals,onApply:applyWizardResult,onClose:()=>setWizardOpen(false)}),
+    wizardOpen&&h(window.NutriTraceGoalsWizard.View,{profile,goals,meals,onApply:applyWizardResult,onClose:()=>setWizardOpen(false)}),
 
     candidatePreview&&h(CandidatePreviewModal,{food:candidatePreview,onClose:()=>setCandidatePreview(null)}),
 

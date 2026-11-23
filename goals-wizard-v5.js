@@ -19,11 +19,11 @@
     { id: 'physiologicalState', title: 'C’è una fase particolare da considerare?', description: 'Gravidanza e allattamento richiedono riferimenti specifici: il percorso manterrà i tuoi obiettivi attuali.', type: 'choice', when: a => a.sex === 'female', options: [choice('none', 'Nessuna di queste'), choice('pregnant', 'Gravidanza'), choice('lactating', 'Allattamento'), choice('unknown', 'Preferisco non indicarlo')] },
     { id: 'menstrualStatus', title: 'Quale riferimento usare per il ferro?', description: 'Serve solo se, nel riepilogo, sceglierai di aggiornare i riferimenti dei micronutrienti. Non viene dedotto dalla tua età.', type: 'choice', when: a => a.sex === 'female' && a.physiologicalState === 'none', options: [choice('menstruating', 'Ho le mestruazioni'), choice('postmenopause', 'Sono in postmenopausa'), choice('unknown', 'Altro / preferisco non indicarlo', 'Il riferimento per il ferro resterà invariato')] },
     { id: 'careContext', title: 'Devi seguire indicazioni personalizzate?', description: 'Per esempio un piano prescritto, condizioni che influenzano la nutrizione o un rapporto difficile con il cibo. Non ti chiediamo diagnosi o dettagli.', type: 'choice', options: [choice('none', 'No, non ho indicazioni di questo tipo'), choice('professional', 'Sì, voglio mantenere il mio piano', 'Salviamo le preferenze senza calcolare nuovi obiettivi'), choice('unknown', 'Preferisco non indicarlo', 'Gli obiettivi restano manuali')] },
-    { id: 'activity', title: 'Quanto movimento c’è nella tua giornata?', description: 'Considera tutta la giornata, incluso l’allenamento: non lo aggiungeremo una seconda volta alle calorie.', type: 'choice', options: [choice('low', 'Prevalentemente sedentaria', 'Molte ore seduto/a, poco movimento complessivo · PAL 1,4'), choice('light', 'Un po’ di movimento', 'Cammino o mi muovo regolarmente · PAL 1,6'), choice('active', 'Attiva', 'Molto movimento nel lavoro e nel tempo libero · PAL 1,8'), choice('veryActive', 'Molto attiva', 'Attività fisica intensa nel complesso della giornata · PAL 2,0')] },
+    { id: 'activity', title: 'Quanto movimento c’è nella tua giornata?', description: 'Considera tutta la giornata, incluso l’allenamento: non lo aggiungeremo una seconda volta alle calorie.', type: 'choice', options: [choice('low', 'Prevalentemente sedentaria', 'Molte ore seduto/a, poco movimento complessivo · PAL 1,4'), choice('deskTraining', 'Giornata soprattutto seduta, con allenamenti regolari', 'Lavoro o studio seduto/a, pochi passi e allenamenti moderati 3–4 volte a settimana · PAL iniziale 1,5'), choice('light', 'Un po’ di movimento', 'Cammino o mi muovo regolarmente anche fuori dagli allenamenti · PAL 1,6'), choice('active', 'Attiva', 'Molto movimento anche fuori dalla palestra: lavoro fisico o molti passi ogni giorno · PAL 1,8'), choice('veryActive', 'Molto attiva', 'Attività fisica intensa nel complesso della giornata · PAL 2,0')] },
     { id: 'trainingDays', title: 'Quante volte ti alleni in una settimana tipica?', description: 'Aiuta a descrivere le tue abitudini. Non raddoppia l’energia già considerata nel movimento quotidiano.', type: 'choice', options: [choice('0', 'Per ora non mi alleno'), choice('1-2', '1–2 volte'), choice('3-4', '3–4 volte'), choice('5+', '5 o più volte')] },
     { id: 'trainingType', title: 'Che tipo di attività preferisci?', description: 'Questa risposta aggiunge contesto alle tue preferenze. Non genera una dieta sportiva.', type: 'choice', when: a => a.trainingDays !== '0', options: [choice('strength', 'Forza e palestra'), choice('endurance', 'Corsa, bici e resistenza'), choice('mixed', 'Un po’ di entrambe'), choice('gentle', 'Mobilità e attività leggera'), choice('other', 'Altra attività')] },
     { id: 'dietaryPattern', title: 'Come descriveresti la tua alimentazione?', description: 'Nessun alimento verrà escluso automaticamente. Le preferenze resteranno modificabili.', type: 'choice', options: [choice('omnivore', 'Varia, senza esclusioni particolari'), choice('vegetarian', 'Vegetariana'), choice('vegan', 'Vegana'), choice('pescatarian', 'Pescetariana'), choice('other', 'Diversa / preferisco non definirla')] },
-    { id: 'mealsPerDay', title: 'Quanti momenti per mangiare ti sono comodi?', description: 'È una preferenza organizzativa: il diario manterrà i pasti che hai già configurato.', type: 'choice', options: [choice('3', 'Tre pasti'), choice('4', 'Tre pasti e uno spuntino'), choice('5', 'Tre pasti e due spuntini'), choice('flexible', 'Preferisco decidere giorno per giorno')] },
+    { id: 'mealsPerDay', title: 'Quanti momenti per mangiare ti sono comodi?', description: 'Con la conferma finale aggiorneremo anche i pasti del diario. Le registrazioni già effettuate non vengono cancellate.', type: 'choice', options: [choice('3', 'Tre pasti'), choice('4', 'Tre pasti e uno spuntino', 'Spuntino del pomeriggio'), choice('4-morning', 'Tre pasti e uno spuntino al mattino'), choice('5', 'Tre pasti e due spuntini'), choice('flexible', 'Preferisco decidere giorno per giorno', 'Mantieni i pasti già configurati')] },
     { id: 'schedule', title: 'Quanto sono regolari i tuoi orari?', description: 'Per suggerimenti compatibili con la vita reale, se deciderai di condividere il contesto con il Coach.', type: 'choice', options: [choice('regular', 'Abbastanza regolari'), choice('variable', 'Cambiano spesso'), choice('shifts', 'Lavoro o studio su turni'), choice('unspecified', 'Preferisco non indicarlo')] },
     { id: 'cookingTime', title: 'Quanto tempo vuoi dedicare a preparare un pasto?', description: 'Non modifica i fabbisogni: aiuta a rendere pratici eventuali suggerimenti.', type: 'choice', options: [choice('quick', 'Fino a 15 minuti'), choice('medium', '15–30 minuti'), choice('relaxed', 'Anche più di 30 minuti'), choice('ready', 'Preferisco pasti pronti o fuori casa')] },
     { id: 'foodPriorities', title: 'Che cosa conta di più nella scelta dei cibi?', description: 'Puoi scegliere più risposte.', type: 'multi', options: [choice('simple', 'Pochi ingredienti e semplicità'), choice('budget', 'Spesa contenuta'), choice('variety', 'Varietà'), choice('family', 'Pasti adatti a tutta la famiglia'), choice('portable', 'Facili da portare con me'), choice('none', 'Nessuna preferenza particolare')] },
@@ -136,7 +136,7 @@
     }
     if (a.goal === 'gain' && bmi >= 30) return blocked('Per il profilo indicato non applichiamo automaticamente un aumento dell’energia. Manteniamo i tuoi obiettivi.');
     const bmr = 10 * a.weight + 6.25 * a.height - 5 * a.age + (a.sex === 'male' ? 5 : -161);
-    const pal = { low: 1.4, light: 1.6, active: 1.8, veryActive: 2.0 }[a.activity];
+    const pal = { low: 1.4, deskTraining: 1.5, light: 1.6, active: 1.8, veryActive: 2.0 }[a.activity];
     const maintenance = bmr * pal;
     const adjustment = a.goal === 'lose' ? -0.10 : a.goal === 'gain' ? 0.05 : 0;
     const kcal = Math.round(maintenance * (1 + adjustment));
@@ -150,7 +150,7 @@
       sourceIds: ['energy-mifflin', 'efsa-energy', 'efsa-protein', 'efsa-carbohydrate', 'efsa-fats'],
       notes: [
         'La stima non misura il metabolismo: valuta nel tempo quanto è adatta a te.',
-        'Il movimento comprende già l’allenamento; non vengono aggiunte calorie per le sessioni.',
+        'Il movimento comprende già l’allenamento; non vengono aggiunte calorie per le sessioni. Il PAL 1,5 per giornate sedentarie con allenamento è una stima iniziale dell’app, non una misurazione: rivaluta il fabbisogno in base all’andamento e al benessere.',
         'La ripartizione iniziale è 20% proteine, 50% carboidrati e 30% grassi, con almeno 0,83 g/kg di proteine. È una scelta modificabile dell’app.',
         'La variazione del −10% per ridurre il peso o del +5% per aumentarlo è una scelta prudente dell’app, non una prescrizione EFSA.',
         'Il limite degli zuccheri totali già impostato rimane distinto dalle raccomandazioni sugli zuccheri liberi.'
@@ -180,6 +180,20 @@
       out.push({ id: g.id, name: g.name, unit: g.unit, daily, target: daily * (g.period === 'week' ? 7 : 1), kind: ref.kind || g.kind, reference: ref });
     }
     return out;
+  }
+  // Organizational change only: keep existing IDs and names for matching meals.
+  // Logs and favorites are never mutated; removing a slot only changes the active list.
+  function mealPlan(input, current) {
+    const a = sanitizeAnswers(input);
+    const ids = { '3': ['breakfast','lunch','dinner'], '4': ['breakfast','lunch','afternoon-snack','dinner'], '4-morning': ['breakfast','morning-snack','lunch','dinner'], '5': ['breakfast','morning-snack','lunch','afternoon-snack','dinner'] }[a.mealsPerDay];
+    if (!ids || !Array.isArray(current)) return null;
+    const names = { breakfast:'Colazione', 'morning-snack':'Spuntino mattina', lunch:'Pranzo', 'afternoon-snack':'Spuntino pomeriggio', dinner:'Cena' };
+    const used = new Set();
+    return ids.map(id => {
+      const existing = current.find(m => m && m.id === id && !used.has(m.id)) || current.find(m => m && typeof m.id === 'string' && typeof m.name === 'string' && !Object.prototype.hasOwnProperty.call(names,m.id) && m.name.trim().toLowerCase() === names[id].toLowerCase() && !used.has(m.id));
+      const next = existing ? { id: existing.id, name: existing.name } : { id, name:names[id] };
+      used.add(next.id); return next;
+    });
   }
   function applyPlan(profile, goals, input, options) {
     const answers = sanitizeAnswers(input);
@@ -214,7 +228,7 @@
       calculation: { eligible: plan.eligible, reason: plan.reason, method: plan.method || null, kcal: plan.kcal || null, bmr: plan.bmr || null, pal: plan.pal || null, adjustment: plan.adjustment || 0 },
       nutritionReferencesVersion: references && (references.version || references.VERSION) || null
     };
-    return { profile: nextProfile, goals: nextGoals, context, summary: plan, updatedMicronutrients: changes.map(x => x.id) };
+    return { profile: nextProfile, goals: nextGoals, context, summary: plan, updatedMicronutrients: changes.map(x => x.id), meals: mealPlan(answers, opts.meals) };
   }
 
   function View(props) {
@@ -317,7 +331,7 @@
       applyingRef.current = true;
       setApplying(true); setError('');
       try {
-        const payload = applyPlan(props.profile, props.goals, answers, { updateMicros });
+        const payload = applyPlan(props.profile, props.goals, answers, { updateMicros, meals: props.meals });
         if (typeof props.onApply !== 'function') throw new Error('Applicazione degli obiettivi non disponibile.');
         const result = await props.onApply(payload);
         if (result === false) throw new Error('Gli obiettivi non sono stati salvati. Riprova.');
@@ -361,12 +375,13 @@
       );
     }
     function renderReview() {
+      const plannedMeals = mealPlan(answers, props.meals);
       const names = { kcal: ['Energia', 'kcal'], protein: ['Proteine', 'g'], carbs: ['Carboidrati', 'g'], fat: ['Grassi', 'g'], fiber: ['Fibre', 'g'] };
       return h('div', { className: 'v5-wizard-review' },
         h('p', { className: 'v5-wizard-kicker' }, 'PRONTO/A A PARTIRE'),
         h('h2', { ref: headingRef, tabIndex: -1 }, plan.eligible ? 'I tuoi riferimenti iniziali' : 'Le tue preferenze, il tuo piano'),
         h('p', { className: 'v5-wizard-description' }, plan.eligible ? 'Controlla il riepilogo. Puoi tornare alle risposte oppure applicare gli obiettivi e modificarli in qualsiasi momento.' : plan.reason),
-        plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, 'Gli obiettivi attuali restano invariati'), h('p', null, 'Salviamo solo le risposte e le preferenze del percorso. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
+        plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, 'Gli obiettivi attuali restano invariati'), h('p', null, 'Salviamo le risposte e le preferenze del percorso; puoi anche aggiornare l’organizzazione dei pasti. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
         !plan.eligible && plan.maintenanceAvailable ? h('div', { className: 'v5-wizard-notice' },
           h('strong', null, 'Vuoi calcolare invece gli obiettivi di mantenimento?'),
           h('p', null, 'Non prevede una riduzione dell’energia. Ti mostreremo la stima di calorie e macro prima di applicarla. Le altre risposte rimangono uguali.'),
@@ -388,6 +403,11 @@
           h('label', { className: 'v5-wizard-toggle' }, h('input', { type: 'checkbox', checked: updateMicros, onChange: event => setUpdateMicros(event.target.checked) }), h('span', null, h('strong', null, 'Aggiorna anche i riferimenti dei micronutrienti'), h('small', null, 'Facoltativo: sostituisce ', microChanges.length, ' obiettivi standard compatibili con il profilo. Le voci personalizzate e i dati senza riferimento applicabile restano invariati.'))),
           updateMicros ? h('details', { open: true, className: 'v5-wizard-explanation' }, h('summary', null, 'Valori che verranno applicati'), h('ul', { className: 'v5-wizard-micro-list' }, microChanges.map(change => h('li', { key: change.id }, h('span', null, change.name), h('strong', null, displayNumber(change.daily), ' ', change.unit, '/giorno')))), h('p', { className: 'v5-wizard-footnote' }, 'I riferimenti EFSA descrivono popolazioni sane, non una prescrizione individuale. I target settimanali vengono convertiti in 7 giorni; i limiti superiori non diventano obiettivi.')) : null
         ) : null,
+        plannedMeals ? h('div', { className: 'v5-wizard-notice' },
+          h('strong', null, 'Configurazione dei pasti dopo la conferma'),
+          h('p', null, plannedMeals.map(m => m.name).join(' · ')),
+          h('p', null, 'Orari: ' + (labelFor('schedule', answers.schedule) || 'Non indicati') + '. Nessun orario obbligatorio.'),
+          h('p', null, 'I pasti non inclusi verranno rimossi dalla configurazione attiva. Le loro registrazioni restano nel diario come Senza pasto; i preferiti restano salvati. Puoi ripristinare la configurazione precedente insieme agli obiettivi.')) : null,
         h('div', { className: 'v5-wizard-privacy' }, h('strong', null, 'Le risposte restano in questo browser'), h('p', null, 'Il percorso non invia risposte al Coach. Nella chat puoi scegliere separatamente se condividere le preferenze e le informazioni nutrizionali.')),
         h('div', { className: 'v5-wizard-question-actions' }, h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setStage('questions'); setQuestionId(questions[questions.length - 1].id); setError(''); } }, '← Rivedi le risposte'), h('button', { type: 'button', className: 'v5-wizard-primary', disabled: applying, onClick: apply }, applying ? 'Salvataggio…' : plan.eligible ? 'Applica obiettivi' : 'Salva le preferenze'))
       );
@@ -406,5 +426,5 @@
     ));
     return root.ReactDOM && root.ReactDOM.createPortal ? root.ReactDOM.createPortal(content, root.document.body) : content;
   }
-  return Object.freeze({ View, VERSION, DRAFT_KEY, MAX_QUESTIONS, QUESTIONS, getQuestions, validateAnswer, sanitizeAnswers, initialAnswers, calculatePlan, referenceChanges, applyPlan, contextForCoach, readDraft, saveDraft, clearDraft, displayNumber });
+  return Object.freeze({ View, VERSION, DRAFT_KEY, MAX_QUESTIONS, QUESTIONS, getQuestions, validateAnswer, sanitizeAnswers, initialAnswers, calculatePlan, mealPlan, referenceChanges, applyPlan, contextForCoach, readDraft, saveDraft, clearDraft, displayNumber });
 });
