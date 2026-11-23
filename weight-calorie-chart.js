@@ -183,7 +183,7 @@
       style: { marginTop: '16px' }
     },
 
-      h('h2', null, 'Peso e alimentazione'),
+      h('h2', null, 'Confronto peso ed alimentazione'),
 
       h('p', { className: 'muted tiny' },
         'Confronto delle misurazioni corporee con le calorie ' +

@@ -1,0 +1,168 @@
+/* NutriTrace V5: live meal diary, secondary navigation and Coach. Load after Aurora V4. */
+.v5-sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.v5-meal-panel,.v5-meal-diary{min-width:0}
+.v5-diary-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:6px 0 14px}
+.v5-diary-heading h2{margin:4px 0 0;font-size:clamp(21px,2.1vw,27px)}
+.v5-diary-heading .a-kicker{font-size:11px}
+.v5-meal-manage{min-height:44px;flex:none;padding:8px 10px;color:var(--accent);background:transparent;border:1px solid var(--line);border-radius:12px;font-size:13px;font-weight:700}
+.v5-meal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;align-items:start}
+.aurora-app .card.v5-meal-card{margin:0;padding:16px;border-radius:20px;background:var(--card);box-shadow:var(--a-softshadow)}
+.v5-meal-heading{display:flex;align-items:center;gap:10px}
+.v5-meal-icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border-radius:14px;background:var(--accent2);font-size:23px}
+.v5-meal-title{flex:1;min-width:0}
+.aurora-app .v5-meal-title h3{font-size:18px;margin:0 0 3px;letter-spacing:-.025em;overflow-wrap:anywhere}
+.v5-meal-count{display:block;color:var(--muted);font-size:12px;line-height:1.35}
+.v5-meal-energy{display:flex;flex-direction:column;text-align:right;line-height:1.15;flex:none}
+.v5-meal-energy strong{font-size:22px;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.v5-meal-energy>span{font-size:12px;color:var(--muted);margin-top:4px}
+.v5-meal-add{display:grid;place-items:center;width:44px;height:44px;flex:none;padding:0;border:0;border-radius:50%;background:var(--a-lime);color:#18462b;font-size:27px;line-height:1;font-weight:500}
+.v5-meal-macros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:12px 0 0;padding:9px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.v5-meal-macros>span{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px;font-size:13px;line-height:1.4}
+.v5-meal-macros abbr{text-decoration:none;font-weight:800;color:var(--accent);margin-right:2px}
+.v5-meal-macros strong{font-size:14px;font-weight:750;font-variant-numeric:tabular-nums}
+.v5-meal-macros small{color:var(--muted);font-size:12px}
+.v5-meal-partial{display:block;font-size:12px;color:var(--muted);margin-top:5px}
+.v5-meal-food{padding:11px 0;border-bottom:1px solid var(--line)}
+.v5-meal-food-main{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.v5-meal-food-name{flex:1;min-width:0}
+.v5-meal-food-name strong{font-size:14px;line-height:1.4;display:block;overflow-wrap:anywhere}
+.v5-meal-food-name>span{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.v5-meal-food-energy{color:var(--muted);font-size:13px;text-align:right;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums;padding-top:1px}
+.v5-meal-food-actions{display:flex;align-items:center;gap:6px;margin-top:8px}
+.v5-meal-move{flex:1;min-width:0;margin:0}
+.v5-meal-move select{min-height:44px;padding:7px 25px 7px 9px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:13px;width:100%;margin:0}
+.v5-meal-action{display:flex;align-items:center;justify-content:center;gap:5px;min-width:44px;min-height:44px;padding:7px 8px;background:transparent;color:var(--accent);border:1px solid var(--line);border-radius:10px;font-size:19px}
+.v5-meal-action span{font-size:12px;font-weight:650}
+.v5-meal-remove{color:var(--danger)}
+.v5-meal-footer{margin-top:6px}
+.v5-meal-copy{display:flex;align-items:center;gap:7px;min-height:44px;padding:8px 0;border:0;background:transparent;color:var(--accent);font-size:13px;font-weight:700;text-align:left}
+.v5-meal-copy>span{font-size:21px;line-height:1}
+.v5-meal-favorites{display:flex;flex-wrap:wrap;gap:7px;margin-top:3px}
+.v5-meal-favorite{display:flex;max-width:100%;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--accent2)}
+.v5-meal-favorite button{border:0;background:transparent;color:var(--accent);min-height:44px;padding:7px 9px}
+.v5-meal-favorite-add{flex:1;min-width:0;overflow-wrap:anywhere;text-align:left;font-size:13px}
+.v5-meal-favorite-remove{font-size:20px;flex:none;min-width:44px}
+.aurora-app .card.v5-day-foods{margin:15px 0 0;padding:16px 18px;border-radius:19px;background:var(--card)}
+.v5-day-foods-heading{display:flex;gap:9px;align-items:center;margin-bottom:5px}
+.v5-day-foods-heading>span:first-child{display:grid;place-items:center;width:32px;height:32px;background:var(--accent2);border-radius:10px;color:var(--accent);font-size:21px}
+.aurora-app .v5-day-foods-heading h3{font-size:18px;margin:0;flex:1;letter-spacing:-.03em}
+.v5-day-foods-count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.v5-day-foods ul{list-style:none;margin:0;padding:0}
+.v5-day-foods li{padding:10px 0;border-bottom:1px solid var(--line)}
+.v5-day-foods li:last-child{border-bottom:0;padding-bottom:0}
+.v5-day-foods p{font-size:13px;margin:7px 0 0}
+.v5-day-food-main{display:flex;justify-content:space-between;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
+.v5-day-food-main strong{font-size:14px;overflow-wrap:anywhere}
+.v5-day-food-main>span{font-size:12px;color:var(--muted)}
+.v5-day-food-metrics{display:flex;gap:3px 12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.a-nav-desktop{overflow-x:auto;scrollbar-width:thin}
+.a-nav-desktop>.a-nav-item{flex:1 0 auto}
+.a-nav-mobile .a-nav-item{font-size:10.5px}
+.v5-more-overlay.a-more-overlay{display:flex;position:fixed;z-index:100;inset:0;align-items:flex-end;justify-content:center;padding:16px 12px max(20px,env(safe-area-inset-bottom));background:rgba(5,30,18,.49);backdrop-filter:blur(4px)}
+.v5-more-overlay .a-more-panel{width:min(100%,510px);border-radius:24px;padding:20px;background:var(--card);border:1px solid var(--line);box-shadow:0 15px 50px #0003;max-height:85dvh;overflow:auto}
+.v5-more-overlay .a-more-title{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:19px;margin:0 0 14px}
+.v5-more-overlay .a-more-title button{width:44px;min-height:44px;border:0;background:var(--accent2);color:var(--ink);border-radius:13px}
+.v5-more-overlay .a-more-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.v5-more-overlay .a-more-grid .a-nav-item{min-height:58px;background:var(--accent2);color:var(--ink);justify-content:flex-start;gap:8px;white-space:normal;font-size:14px;padding:12px}
+.v5-more-overlay .a-more-grid .a-nav-item.is-active{background:var(--accent);color:white}
+/* Coach */
+.v5-coach{--v5-coach-soft:#f0f7e9}
+.aurora-coach .v5-coach .coach-head{background:linear-gradient(125deg,#f2f8e8,var(--card));padding:22px;border-radius:23px;gap:18px}
+.v5-coach-kicker{display:block;font-size:10px;letter-spacing:.12em;font-weight:800;color:var(--muted);margin-bottom:8px}
+.v5-coach .coach-head h2{font-size:25px;letter-spacing:-.045em;margin:0 0 7px}
+.v5-coach .coach-head p{font-size:14px;max-width:42ch;line-height:1.5}
+.aurora-coach .v5-coach .coach-btn{min-height:44px;font-size:14px;line-height:1.35;border-radius:13px;background:var(--card);color:var(--accent);border:1px solid var(--line);box-shadow:none}
+.aurora-coach .v5-coach .coach-primary{background:var(--accent);color:white;border-color:var(--accent);font-weight:750}
+.v5-coach-sharing{background:#f1f8e9;border:1px solid #ccdfc4;border-radius:21px;padding:17px 18px;box-shadow:var(--a-softshadow)}
+.v5-coach-sharing-main{display:flex;flex-direction:row;align-items:flex-start;gap:12px;margin:0;cursor:pointer;color:var(--ink)}
+.v5-coach-sharing-main>span:nth-child(2){flex:1;min-width:0}
+.v5-coach-sharing-main strong{display:block;font-size:16px;line-height:1.35;font-weight:800}
+.v5-coach-sharing-main small{display:block;font-size:12px;color:var(--muted);font-weight:400;line-height:1.5;margin-top:4px}
+.v5-coach-sharing input[type=checkbox]{width:21px;height:21px;min-width:21px;margin:1px 0 0;accent-color:var(--accent);flex:none;cursor:pointer;padding:0}
+.v5-coach-sharing-badge{font-size:11px;line-height:1.5;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--accent);font-weight:800;flex:none}
+.v5-coach-sharing-options{display:grid;gap:10px;border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+.v5-coach-sharing-options label{display:flex;flex-direction:row;gap:11px;align-items:flex-start;line-height:1.45;margin:0;color:var(--ink);font-size:13px;font-weight:500;cursor:pointer}
+.v5-coach-sharing-options label small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:3px}
+.v5-coach-sharing-options>small{font-size:12px;color:var(--muted);line-height:1.5}
+.v5-coach-sharing-note{font-size:12px;line-height:1.5;color:var(--muted);margin:11px 0 0}
+.v5-coach-privacy-note{margin-top:6px;font-size:12px;color:var(--muted)}
+.v5-coach-privacy-note summary{min-height:36px;display:flex;align-items:center;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.v5-coach-privacy-note p{margin:4px 0 0;font-size:12px}
+.v5-coach .coach-details{font-size:14px;padding:14px 17px}
+.v5-coach .coach-details summary{min-height:26px;line-height:1.5}
+.v5-coach .coach-messages{padding:12px 0;gap:22px}
+.v5-coach .coach-empty{display:flex;flex-direction:column;align-items:center;padding:20px 8px 12px}
+.v5-coach-empty-symbol{display:grid;place-items:center;width:55px;height:55px;background:var(--accent2);color:var(--accent);font-size:30px;border-radius:19px;margin-bottom:13px}
+.v5-coach .coach-empty h3{margin:0 0 8px;font-size:25px;letter-spacing:-.04em}
+.v5-coach .coach-empty p{font-size:14px;margin:0;max-width:40ch}
+.v5-coach-prompts{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:20px;max-width:700px}
+.aurora-coach .v5-coach .v5-coach-prompt{font-size:13px;padding:10px 13px;border-radius:15px;background:var(--card);text-align:left}
+.v5-coach .coach-message{font-size:15px;line-height:1.65}
+.v5-coach .coach-message.assistant{border:1px solid var(--line);background:var(--card);border-radius:19px 19px 19px 5px;padding:18px 20px;box-shadow:var(--a-softshadow);max-width:calc(100% - 30px)}
+.aurora-coach .v5-coach .coach-message.user{background:#e6f2d8;padding:15px 18px;max-width:88%}
+.v5-coach .coach-message-meta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-bottom:9px}
+.v5-coach .coach-message-meta>strong{font-size:13px;color:var(--accent)}
+.v5-coach .coach-message-meta>small{font-size:11px;color:var(--muted)}
+.aurora-coach .v5-coach .coach-message-actions .coach-btn{font-size:12px;min-height:36px;padding:6px 10px;background:transparent}
+.v5-coach .coach-message-actions{border-top:1px solid var(--line);padding-top:9px;margin-top:12px}
+.v5-coach .coach-user-text{font-size:15px;line-height:1.6}
+.v5-coach .coach-wait{font-size:14px;padding:12px 15px;color:var(--muted);margin:0}
+.aurora-coach .v5-coach .coach-composer{padding:17px;border-radius:21px;background:var(--card)}
+.v5-coach .coach-consent-row{font-size:13px;line-height:1.5;color:var(--ink);padding:12px;background:var(--bg);font-weight:500;gap:11px}
+.v5-coach .coach-consent-row input{width:21px;height:21px;min-width:21px;flex:none;padding:0;margin:1px 0 0}
+.aurora-coach .v5-coach .coach-composer textarea{font-size:16px;padding:13px 14px;min-height:96px;border:1px solid var(--line);border-radius:14px;background:var(--bg);line-height:1.5}
+.v5-coach .coach-composer-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end}
+.v5-coach-input-count{font-size:11px;color:var(--muted);margin-right:auto;font-variant-numeric:tabular-nums}
+.v5-coach .coach-disclaimer{font-size:12px;line-height:1.6;display:block;padding:0 3px}
+.v5-coach .coach-thread{gap:8px}
+.v5-coach .coach-thread-title{overflow-wrap:anywhere;line-height:1.4}
+html[data-theme=dark] .v5-meal-add{background:#bbdf6c;color:#173823}
+html[data-theme=dark] .v5-meal-manage,html[data-theme=dark] .v5-meal-macros abbr,html[data-theme=dark] .v5-meal-action,html[data-theme=dark] .v5-meal-copy,html[data-theme=dark] .v5-meal-favorite button{color:#b0ebc4}
+html[data-theme=dark] .v5-meal-remove{color:#ffabb1}
+html[data-theme=dark] .v5-coach-sharing{background:#203a2c;border-color:#3f5a45}
+html[data-theme=dark] .aurora-coach .v5-coach .coach-head{background:linear-gradient(125deg,#203a2c,var(--card))}
+html[data-theme=dark] .aurora-coach .v5-coach .coach-btn,html[data-theme=dark] .v5-coach-sharing-badge,html[data-theme=dark] .v5-coach .coach-message-meta>strong{color:#b6efc6}
+html[data-theme=dark] .aurora-coach .v5-coach .coach-primary{background:#3b855c;color:#fff;border-color:#5b9e75}
+html[data-theme=dark] .aurora-coach .v5-coach .coach-message.user{background:#294a36;color:var(--ink)}
+html[data-theme=dark] .v5-coach .coach-consent-row{background:#203529}
+@media(max-width:760px){
+ .v5-meal-grid{grid-template-columns:1fr;gap:11px}
+ .aurora-app .card.v5-meal-card{padding:14px;border-radius:18px}
+ .v5-meal-heading{gap:8px}
+ .aurora-app .v5-meal-title h3{font-size:17px}
+ .v5-meal-icon{width:38px;height:38px;font-size:21px;border-radius:12px}
+ .v5-meal-energy strong{font-size:21px}
+ .v5-coach-sharing{padding:15px}
+ .v5-coach-sharing-main{gap:9px}
+ .v5-coach-sharing-main strong{font-size:15px}
+ .v5-coach .coach-head-actions{display:flex;flex-wrap:wrap}
+ .v5-coach .coach-head-actions .coach-btn{flex:1;font-size:13px}
+ .aurora-coach .v5-coach .coach-head{padding:18px}
+ .v5-coach .coach-head h2{font-size:23px}
+ .v5-coach .coach-head p{font-size:13px}
+ .v5-coach .coach-empty h3{font-size:23px}
+ .v5-coach .coach-message.assistant{max-width:100%;padding:15px}
+ .aurora-coach .v5-coach .coach-message.user{max-width:94%;padding:13px 15px}
+ .v5-coach .coach-message-actions .coach-btn{min-height:44px!important}
+ .v5-coach .coach-composer-actions{justify-content:flex-end}
+ .aurora-coach .v5-coach .coach-composer{padding:13px}
+ .v5-coach .coach-consent-row{padding:10px;font-size:12px}
+ .v5-coach-prompts{display:grid;grid-template-columns:1fr;width:100%;max-width:480px}
+ .aurora-coach .v5-coach .v5-coach-prompt{width:100%;text-align:center}
+}
+@media(max-width:440px){
+ .v5-meal-action span{display:none}
+ .v5-meal-action{width:44px;padding:6px;font-size:22px}
+ .v5-meal-move select{font-size:14px}
+ .v5-meal-count{font-size:12px}
+ .v5-meal-energy strong{font-size:20px}
+ .v5-meal-macros{gap:3px}
+ .v5-meal-macros strong{font-size:13px}
+ .v5-coach-sharing-badge{display:none}
+ .v5-diary-heading{gap:8px}
+ .v5-diary-heading h2{font-size:21px}
+ .v5-meal-manage{font-size:12px;max-width:90px}
+ .v5-day-food-main{display:block}
+ .v5-day-food-main>span{display:block;margin-top:2px}
+}
+@media(prefers-reduced-motion:reduce){.v5-coach *,.v5-meal-panel *,.v5-more-overlay *{scroll-behavior:auto!important;transition:none!important}}

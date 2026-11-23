@@ -1,0 +1,233 @@
+/* Aurora V5. Keep all layout and focus order in the same document order. */
+.aurora-today > * { order:initial!important }
+.aurora-today { gap:18px }
+.aurora-app .v5-note,.v5-dialog .v5-note { display:block;font-size:13px;line-height:1.55;color:var(--muted);margin:8px 0;overflow-wrap:anywhere }
+.v5-icon-button { display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:44px;min-height:44px;padding:8px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--accent);font-size:24px;line-height:1;cursor:pointer }
+.v5-icon-button:hover { background:var(--accent2) }
+.v5-composer-heading { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px }
+.v5-composer-heading h2 { margin:4px 0 0!important;font-size:clamp(20px,2.3vw,27px)!important }
+.v5-capture-buttons { display:flex;gap:6px }
+.v5-capture-buttons .v5-icon-button { background:var(--a-forest);color:white;border-color:transparent }
+.aurora-app .v5-quick-diary,.v5-dialog .v5-quick-diary { padding:22px!important;border:1px solid var(--line);background:var(--card);border-radius:24px;box-shadow:var(--a-softshadow);margin:0 }
+.v5-segmented { display:flex;gap:4px;background:var(--accent2);border-radius:14px;padding:4px;flex-wrap:wrap }
+.v5-segmented button { border:0;flex:1;min-height:42px;border-radius:10px;background:transparent;color:var(--muted);font-size:14px;font-weight:750;padding:8px 12px }
+.v5-segmented button[aria-pressed=true] { background:var(--card);color:var(--accent);box-shadow:0 2px 6px #0000000b }
+.v5-entry-tabs { margin-bottom:14px }
+.v5-quick-diary .quickInputs { display:grid!important;grid-template-columns:minmax(0,1fr) 105px;gap:10px;margin:0 0 12px }
+.v5-quick-diary label,.v5-dialog label { display:flex;flex-direction:column;gap:6px;color:var(--ink);font-size:13px;font-weight:650;min-width:0 }
+.v5-quick-diary :is(input,textarea,select),.v5-dialog :is(input,textarea,select) { width:100%;min-width:0;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:11px 12px;min-height:46px;font-size:16px;line-height:1.4 }
+.v5-quick-diary textarea { resize:vertical;min-height:94px }
+.v5-recent-label { display:block;font-size:12px;font-weight:650;color:var(--muted);margin:3px 0 5px }
+.aurora-app .v5-recent-list,.v5-dialog .v5-recent-list { display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 }
+.v5-quick-diary .quickChoice { min-height:54px!important;padding:9px 12px!important;border-radius:12px!important;gap:8px!important;background:var(--bg);color:var(--ink);border:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;text-align:left;min-width:0 }
+.v5-quick-diary .quickChoice>span { display:flex;flex-direction:column;min-width:0 }
+.v5-quick-diary .quickChoice b { font-size:14px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis }
+.v5-quick-diary .quickChoice small { font-size:12px;line-height:1.4;color:var(--muted);white-space:normal }
+.v5-quick-diary .quickChoice>strong { font-size:23px!important;color:var(--accent);padding:0!important;background:transparent!important }
+.v5-selected-food { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--a-leaf);border-radius:14px;margin:8px 0 }
+.v5-action-row { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px }
+.v5-action-row>button { min-height:44px }
+.v5-text-entry { display:flex;flex-direction:column;gap:8px }
+.v5-dialog-backdrop { position:fixed;inset:0;z-index:250;display:grid;place-items:center;padding:24px;background:rgba(4,31,22,.48);backdrop-filter:blur(7px) }
+.v5-dialog { background:var(--bg);color:var(--ink);width:min(100%,680px);max-height:calc(100dvh - 48px);display:flex;flex-direction:column;border-radius:28px;box-shadow:0 25px 100px #001b1840;overflow:hidden;outline:none }
+.v5-dialog-wide { width:min(100%,960px) }
+.v5-dialog-head { flex:none;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:24px 26px 18px;background:var(--card);border-bottom:1px solid var(--line) }
+.v5-dialog-head h2 { margin:4px 0;font-size:25px;letter-spacing:-.04em;line-height:1.2 }
+.v5-dialog-head p { margin:4px 0 0;color:var(--muted);font-size:14px }
+.v5-dialog-body { padding:22px;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;min-height:0 }
+.v5-dialog .v5-quick-diary { border:none;box-shadow:none;background:transparent;padding:0!important }
+.v5-dialog .v5-composer-heading { justify-content:flex-end;margin-bottom:12px }
+.v5-dialog .v5-composer-heading>div:first-child { display:none }
+.v5-dialog .cta { background:var(--a-forest);color:white;border:0;padding:12px 18px;border-radius:13px;font-size:15px;font-weight:750;min-height:46px }
+.v5-dialog .ghost { background:var(--card);color:var(--accent);border:1px solid var(--line);padding:10px 14px;border-radius:13px;font-size:14px;font-weight:650;min-height:44px }
+.v5-dialog :is(h3,h4) { margin:8px 0 14px;letter-spacing:-.03em }
+.v5-product-review { max-width:510px;margin:auto }
+.v5-product-mark { width:62px;height:62px;border-radius:20px;background:var(--accent2);color:var(--accent);display:grid;place-items:center;margin:6px 0 18px }
+.v5-product-review h3 { font-size:27px }
+.v5-product-macros { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;background:var(--card);border:1px solid var(--line);border-radius:17px;padding:15px 10px;margin:20px 0 }
+.v5-product-macros>div { display:flex;flex-direction:column;align-items:center;gap:4px }
+.v5-product-macros strong { font-size:18px }
+.v5-product-macros small { color:var(--muted);font-size:12px }
+.v5-quantity-field { display:flex;align-items:center;gap:12px }
+.v5-quantity-field input { font-size:28px!important }
+.v5-product-review .v5-action-row .cta { flex:1 }
+.v5-recipe-review { margin-top:15px }
+.v5-ingredient,.v5-recipe-yield { border:1px solid var(--line);border-radius:18px;background:var(--card);padding:16px;margin:14px 0;display:flex;flex-direction:column;gap:12px }
+.v5-ingredient-head { display:flex;align-items:center;justify-content:space-between;gap:12px }
+.v5-two-fields { display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:12px }
+.v5-check { display:flex!important;flex-direction:row!important;align-items:center;gap:12px!important;min-height:44px }
+.v5-check input[type=checkbox] { width:22px!important;min-height:22px;height:22px;flex:none;accent-color:var(--accent) }
+.v5-sticky-action { position:sticky;bottom:-22px;background:var(--bg);padding:15px 0 6px;z-index:2 }
+.v5-sticky-action>.cta { width:100% }
+.v5-saved-recipe { margin:12px 0;border:1px solid var(--line);border-radius:16px;background:var(--bg);padding:12px }
+.v5-saved-recipe-head { display:flex;align-items:center;gap:8px }
+.v5-recipe-select { border:0;background:transparent;text-align:left;flex:1;min-height:44px;color:var(--ink);min-width:0 }
+.v5-recipe-select b,.v5-recipe-select small { display:block }
+.v5-recipe-select small { color:var(--muted);font-size:12px;margin-top:3px }
+.v5-recipe-portion { margin-top:12px;display:flex;flex-direction:column;gap:12px }
+.v5-recipe-portion ul { padding-left:18px;font-size:14px;color:var(--muted) }
+.v5-week-metrics { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:20px 0 }
+.v5-week-metrics>div { display:flex;flex-direction:column;gap:5px;padding:14px;border:1px solid var(--line);border-radius:17px;background:var(--bg) }
+.v5-week-metrics strong { font-size:27px;letter-spacing:-.06em;line-height:1.2 }
+.v5-week-metrics small { font-size:12px;line-height:1.4;color:var(--muted) }
+.v5-week-metrics span { color:var(--accent);font-size:13px;font-weight:650 }
+.v5-micro-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px }
+.v5-micro-card { border:1px solid var(--line);border-radius:22px;background:var(--card);box-shadow:var(--a-softshadow);padding:20px;min-width:0 }
+.v5-micro-title { display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:18px }
+.v5-micro-title h3 { font-size:18px!important;margin:3px 0 5px!important }
+.v5-micro-title span { font-size:12px;color:var(--muted) }
+.v5-micro-title .v5-icon-button { border:0;background:transparent;margin:-7px -7px 0 0 }
+.v5-micro-numbers { display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-bottom:12px }
+.v5-micro-numbers>strong { font-size:29px;line-height:1.2;letter-spacing:-.045em }
+.v5-micro-numbers strong small { font-size:14px;font-weight:500;letter-spacing:0;color:var(--muted) }
+.v5-micro-numbers>span { font-size:14px;color:var(--muted) }
+.v5-progress-track { height:10px;border-radius:99px;background:var(--accent2);overflow:hidden }
+.v5-progress-track>span { display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--a-leaf),var(--accent));transition:width .2s ease }
+.v5-progress-track .v5-progress-excess { background:#b86a30 }
+.v5-micro-gap { display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 }
+.v5-micro-gap>span { font-size:14px;line-height:1.45;color:var(--ink) }
+.v5-micro-gap>b { font-size:24px;letter-spacing:-.04em;color:var(--accent);white-space:nowrap }
+.v5-micro-quality { display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted) }
+.v5-estimate { color:#8b5829;background:#faf1dd;border-radius:6px;padding:2px 6px }
+.v5-micro-card .v5-note { font-size:12px;margin-bottom:0 }
+.v5-micro-intro { margin:20px 0 }
+.v5-micro-search { flex:1;min-width:190px;display:flex;flex-direction:column;gap:6px;font-size:13px }
+.v5-micro-search input { min-height:46px;font-size:16px }
+.v5-micro-history { margin-top:24px }
+.v5-history-summary { display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin:18px 0 }
+.v5-history-summary strong { font-size:28px;letter-spacing:-.04em }
+.v5-history-summary span { color:var(--muted);font-size:13px }
+.v5-history-bars { height:180px;display:flex;align-items:stretch;gap:5px;border-bottom:1px solid var(--line);margin:28px 0;padding-bottom:22px }
+.v5-history-bar { position:relative;flex:1;display:flex;align-items:flex-end;min-width:0;max-width:60px }
+.v5-history-bar>span { display:block;background:var(--accent);width:100%;border-radius:5px 5px 0 0;min-width:3px }
+.v5-history-bar>small { position:absolute;top:100%;left:0;right:0;text-align:center;font-size:10px;color:var(--muted) }
+.v5-history-bar .v5-estimated-bar { background:repeating-linear-gradient(45deg,var(--a-leaf),var(--a-leaf) 5px,var(--accent2) 5px,var(--accent2) 8px) }
+.v5-table-scroll { overflow-x:auto }
+.v5-table-scroll table { width:100%;border-collapse:collapse;font-size:13px }
+.v5-table-scroll :is(th,td) { text-align:left;padding:11px;border-bottom:1px solid var(--line);white-space:nowrap }
+.v5-wizard-launch { display:flex;align-items:center;justify-content:space-between;gap:24px;background:linear-gradient(120deg,var(--card),var(--accent2))!important;margin-bottom:24px }
+.v5-wizard-launch>div:first-child { max-width:650px }
+.v5-wizard-launch h2 { margin:5px 0 9px;font-size:25px!important }
+.v5-wizard-launch p { font-size:14px;line-height:1.55;color:var(--muted);margin:0 }
+.v5-wizard-launch>.v5-action-row { flex-direction:column;align-items:stretch;flex:none }
+.v5-toast { position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:300;display:flex;align-items:center;gap:12px;max-width:calc(100vw - 28px);width:max-content;background:var(--a-deep);color:#fff;border:1px solid #ffffff22;border-radius:18px;padding:12px 14px 12px 18px;box-shadow:0 10px 40px #001e2430;font-size:14px }
+.v5-toast .ghost,.v5-toast .v5-icon-button { color:#fff;background:transparent;border:1px solid #ffffff66 }
+.v5-toast .v5-icon-button { min-width:38px;min-height:38px;font-size:20px }
+.aurora-app .modalBackdrop { z-index:260 }
+.aurora-app .dateNavigator { margin-bottom:0 }
+@media(min-width:851px) { .v5-toast { bottom:30px } }
+@media(max-width:1000px) { .v5-micro-grid { grid-template-columns:repeat(2,minmax(0,1fr)) }.v5-week-metrics { grid-template-columns:repeat(3,minmax(0,1fr)) }.v5-wizard-launch { flex-direction:column;align-items:stretch }.v5-wizard-launch>.v5-action-row { flex-direction:row } }
+@media(max-width:600px) {
+  .aurora-app .v5-quick-diary { padding:17px!important }
+  .v5-composer-heading { gap:8px }.v5-composer-heading h2 { font-size:20px!important }
+  .v5-capture-buttons { gap:4px }.v5-capture-buttons .v5-icon-button { min-width:42px;min-height:44px;border-radius:12px }
+  .aurora-app .v5-recent-list,.v5-dialog .v5-recent-list { grid-template-columns:1fr;gap:6px }
+  .v5-quick-diary .quickChoice { min-height:48px!important;padding:7px 11px!important }
+  .v5-quick-diary .quickChoice>span { flex-direction:row;align-items:baseline;gap:8px;flex-wrap:wrap }
+  .v5-quick-diary .quickChoice b { max-width:190px }
+  .v5-quick-diary .quickChoice small { font-size:11px }
+  .v5-segmented button { font-size:13px;padding:8px 6px }
+  .v5-dialog-backdrop { padding:0;place-items:stretch }
+  .v5-dialog { width:100%;height:100dvh;max-height:100dvh;border-radius:0 }
+  .v5-dialog-head { padding:calc(15px + env(safe-area-inset-top)) 18px 15px }
+  .v5-dialog-head h2 { font-size:23px }
+  .v5-dialog-body { padding:18px 16px calc(18px + env(safe-area-inset-bottom)) }
+  .v5-dialog .v5-capture-buttons { display:flex }
+  .v5-micro-grid { grid-template-columns:1fr;gap:12px }
+  .v5-micro-card { padding:18px }
+  .v5-week-metrics { grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0 }
+  .v5-week-metrics>div:first-child { grid-column:1/-1 }
+  .v5-week-metrics>div { padding:12px }
+  .v5-week-metrics strong { font-size:25px }
+  .v5-toast { gap:8px;padding:10px 10px 10px 14px;font-size:13px;bottom:calc(87px + env(safe-area-inset-bottom)) }
+  .v5-two-fields { grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) }
+  .v5-micro-home .cardTitle { align-items:flex-start }
+  .v5-saved-recipe-head { flex-wrap:wrap }.v5-recipe-select { flex-basis:calc(100% - 50px) }
+}
+@media(prefers-reduced-motion:reduce) { .v5-progress-track>span { transition:none } }
+html[data-theme=dark] .v5-estimate { background:#433a20;color:#e3cb83 }
+
+.v5-sticky-action>.ghost { width:100%;margin-bottom:8px }
+.v5-sources p { font-size:14px;line-height:1.6;overflow-wrap:anywhere }.v5-source-principles { display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:18px 0 }.v5-source-principles p { background:var(--bg);border:1px solid var(--line);padding:16px;border-radius:16px;margin:0 }.v5-source-links { display:flex;gap:8px 16px;flex-wrap:wrap }.v5-source-links a { font-size:13px;color:var(--accent);text-decoration:underline;overflow-wrap:anywhere }.v5-source-row { padding:15px 0;border-bottom:1px solid var(--line) }.v5-source-row h3 { margin-top:0 }.v5-sources details { margin:16px 0 }.v5-sources summary { min-height:44px;padding:10px 0;cursor:pointer;font-weight:700 }
+
+/* V5.7.1: targeted diary usability and night-theme corrections only. */
+.v5-meal-destination{display:flex;align-items:center;gap:8px;color:var(--ink);min-width:0;font-size:16px;line-height:1.25}
+.v5-meal-destination strong{overflow-wrap:anywhere;font-weight:800}
+.v5-clear-meal,.v5-day-remove{display:grid;place-items:center;flex:none;min-width:44px;min-height:44px;padding:0;background:transparent;border:1px solid var(--line);border-radius:12px;color:var(--muted);font-size:23px;line-height:1}
+.v5-dialog .v5-composer-heading{justify-content:space-between}
+.v5-dialog .v5-composer-heading>div:first-child{display:block}
+.v5-dialog .v5-composer-heading h2{display:none}
+.v5-composer-heading>div:first-child{min-width:0}
+.aurora-app .v5-search-list,.v5-dialog .v5-search-list{display:grid!important;grid-template-columns:minmax(0,1fr);gap:6px;margin:0}
+.v5-quick-diary .quickChoice b,.v5-quick-diary .quickChoice small{white-space:normal!important;overflow:visible;text-overflow:clip;max-width:none!important;overflow-wrap:anywhere}
+.v5-quick-diary .quickChoice>span{flex:1;min-width:0;align-items:flex-start}
+.v5-quick-diary .v5-search-list .quickChoice>span{flex-direction:column;gap:2px}
+.v5-quick-diary .v5-recent-list .quickChoice{min-height:44px!important;padding:5px 9px!important;gap:5px!important}
+.v5-quick-diary .v5-recent-list .quickChoice b{font-size:12px;line-height:1.2}
+.v5-quick-diary .v5-recent-list .quickChoice small{font-size:10.5px;line-height:1.2;margin:0}
+.v5-quick-diary .v5-recent-list .quickChoice>strong{font-size:18px!important}
+.v5-meal-details{margin-top:6px}
+.v5-meal-summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;min-height:32px;color:var(--muted)}
+.v5-meal-summary::-webkit-details-marker{display:none}
+.v5-meal-inline-names{flex:1;min-width:0;font-size:12px;line-height:1.4;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.v5-meal-expand{flex:none;font-size:14px;font-weight:750;color:var(--accent)}
+.v5-meal-details[open] .v5-meal-inline-names{-webkit-line-clamp:unset;overflow:visible}
+.v5-meal-details[open] .v5-meal-expand{display:none}
+.v5-meal-details[open] .v5-meal-summary:after{content:'Chiudi ▴';font-size:14px;color:var(--accent);font-weight:750}
+.v5-day-food-main{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 8px;align-items:center}
+.v5-day-remove{color:var(--danger);grid-column:3;grid-row:1;min-width:36px;min-height:36px}
+.v5-day-food-main>span{grid-column:2}
+.v5-weekly .a-kicker{font-size:18px;letter-spacing:.025em;line-height:1.25}
+.v5-hydration-compact{margin-top:12px}
+.aurora-app .v5-hydration-compact>.card{padding:11px 13px!important;margin:0!important;border-radius:16px;box-shadow:none;background:var(--card)}
+.v5-hydration-compact .card h2{font-size:16px!important}
+.v5-hydration-compact .card .ghost{min-height:38px;padding:6px 8px;font-size:12px}
+.v5-hydration-compact .card input{min-height:40px!important;padding:7px 9px!important}
+.v5-hydration-compact .card label{margin-bottom:6px}
+.v5-hydration-compact .card p{font-size:10px}
+.v5-meal-picker{color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;max-height:85dvh;width:min(92vw,460px);overflow:auto;box-shadow:0 22px 72px #0004;z-index:2000}
+.v5-meal-picker::backdrop{background:rgba(5,25,16,.55)}
+.v5-meal-picker header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.v5-meal-picker h2{font-size:20px;margin:3px 0;line-height:1.3;letter-spacing:-.025em}
+.v5-meal-picker-list{display:grid;gap:7px}
+.v5-meal-picker-list button{color:var(--ink);background:var(--bg);text-align:left;min-height:44px;padding:10px 13px;border-color:var(--line)}
+.v5-coach-settings-compact{padding:0;border:0;background:transparent}
+.v5-coach-settings-toggle{width:100%;text-align:left;font-size:12px;min-height:38px!important;color:var(--muted)}
+.v5-coach-settings-compact .v5-coach-sharing{margin-top:8px;padding:12px;box-shadow:none;border-radius:14px}
+.v5-coach-settings-compact .coach-consent-row{margin-top:8px}
+.v5-coach-sharing-done{margin-top:9px}
+.v5-coach-profile-invite{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:12px;font-size:13px}
+.v5-coach-profile-invite p{margin:5px 0;color:var(--muted)}
+.v5-wizard-outcome{flex-basis:100%;overflow-wrap:anywhere}
+@media(max-width:600px){.v5-meal-destination{font-size:15px}.v5-quick-diary .v5-recent-list .quickChoice>span{flex-wrap:wrap;align-items:baseline;gap:3px 8px}.v5-day-food-main{grid-template-columns:minmax(0,1fr) 36px}.v5-day-food-main>span{grid-column:1;grid-row:2;margin:0}.v5-day-remove{grid-column:2;grid-row:1 / 3}.v5-hydration-compact .card .ghost{min-height:40px}}
+/* These overrides only apply to dark mode. Keep Aurora's light palette unchanged. */
+html[data-theme=dark] .aurora-app :is(.sourceGroups details,.recipeReview,.recipeIngredient,.candidateBrowser,.pinnedMicro,.ndPanel,.ndItem,.qualityNotice,.emptyAction,.aiFallback,.deficitItem,.historyRow,.officialName,.planPreview,.goalGroup,.goalGroup>summary,.previewMacroGrid>div,.candidateDetailGrid>div,.labelImportRow,.labelImportCard,.addDbCard,.reportControls,.dateNavigator,.notice){background:var(--card);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] .aurora-app :is(.recipeErrors,.recipeIngredient.problem,.coverageTag.warn,.mergeWarning){background:#42351f;color:#f3dca7;border-color:#886a39}
+html[data-theme=dark] .aurora-app :is(.sourcePills span,.sourceBadges span,.masterBadge,.coverageTag,.aiRole,.chips span){background:var(--accent2);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] :is(.aurora-app,.v5-dialog) :is(.a-kicker,.v5-segmented button[aria-pressed=true],.v5-meal-expand,.v5-icon-button,.v5-day-foods-heading>span:first-child,.v5-week-metrics span,.v5-micro-gap>b,.v5-recipe-select,.v5-coach-sharing-badge){color:#c1e8b7}
+html[data-theme=dark] .v5-dialog :is(.card,.recipeIngredient,.v5-ingredient,.v5-recipe-yield,.v5-saved-recipe){background:var(--card);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] .v5-dialog .ghost{color:#c1e8b7}
+html[data-theme=dark] .v5-dialog .errorText,html[data-theme=dark] .aurora-app .errorText{color:#ffb2b8}
+html[data-theme=dark] .aurora-app :is(.a-macro-bottom,.a-energy-percent,.a-goal-value,.a-analysis-sub,.a-micro-card small,.a-action-tile:not(.a-action-ai) small,.a-ring-inner small,.a-macro-amount span,.a-energy-status>span){color:#b8c9bb}
+html[data-theme=dark] .aurora-app :is(.a-macro-heading,.a-action-tile:not(.a-action-ai),.a-goal-identity,.a-ring-inner,.a-micro-card){color:var(--ink)}
+html[data-theme=dark] .aurora-app .a-micro-card strong{color:#c1e8b7}
+html[data-theme=dark] .aurora-app .pinBtn{background:var(--accent2);color:var(--ink);border-color:var(--line)}
+html[data-theme=dark] .aurora-app .pinBtn.pinned{background:#443d26;color:#f2d785;border-color:#746341}
+html[data-theme=dark] .v5-dialog .v5-capture-buttons .v5-icon-button{color:white}
+html[data-theme=dark] .v5-toast .v5-icon-button{color:white}
+html[data-theme=dark] .v5-wizard-backdrop input:not([type=radio]):not([type=checkbox]){background:var(--vw-card);color:var(--vw-ink);border-color:var(--vw-border)}
+
+/* V5.7.2: compact only the existing Home hydration widget; no controls hidden. */
+.v5-hydration-compact{margin-top:8px}
+.aurora-app .v5-hydration-compact>.card{padding:8px 10px!important}
+.v5-hydration-compact>.card>div:nth-child(1){gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(2){margin:5px 0 4px!important;gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(2)>strong{font-size:20px!important}
+.v5-hydration-compact>.card>[role=progressbar]{height:8px!important}
+.v5-hydration-compact>.card>div:nth-child(4){margin:3px 0 5px!important;gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(5){gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(5)>button{min-height:38px!important;padding:3px 4px!important;gap:1px!important}
+.v5-hydration-compact>.card>div:nth-child(6){margin-top:5px!important;gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(6)>input{min-height:38px!important;padding:4px 7px!important}
+.v5-hydration-compact>.card>div:nth-child(6)>button{min-height:38px!important;padding:4px 7px!important}
+.v5-hydration-compact>.card>p:last-child{margin:4px 0 0!important}
