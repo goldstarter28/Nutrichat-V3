@@ -362,6 +362,7 @@ function parseSheetRows(data, type = 'array') { const wb = XLSX.read(data, { typ
 } return rows; }
 
 const h = React.createElement;
+const V5 = window.NutriTraceV5, DiaryV5 = window.NutriTraceDiaryV5;
 const NutriTraceFastFoodInput = React.memo(
   function NutriTraceFastFoodInput({
     value,
@@ -470,6 +471,14 @@ const MACRO_GOALS = [
   { id:'fiber', name:'Fibre', unit:'g', target:35, period:'day', kind:'minimum', group:'Energia e macro' }
 ];
 
+// V5 replaces only reference metadata here. Stored user targets remain intact.
+for (let i=0;i<MICRO_CATALOG.length;i++) {
+  const g=MICRO_CATALOG[i], refs=window.NutriTraceNutritionReferences;
+  const ref=refs.referenceForGoal(g.name, {});
+  MICRO_CATALOG[i]={...g,...refs.catalogMetadataPatch(g.name),dailyTarget:ref?.autoApplicable?ref.value:0,
+    noOfficialTarget:['not-established','combined-reference','special-review'].includes(ref?.type), referencePending:!ref?.autoApplicable,
+    referenceSourceIds:ref?.sourceIds||[], referenceType:ref?.type||null};
+}
 function buildDefaultGoals(){
   return [
     ...MACRO_GOALS.map(x=>({...x,targetMode:'absolute',perKg:0,pinned:false})),
@@ -481,7 +490,7 @@ function mergeGoalCatalog(saved){
   // V2.3 deliberately uses a new storage key. This merge remains useful for import/backups.
   if(!Array.isArray(saved)||!saved.length)return base;
   const map=new Map(saved.map(g=>[String(g.id),g]));
-  const out=base.map(b=>({...b,...(map.get(String(b.id))||{}),group:(map.get(String(b.id))||{}).group||b.group,targetMode:(map.get(String(b.id))||{}).targetMode||'absolute',perKg:Number((map.get(String(b.id))||{}).perKg||0),pinned:Boolean((map.get(String(b.id))||{}).pinned)}));
+  const out=base.map(b=>({...b,...(map.get(String(b.id))||{}),...((map.get(String(b.id))||b).group==='Personalizzati'?{}:window.NutriTraceNutritionReferences.catalogMetadataPatch(b.name,(map.get(String(b.id))||{}).unit||b.unit)),group:(map.get(String(b.id))||{}).group||b.group,targetMode:(map.get(String(b.id))||{}).targetMode||'absolute',perKg:Number((map.get(String(b.id))||{}).perKg||0),pinned:Boolean((map.get(String(b.id))||{}).pinned)}));
   const ids=new Set(out.map(g=>String(g.id)));
   for(const g of saved)if(!ids.has(String(g.id)))out.push({...g,group:g.group||'Personalizzati',targetMode:g.targetMode||'absolute',perKg:Number(g.perKg||0),pinned:Boolean(g.pinned)});
   return out;
@@ -1095,16 +1104,22 @@ if(hasValue)continue;
 }
 
 function GoalRow({g,index,goals,setGoals,weight,current}){
-  const patch=(x)=>{ const a=[...goals]; a[index]={...a[index],...x}; setGoals(a); };
+  const patch=(x)=>{
+    const a=[...goals], refs=window.NutriTraceNutritionReferences;
+    const metadata=x.unit && g.group!=='Personalizzati' && refs?.catalogMetadataPatch
+      ? refs.catalogMetadataPatch(g.name,x.unit) : {};
+    a[index]={...a[index],...x,...metadata,customized:true};
+    setGoals(a);
+  };
   const amount=g.targetMode==='perKg'?g.perKg:g.target, custom=g.group==='Personalizzati';
   return h('div',{className:`goalRow ${custom?'customGoal':''}`},
     h('div',{className:'goalIdentity'},custom?h('input',{value:g.name,onChange:e=>patch({name:e.target.value}),placeholder:'Nome nutriente'}):h('b',null,g.name),h('small',null,`${fmt(current,2)} ${g.unit} registrati`)),
-    h('input',{type:'number',step:'any',value:amount,onChange:e=>patch(g.targetMode==='perKg'?{perKg:Number(e.target.value)}:{target:Number(e.target.value)})}),
+    h('input',{type:'number',step:'any',value:typeof amount==='number'&&Math.abs(amount)>=.01?Number(amount.toFixed(2)):amount,onChange:e=>patch(g.targetMode==='perKg'?{perKg:Number(e.target.value)}:{target:Number(e.target.value)})}),
     h('select',{value:g.unit||'mg',onChange:e=>patch({unit:e.target.value})},h('option',{value:'g'},'g'),h('option',{value:'mg'},'mg'),h('option',{value:'µg'},'µg')),
     h('select',{value:g.targetMode||'absolute',onChange:e=>patch({targetMode:e.target.value})},h('option',{value:'absolute'},'Assoluto'),h('option',{value:'perKg'},'Per kg BW')),
     h('select',{value:g.kind||'minimum',onChange:e=>patch({kind:e.target.value})},h('option',{value:'minimum'},'Minimo'),h('option',{value:'target'},'Target'),h('option',{value:'upper'},'Massimo')),
     h('select',{value:g.period||'day',onChange:e=>patch({period:e.target.value})},h('option',{value:'day'},'Giorno'),h('option',{value:'week'},'Settimana')),
-    h('span',{className:'goalComputed'},`→ ${fmt(effectiveTarget(g,weight),2)} ${g.unit}${g.period==='week'?` / settimana · ${fmt(goalDailyReference(g,weight),2)}/die`:''}${g.ul?` · UL ${fmt(g.ul,2)}/die`:''}${g.targetMode==='perKg'?` (${fmt(Number(g.perKg||0),3)} ${g.unit}/kg)`:''}`),
+    h('span',{className:'goalComputed'},`→ ${fmt(effectiveTarget(g,weight),2)} ${g.unit}${g.period==='week'?` / settimana · ${fmt(goalDailyReference(g,weight),2)}/die`:''}${g.ul?` · UL adulti sani ${fmt(g.ul,2)} ${g.unit}/die`:''}${g.targetMode==='perKg'?` (${fmt(Number(g.perKg||0),2)} ${g.unit}/kg)`:''}`),
     g.group!=='Energia e macro'?h('button',{className:`pinBtn ${g.pinned?'pinned':''}`,title:g.pinned?'Rimuovi dai pinnati':'Pinna nel diario',onClick:()=>patch({pinned:!g.pinned})},g.pinned?'★':'☆'):null,
     custom?h('button',{className:'ghost danger',onClick:()=>setGoals(goals.filter(x=>x.id!==g.id))},'×'):null
   );
@@ -1149,6 +1164,16 @@ function CandidatePreviewModal({food,onClose}){
 }
 
 function Home(){
+  const [entryOpen,setEntryOpen]=useState(false),[entryMode,setEntryMode]=useState('food');
+  const [quickSelected,setQuickSelected]=useState(null),[directCapture,setDirectCapture]=useState(null);
+  const [recipeDestination,setRecipeDestination]=useState(null),[wizardOpen,setWizardOpen]=useState(false);
+  const [v5Notice,setV5Notice]=useState(null),[wizardUndo,setWizardUndo]=useState(()=>{try{return Boolean(localStorage.getItem('nutritrace_goals_before_wizard_v5'));}catch{return false;}});
+  const [savedRecipes,setSavedRecipes]=useState(()=>{try{return DiaryV5.normalizeRecipes(JSON.parse(localStorage.getItem('nutritrace_recipes_v5')||'[]'));}catch{return [];}});
+  const mutationLock=React.useRef(false),captureGeneration=React.useRef(0),speechRef=React.useRef(null),recipeRequest=React.useRef(0);
+  const [listening,setListening]=useState(false);
+  useEffect(()=>()=>{speechRef.current?.abort?.();},[]);
+  useEffect(()=>{if(!v5Notice)return;const timer=setTimeout(()=>setV5Notice(null),12000);return()=>clearTimeout(timer);},[v5Notice]);
+
   const [foods,setFoods]=useState([]), [logs,setLogs]=useState([]), [goals,setGoals]=useState(buildDefaultGoals()), [profile,setProfile]=useState(structuredClone(DEFAULT_PROFILE));
   const [meals,setMeals] = useState(() => {
   const config = window.NutriTraceMealConfig;
@@ -1267,6 +1292,9 @@ useEffect(()=>{
   const [candidateBrowserIndex,setCandidateBrowserIndex]=useState(null), [candidatePreview,setCandidatePreview]=useState(null), [candidatePreviewBusy,setCandidatePreviewBusy]=useState(false);
   const [reportMode,setReportMode]=useState('week'), [reportAnchor,setReportAnchor]=useState(dateKey()), [reportFrom,setReportFrom]=useState(dateKey()), [reportTo,setReportTo]=useState(dateKey());
 
+  const liveData=React.useRef(null),liveReview=React.useRef(null),liveQuick=React.useRef('');
+  liveData.current={foods,logs,recipes:savedRecipes};liveReview.current=recipeReview;liveQuick.current=quickQuery;
+
   useEffect(()=>{ try{
     setFoods(JSON.parse(localStorage.getItem('nutritrace_foods')||'[]'));
     setLogs(JSON.parse(localStorage.getItem('nutritrace_logs')||'[]'));
@@ -1336,15 +1364,11 @@ useEffect(()=>{
   const [weekStart,weekEnd]=useMemo(()=>weekBounds(selectedDate),[selectedDate]);
   const weekLogs=useMemo(()=>logs.filter(l=>l.date>=weekStart&&l.date<=weekEnd),[logs,weekStart,weekEnd]);
   const totals=useMemo(()=>aggregate(dayLogs,foods),[dayLogs,foods]), weekTotals=useMemo(()=>aggregate(weekLogs,foods),[weekLogs,foods]);
-  const recentIds=useMemo(()=>[...logs].reverse().map(l=>l.foodId).filter((id,i,a)=>a.indexOf(id)===i).slice(0,6),[logs]);
+  const recentFoods=useMemo(()=>DiaryV5.recentFoods(logs,foods,3,deviceToday),[logs,foods,deviceToday]);
   const quickSuggestions=useMemo(()=>{
   const q=quickSearchQuery.trim();
 
-  if(!q)
-    return recentIds
-      .map(id=>foods.find(f=>f.id===id))
-      .filter(Boolean)
-      .map(f=>({...f,resultType:'personal'}));
+  if(!q) return recentFoods;
 
   if(norm(q).length<2)return [];
 
@@ -1382,7 +1406,7 @@ useEffect(()=>{
 
 },[
   quickSearchQuery,foods,datasets,
-  recentIds,masterIndex,quickAiResult,foodLexicon
+  recentFoods,masterIndex,quickAiResult,foodLexicon
 ]);
   const macroPreview=useMemo(()=>computeMacroPlan(profile),[profile]);
   const pinnedGoals=goals.filter(g=>g.group!=='Energia e macro'&&g.pinned);
@@ -1412,12 +1436,12 @@ useEffect(()=>{
   const reportLogs=useMemo(()=>logs.filter(l=>l.date>=reportRange[0]&&l.date<=reportRange[1]),[logs,reportRange[0],reportRange[1]]);
   const reportTrackedDays=useMemo(()=>new Set(reportLogs.map(l=>l.date)).size,[reportLogs]);
   const reportTotals=useMemo(()=>aggregate(reportLogs,foods),[reportLogs,foods]);
-  const reportAvg=useMemo(()=>{const d=Math.max(1,reportTrackedDays),o={};for(const k of Object.keys(MACROS))o[k]=(reportTotals[k]||0)/d;return o;},[reportTotals,reportTrackedDays]);
+  const reportAvg=useMemo(()=>Object.fromEntries(Object.keys(MACROS).map(k=>[k,DiaryV5.stats(reportLogs,foods,{id:k}).average])),[reportLogs,foods]);
   const previousReportRange=useMemo(()=>previousRange(reportRange[0],reportRange[1]),[reportRange[0],reportRange[1]]);
   const previousReportLogs=useMemo(()=>logs.filter(l=>l.date>=previousReportRange[0]&&l.date<=previousReportRange[1]),[logs,previousReportRange[0],previousReportRange[1]]);
   const previousTrackedDays=useMemo(()=>new Set(previousReportLogs.map(l=>l.date)).size,[previousReportLogs]);
   const previousTotals=useMemo(()=>aggregate(previousReportLogs,foods),[previousReportLogs,foods]);
-  const previousAvg=useMemo(()=>{const d=Math.max(1,previousTrackedDays),o={};for(const k of Object.keys(MACROS))o[k]=(previousTotals[k]||0)/d;return o;},[previousTotals,previousTrackedDays]);
+  const previousAvg=useMemo(()=>Object.fromEntries(Object.keys(MACROS).map(k=>[k,DiaryV5.stats(previousReportLogs,foods,{id:k}).average])),[previousReportLogs,foods]);
   const reportGoalStats=useMemo(()=>goals.filter(g=>g.group!=='Energia e macro'&&effectiveTarget(g,profile.weight)>0).map(g=>{
     const coverage=goalCoverageFromLogs(reportLogs,foods,g,'deficiency'),current=goalNutrientTotalFromLogs(reportLogs,foods,g,'deficiency'),target=goalTargetForDays(g,profile.weight,reportTrackedDays);
     const pct=target>0?current/target:null,ulTotal=g.ul?Number(g.ul)*Math.max(1,reportTrackedDays):null;
@@ -1460,6 +1484,98 @@ const draftNdRows=draftCatalogRows.filter(
 );
 
   const ui=(path,fallback)=>cfgGet(appConfig?.ui,path,fallback);
+
+
+  function persistDiaryChange(nextFoods,nextLogs,recipes){
+    const updates=[['nutritrace_foods',JSON.stringify(nextFoods)],['nutritrace_logs',JSON.stringify(nextLogs)]];
+    if(recipes)updates.push(['nutritrace_recipes_v5',JSON.stringify(recipes)]);
+    const before=updates.map(([key])=>[key,localStorage.getItem(key)]);
+    try{for(const [key,value]of updates)localStorage.setItem(key,value);}
+    catch(error){for(const [key,value]of before){try{value===null?localStorage.removeItem(key):localStorage.setItem(key,value);}catch{}}throw new Error('Spazio sul dispositivo insufficiente: il salvataggio non è stato completato. Esporta un backup da Dati.');}
+    liveData.current={foods:nextFoods,logs:nextLogs,recipes:recipes||liveData.current.recipes};
+    setFoods(nextFoods);setLogs(nextLogs);if(recipes)setSavedRecipes(recipes);
+  }
+  function persistDiaryBatch(created,added,recipes){
+    const latest=liveData.current, nextFoods=[...latest.foods],remap=new Map();
+    for(const food of created){
+      const found=nextFoods.find(f=>f.id===food.id||(food.masterId!=null&&f.masterId!=null&&String(food.masterId)===String(f.masterId))||(food.barcode&&f.barcode===food.barcode));
+      if(found)remap.set(food.id,found.id);else nextFoods.push(food);
+    }
+    const known=new Set(nextFoods.map(f=>f.id));
+    const nextLogs=added.map(log=>({...log,foodId:remap.get(log.foodId)||log.foodId}));
+    if(nextLogs.some(log=>!known.has(log.foodId)))throw new Error('Un alimento è stato rimosso durante la preparazione. Ripeti la selezione.');
+    if(recipes)recipes=recipes.map(recipe=>({...recipe,ingredients:recipe.ingredients.map(i=>({...i,foodId:remap.get(i.foodId)||i.foodId}))}));
+    persistDiaryChange(nextFoods,[...latest.logs,...nextLogs],recipes);
+    return nextLogs;
+  }
+  function openEntry(mealId){
+    setSelectedMealId(meals.some(m=>m.id===mealId)?mealId:null);setQuickQuery('');setQuickSearchQuery('');setGrams('');setQuickSelected(null);setAiMsg('');setEntryMode('food');setEntryOpen(true);
+  }
+  function openDirectCapture(mode){
+    captureGeneration.current++;recipeRequest.current++;setRecipeBusy('');setEntryOpen(false);setRecipeReview(null);setRecipeMsg('');
+    const context={date:selectedDate,mealId:activeMealId};setRecipeDestination(context);
+    setDirectCapture({mode,context,generation:captureGeneration.current,product:null,review:false});
+  }
+  function closeDirectCapture(){if(mutationLock.current)return;captureGeneration.current++;recipeRequest.current++;setRecipeBusy('');setDirectCapture(null);setRecipeReview(null);setRecipeDestination(null);setPhotoReviewOpen(false);}
+  async function captureDish(photo){
+    const generation=captureGeneration.current;
+    await importPhotoDish(photo,true);
+    if(generation!==captureGeneration.current)return;
+    setDirectCapture(prev=>prev?{...prev,review:true}:prev);
+  }
+  function captureLabel(photo){
+    if(photo.basis!=='per_100g')throw new Error('Per registrare i valori, conferma prima una tabella riferita a 100 g.');
+    setDirectCapture(prev=>prev?{...prev,product:photo}:prev);
+  }
+  async function commitCapturedProduct(product,amount){
+    if(mutationLock.current)return;
+    if(!directCapture||!DiaryV5.positive(amount))throw new Error('Controlla la quantità.');
+    mutationLock.current=true;
+    try{
+      const result=DiaryV5.productFood(product,foods,newId()),food=result.food;
+      const log={id:newId(),createdAt:new Date().toISOString(),...directCapture.context,foodId:food.id,grams:amount,entryOrigin:product.barcode?'barcode-direct-v5':'photo-label-direct-v5'};
+      persistDiaryBatch(result.existing?[]:[food],[log]);
+      setV5Notice({text:food.name+' aggiunto al pasto',ids:[log.id]});setDirectCapture(null);setRecipeDestination(null);
+    }finally{mutationLock.current=false;}
+  }
+  function startDictation(){
+    const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!Speech){setRecipeMsg('La dettatura non è disponibile in questo browser. Puoi usare il microfono della tastiera del telefono.');return;}
+    if(listening){speechRef.current?.stop();return;}
+    const recognition=new Speech();recognition.lang='it-IT';recognition.interimResults=false;
+    recognition.onresult=e=>{const text=Array.from(e.results).map(r=>r[0].transcript).join(' ');setRecipeText(old=>(old?old+' ':'')+text);};
+    recognition.onerror=()=>{setRecipeMsg('Dettatura interrotta. Controlla il permesso del microfono o usa la tastiera.');setListening(false);};
+    recognition.onend=()=>setListening(false);speechRef.current=recognition;
+    try{recognition.start();setListening(true);}catch{setRecipeMsg('Impossibile avviare la dettatura.');}
+  }
+  async function addSavedRecipe(recipe,amount){
+    if(mutationLock.current)return;
+    mutationLock.current=true;
+    try{const portions=DiaryV5.scaleRecipe(recipe,amount,foods),groupId=newId(),now=new Date().toISOString();
+      const added=portions.map(x=>({...x,id:newId(),createdAt:now,recipeGroupId:groupId,date:selectedDate,mealId:activeMealId}));
+      persistDiaryBatch([],added);setV5Notice({text:recipe.name+' · '+fmt(amount,2)+' g aggiunti',ids:added.map(l=>l.id)});setEntryOpen(false);
+    }finally{mutationLock.current=false;}
+  }
+  function editSavedRecipe(recipe){
+    setRecipeReview({mode:'recipe',recipe_name:recipe.name,recipeId:recipe.id,saveRecipe:true,yieldOverride:recipe.yieldGrams,servings:recipe.servings||'',consumed_grams:'',ingredients:recipe.ingredients.map(i=>{const f=foods.find(x=>x.id===i.foodId);return{savedMetadata:{...(i.metadata||{})},name:f?.name||i.name,grams:i.grams,selectedKey:f?'p:'+f.id:'',candidates:f?[{...f,candidateKey:'p:'+f.id,resultType:'personal'}]:[],ambiguity:'none'};})});
+    setRecipeDestination({date:selectedDate,mealId:activeMealId});setEntryMode('text');setRecipeMsg('');
+  }
+  function removeSavedRecipe(id){
+    if(!window.confirm('Rimuovere questa ricetta salvata? Le registrazioni già nel diario restano.'))return;
+    const next=savedRecipes.filter(r=>r.id!==id);try{localStorage.setItem('nutritrace_recipes_v5',JSON.stringify(next));setSavedRecipes(next);}catch{setRecipeMsg('Ricette non salvate: spazio insufficiente.');}
+  }
+  function applyWizardResult(result){
+    const before={profile,goals},rawProfile=localStorage.getItem('nutritrace_profile_v23'),rawGoals=localStorage.getItem('nutritrace_goals_v23');
+    localStorage.setItem('nutritrace_goals_before_wizard_v5',JSON.stringify(before));
+    try{localStorage.setItem('nutritrace_profile_v23',JSON.stringify(result.profile));localStorage.setItem('nutritrace_goals_v23',JSON.stringify(result.goals));}
+    catch(error){try{rawProfile===null?localStorage.removeItem('nutritrace_profile_v23'):localStorage.setItem('nutritrace_profile_v23',rawProfile);rawGoals===null?localStorage.removeItem('nutritrace_goals_v23'):localStorage.setItem('nutritrace_goals_v23',rawGoals);}catch{}throw new Error('Impossibile salvare gli obiettivi sul dispositivo.');}
+    setProfile(result.profile);setGoals(result.goals);setWizardOpen(false);setWizardUndo(true);setV5Notice({text:'Obiettivi aggiornati. Puoi modificarli in qualsiasi momento.'});
+  }
+  function undoWizard(){
+    try{const previous=JSON.parse(localStorage.getItem('nutritrace_goals_before_wizard_v5')||'null');if(!previous?.profile||!Array.isArray(previous.goals))throw new Error('Nessun ripristino disponibile.');
+      applyWizardResult(previous);setV5Notice({text:'Ripristinati gli obiettivi precedenti.'});
+    }catch(e){setV5Notice({text:e.message});}
+  }
 
   function valueForGoal(g,ag){ const v=goalValueFromAggregate(g,ag); if(v===0&&g.name==='Sodio'&&ag.salt>0)return convert(ag.salt/2.5,'g',g.unit); return v; }
   function openBarcodeProduct(product) {
@@ -1584,7 +1700,8 @@ function saveFood() {
       ...prev,
       {
         id: newId(),
-        date: selectedDate,
+        date: barcodeDiary.date || selectedDate,
+        createdAt:new Date().toISOString(),
         foodId: food.id,
         grams: gramsValue,
         mealId
@@ -1598,7 +1715,7 @@ function saveFood() {
   function addFoodLog(foodId, g = grams, extra = {}) {
   const amount = Number(g);
 
-  if (!foodId || !Number.isFinite(amount) || amount <= 0) {
+  if (!foodId || !Number.isFinite(amount) || amount <= 0 || amount > 10000) {
     return;
   }
 
@@ -1607,6 +1724,7 @@ function saveFood() {
     {
       id: newId(),
       date: selectedDate,
+      createdAt:new Date().toISOString(),
       foodId,
       grams: amount,
       ...extra,
@@ -1624,83 +1742,31 @@ function saveFood() {
     return fresh;
   }
   async function quickAdd(r) {
-  let useGrams = Number(grams);
-  let portion = null;
-
-  if (!(useGrams > 0)) {
-    portion = findPortionCatalog(
-      [quickQuery, r?.name],
-      appConfig,
-      '',
-      countFromText(quickQuery) || 1
-    );
-
-    if (portion) useGrams = portion.grams;
-  }
-
-  if (!Number.isFinite(useGrams) || useGrams <= 0) {
-    setAiMsg(
-      'Peso non definito: indica i grammi oppure ' +
-      'usa la ricerca AI per stimare la porzione.'
-    );
-    return;
-  }
-
-  const extra = portion
-    ? { portionAssumption: portion.assumption }
-    : {};
-
-  if (r.resultType === 'personal') {
-    addFoodLog(r.id, useGrams, extra);
-    setQuickQuery('');
-    setGrams('');
-    return;
-  }
-
-  try {
-    setRecipeBusy('quick');
-
-    let food;
-
-    if (r.resultType === 'master') {
-      food = foods.find(
-        f => String(f.masterId || '') === String(r.id)
-      );
-
-      if (!food) {
-        food = await masterFoodFromResult(
-          r,
-          quickQuery || r.name
-        );
-
-        setFoods(previous => [...previous, food]);
+    if(mutationLock.current)return;
+    const isRecent=Boolean(r.recentLog&&!quickQuery.trim());
+    const amount=String(grams).trim()===''?(isRecent?DiaryV5.number(r.recentLog.grams):null):DiaryV5.number(grams);
+    if(!DiaryV5.positive(amount)){
+      setQuickSelected(r);setAiMsg(String(grams).trim()===''?'':'Inserisci una quantità positiva, fino a 10.000 g.');
+      requestAnimationFrame(()=>document.querySelector('[data-v5-grams]')?.focus());return;
+    }
+    const destination={date:selectedDate,mealId:activeMealId};
+    mutationLock.current=true;setRecipeBusy('quick');setAiMsg('');
+    try {
+      let food=r.resultType==='personal'?foods.find(f=>f.id===r.id):r.resultType==='master'?foods.find(f=>String(f.masterId||'')===String(r.id)):foods.find(f=>f.sourceId&&f.sourceId===r.sourceId&&f.source===r.source);
+      const created=!food;
+      if(!food)food=r.resultType==='master'?await masterFoodFromResult(r,quickQuery||r.name):materializeImported(r,quickQuery||r.name);
+      if(!food)throw new Error('Alimento non più disponibile.');
+      const log={...(isRecent?DiaryV5.recentMetadata(r.recentLog):{}),id:newId(),createdAt:new Date().toISOString(),...destination,foodId:food.id,grams:amount};
+      if(isRecent&&String(grams).trim()!==''&&amount!==DiaryV5.number(r.recentLog.grams)){
+        for(const key of ['quantity','unit','gramsPerUnit','portionEstimatedMinGrams','portionEstimatedMaxGrams','portionConfidence','portionAssumption','portionNote'])delete log[key];
+        log.portionEstimatedByAI=false;log.portionOrigin='manual';
       }
-    } else {
-      food = materializeImported(
-        r,
-        quickQuery || r.name
-      );
-
-      setFoods(previous => [...previous, food]);
-    }
-
-    addFoodLog(food.id, useGrams, extra);
-
-    setQuickQuery('');
-    setGrams('');
-
-    if (portion) {
-      setAiMsg(
-        `Porzione standard applicata: ${portion.assumption}.`
-      );
-    }
-
-  } catch (error) {
-    setAiMsg(error.message || 'Inserimento non riuscito.');
-  } finally {
-    setRecipeBusy('');
+      persistDiaryBatch(created?[food]:[],[log]);
+      setV5Notice({text:food.name+' · '+fmt(amount,2)+' g aggiunti',ids:[log.id]});
+      setQuickQuery('');setQuickSearchQuery('');setGrams('');setQuickSelected(null);setEntryOpen(false);
+    }catch(error){setAiMsg(error.message||'Inserimento non riuscito.');}
+    finally{mutationLock.current=false;setRecipeBusy('');}
   }
-}
   function materializeImported(f,alias=''){ const source=f.sourceInfo||f.source; const useAlias=alias.trim(); return {...emptyFood(),source:f.source||'',sourceId:f.sourceId||'',name:useAlias?alias.trim():f.name,officialName:f.officialName||f.name,aliases:[...new Set([...(f.aliases||[]),...(useAlias?[alias.trim()]:[])])],brand:f.brand||'',servingGrams:f.servingGrams||100,label:f.label||emptyFood().label,ingredients:f.ingredients||'',nutrients:f.nutrients||[],sources:[source],mergeMeta:{importedFrom:f.source||source?.name}}; }
   function openImported(f,alias=query){ const same=foods.find(z=>(z.sourceId&&z.sourceId===f.sourceId)||(norm(z.name)===norm(f.name)&&norm(z.brand||'')===norm(f.brand||''))); if(same) setFoodDraft({...structuredClone(same),mergeMeta:{mode:'review',candidate:f}}); else setFoodDraft(materializeImported(f,alias)); setTab('alimenti'); }
   async function openResult(r,alias=query){
@@ -1901,7 +1967,9 @@ async function importPhotoLabel(photo) {
 
 
 
-async function importPhotoDish(photo) {
+async function importPhotoDish(photo,direct=false) {
+  const captureToken=captureGeneration.current,requestToken=++recipeRequest.current;
+  if(!direct)setRecipeDestination({date:selectedDate,mealId:activeMealId});
   const description = typeof photo === 'string'
     ? photo.trim()
     : String(photo?.description || '').trim();
@@ -2070,9 +2138,10 @@ async function importPhotoDish(photo) {
     // L'utente deve ancora selezionare e confermare
     // la corrispondenza database di ogni alimento.
 
+    if(requestToken!==recipeRequest.current||(direct&&captureToken!==captureGeneration.current))return;
     setRecipeText(text);
     setRecipeReview(review);
-    setPhotoReviewOpen(true);
+    setPhotoReviewOpen(!direct);
 
     if (review.errors?.length) {
       setRecipeMsg(review.errors.join(' · '));
@@ -2085,7 +2154,7 @@ async function importPhotoDish(photo) {
     );
 
   } finally {
-    setRecipeBusy('');
+    if(requestToken===recipeRequest.current)setRecipeBusy('');
   }
 }
 
@@ -2219,9 +2288,11 @@ function editCatalogNutrient(name, unit, value) {
     return {...parsed,mode,ingredients,errors:unresolvedErrors,yieldOverride:parsed.final_recipe_weight_g||''};
   }
   async function interpretRecipe(){
-    if(!recipeText.trim())return;setRecipeBusy('parse');setRecipeMsg('');setRecipeReview(null);
-    try{const review=await interpretText(recipeText,'recipe');setRecipeReview(review);if(review.errors?.length)setRecipeMsg(review.errors.join(' · '));}
-    catch(e){setRecipeMsg(e.message)}finally{setRecipeBusy('')}
+    if(!recipeText.trim())return;
+    const token=++recipeRequest.current;
+    setRecipeDestination({date:selectedDate,mealId:activeMealId});setRecipeBusy('parse');setRecipeMsg('');setRecipeReview(null);
+    try{const review=await interpretText(recipeText,'recipe');if(token!==recipeRequest.current)return;setRecipeReview(review);if(review.errors?.length)setRecipeMsg(review.errors.join(' · '));}
+    catch(e){if(token===recipeRequest.current)setRecipeMsg(e.message);}finally{if(token===recipeRequest.current)setRecipeBusy('');}
   }
   async function quickSearchWithAI(){
   const text=quickQuery.trim();
@@ -2233,6 +2304,7 @@ function editCatalogNutrient(name, unit, value) {
 
   try{
     const review=await interpretText(text,'search');
+    if(liveQuick.current!==text)return;
     const ingredients=review.ingredients||[];
 
     if(ingredients.length!==1){
@@ -2358,7 +2430,7 @@ function editCatalogNutrient(name, unit, value) {
       if(!found.length)setSearchError('Alimento interpretato, ma nessuna corrispondenza database sufficientemente affidabile.');
     }catch(e){setSearchError(e.message)}finally{setAiBusy('')}
   }
-  function updateRecipeIngredient(i,patch){const rr=structuredClone(recipeReview);rr.ingredients[i]={...rr.ingredients[i],...patch};setRecipeReview(rr);}
+  function updateRecipeIngredient(i,patch){if(!liveReview.current?.ingredients?.[i])return;const rr=structuredClone(liveReview.current);rr.ingredients[i]={...rr.ingredients[i],...patch};setRecipeReview(rr);}
   function rerunRecipeCandidates(i){const ing=recipeReview.ingredients[i],r=ingredientCandidates(ing,'none');updateRecipeIngredient(i,r);setCandidateBrowserIndex(i);}
   async function previewCandidate(c,alias=''){
     if(!c)return;setCandidatePreviewBusy(true);setRecipeMsg('');
@@ -2370,18 +2442,22 @@ function editCatalogNutrient(name, unit, value) {
     }catch(e){setRecipeMsg(e.message)}finally{setCandidatePreviewBusy(false)}
   }
   async function estimateRecipeIngredient(i){
-    const ing=recipeReview.ingredients[i];setRecipeBusy(`ai-${i}`);setRecipeMsg('');
+    const original=liveReview.current,ing=original?.ingredients?.[i];if(!ing)return;
+    const token=++recipeRequest.current;setRecipeBusy('ai-'+i);setRecipeMsg('');
     try{
-      const parsed=await parseFoodEntry(ing.name,'search');const raw=parsed.ingredients?.[0];if(!raw)throw new Error('L’AI non ha reinterpretato l’alimento.');
-      const weighted=applyPortionPolicy({...ing,...raw,grams:ing.grams||raw.grams},appConfig);const match=ingredientCandidates(weighted,weighted.ambiguity);
-      updateRecipeIngredient(i,{...weighted,...match});
-      if(!match.candidates.length)setRecipeMsg(`AI: “${weighted.name}” interpretato, ma nessuna corrispondenza DB affidabile.`);
-    }catch(e){setRecipeMsg(e.message)}finally{setRecipeBusy('')}
+      const parsed=await parseFoodEntry(ing.name,'search');if(token!==recipeRequest.current||liveReview.current!==original)return;
+      const raw=parsed.ingredients?.[0];if(!raw)throw new Error('L’AI non ha reinterpretato l’alimento.');
+      const weighted=applyPortionPolicy({...ing,...raw,grams:ing.grams||raw.grams},appConfig),match=ingredientCandidates(weighted,weighted.ambiguity);
+      setRecipeReview({...original,ingredients:original.ingredients.map((item,j)=>i===j?{...item,...weighted,...match}:item)});
+      if(!match.candidates.length)setRecipeMsg('Nessuna corrispondenza affidabile: prova a precisare il nome.');
+    }catch(e){if(token===recipeRequest.current)setRecipeMsg(e.message);}finally{if(token===recipeRequest.current)setRecipeBusy('');}
   }
   
-async function commitRecipe() {
-  if (!recipeReview) return;
-
+async function commitRecipe(options={}) {
+  const saveOnly=options?.saveOnly===true;
+  if (!recipeReview||mutationLock.current) return;
+  mutationLock.current=true;
+  const destination=recipeDestination||{date:selectedDate,mealId:activeMealId};
   setRecipeBusy('commit');
   setRecipeMsg('');
 
@@ -2394,7 +2470,7 @@ async function commitRecipe() {
 
     const bad = ingredients.filter(ing =>
       !Number.isFinite(Number(ing.grams)) ||
-      Number(ing.grams) <= 0 ||
+      Number(ing.grams) <= 0 || Number(ing.grams)>10000 ||
       !ing.selectedKey ||
       ing.ambiguity === 'needs_detail'
     );
@@ -2420,12 +2496,10 @@ async function commitRecipe() {
 
     if (isRecipe) {
       const yieldG =
-        Number(recipeReview.yieldOverride) ||
-        ingredientSum;
+        (String(recipeReview.yieldOverride??'').trim()===''?ingredientSum:DiaryV5.number(recipeReview.yieldOverride));
 
-      consumed =
-        Number(recipeReview.consumed_grams) ||
-        yieldG;
+      consumed = saveOnly?yieldG:Number(recipeReview.consumed_grams);
+      if(!DiaryV5.positive(consumed)||!DiaryV5.positive(yieldG))throw new Error('Indica quanti grammi di ricetta hai mangiato (massimo 10.000 g).');
 
       if (!(yieldG > 0) || !(consumed > 0)) {
         throw new Error(
@@ -2439,6 +2513,7 @@ async function commitRecipe() {
 
     const created = [];
     const newLogs = [];
+    const savedIngredients=[];
 
     for (const ing of ingredients) {
       let food = null;
@@ -2508,21 +2583,23 @@ async function commitRecipe() {
         );
       }
 
+      const portionMeta={...(ing.savedMetadata||{})};
+      if(ing.portion_assumption)portionMeta.portionAssumption=ing.portion_assumption;
+      if(ing.visualPortionSource){Object.assign(portionMeta,{portionOrigin:ing.visualPortionSource,portionEstimatedByAI:ing.visualPortionSource==='ai_visual_estimate',portionConfidence:ing.visualPortionConfidence||'none',portionEstimatedMinGrams:ing.visualPortionMinGrams??null,portionEstimatedMaxGrams:ing.visualPortionMaxGrams??null});}
+      else if(ing.portionResolution?.type==='ai_portion'){Object.assign(portionMeta,{portionOrigin:'ai-text-estimate',portionEstimatedByAI:true});}
+      else if(ing.portionResolution?.type==='catalog'){Object.assign(portionMeta,{portionOrigin:'catalog-standard',portionEstimatedByAI:false,portionAssumption:ing.portion_assumption||'Porzione standard, non pesata'});}
+      if(ing.gramsUserEdited&&!ing.visualPortionSource){delete portionMeta.quantity;delete portionMeta.unit;delete portionMeta.gramsPerUnit;delete portionMeta.portionEstimatedMinGrams;delete portionMeta.portionEstimatedMaxGrams;}
+      savedIngredients.push({foodId:food.id,name:ing.name,grams:Number(ing.grams),metadata:portionMeta});
       const grams = Number(ing.grams) * factor;
 
-      if (!Number.isFinite(grams) || grams <= 0) {
+      if (!DiaryV5.positive(grams)) {
         throw new Error(
           `Peso non valido: ${ing.name}`
         );
       }
 
-      const log = {
-  id: newId(),
-  date: selectedDate,
-  foodId: food.id,
-  grams,
-  mealId: activeMealId
-};
+      const log = {...portionMeta,id:newId(),createdAt:new Date().toISOString(),...destination,foodId:food.id,grams};
+      if(factor!==1){if(Number(log.quantity)>0)log.quantity*=factor;for(const field of ['portionEstimatedMinGrams','portionEstimatedMaxGrams'])if(Number(log[field])>0)log[field]*=factor;}
 
       if (isRecipe) {
         log.recipeGroupId = groupId;
@@ -2536,52 +2613,19 @@ async function commitRecipe() {
           ing.portion_assumption;
       }
 
-      if (ing.visualPortionSource) {
-        log.portionOrigin =
-          ing.visualPortionSource;
-
-        log.portionConfidence =
-          ing.visualPortionConfidence || 'none';
-
-        log.portionEstimatedMinGrams =
-          ing.visualPortionMinGrams ?? null;
-
-        log.portionEstimatedMaxGrams =
-          ing.visualPortionMaxGrams ?? null;
-
-        log.portionEstimatedByAI =
-          ing.visualPortionSource ===
-          'ai_visual_estimate';
-      }
 
       newLogs.push(log);
     }
 
-    // Il ciclo è terminato: tutti gli alimenti
-    // sono stati risolti correttamente.
-
-    if (created.length) {
-      setFoods(previous => [
-        ...previous,
-        ...created.filter(food =>
-          !previous.some(existing =>
-            existing.id === food.id ||
-            (
-              food.masterId != null &&
-              existing.masterId != null &&
-              String(existing.masterId) ===
-              String(food.masterId)
-            )
-          )
-        )
-      ]);
+    let recipes=null;
+    if(isRecipe&&(recipeReview.saveRecipe||saveOnly)){
+      const saved={id:recipeReview.recipeId||newId(),name:recipeReview.recipe_name||'Ricetta',yieldGrams:String(recipeReview.yieldOverride??'').trim()===''?ingredientSum:DiaryV5.number(recipeReview.yieldOverride),servings:recipeReview.servings||null,createdAt:new Date().toISOString(),ingredients:savedIngredients};
+      recipes=DiaryV5.normalizeRecipes([...liveData.current.recipes.filter(r=>r.id!==saved.id),saved]);
+      if(!recipes.some(r=>r.id===saved.id))throw new Error('La ricetta non può essere salvata: controlla ingredienti e peso finale.');
     }
-
-    setLogs(previous => [
-      ...previous,
-      ...newLogs
-    ]);
-
+    persistDiaryBatch(created,saveOnly?[]:newLogs,recipes);
+    setV5Notice({text:saveOnly?'Ricetta salvata':isRecipe?'Ricetta aggiunta al pasto':newLogs.length+' alimenti aggiunti al pasto',ids:saveOnly?undefined:newLogs.map(l=>l.id)});
+    setDirectCapture(null);setEntryOpen(false);setPhotoReviewOpen(false);setRecipeDestination(null);
     setRecipeText('');
     setRecipeReview(null);
 
@@ -2601,6 +2645,7 @@ async function commitRecipe() {
     );
 
   } finally {
+    mutationLock.current=false;
     setRecipeBusy('');
   }
 }
@@ -2630,7 +2675,8 @@ async function commitRecipe() {
     }
 
     const backup = {
-  version: 6,
+  version: 7,
+  savedRecipes,
   foods,
   logs,
   goals,
@@ -2678,7 +2724,7 @@ function importBackup(event) {
         throw new Error('Formato del backup non valido.');
       }
 
-      if (Number(data.version || 4) > 6) {
+      if (Number(data.version || 4) > 7) {
         throw new Error(
           'Backup creato con una versione più recente di NutriTrace.'
         );
@@ -2722,6 +2768,13 @@ function importBackup(event) {
         sections.push('Profilo: presente');
       }
 
+      if(own('savedRecipes')){
+        const recipes=DiaryV5.normalizeRecipes(data.savedRecipes);
+        if(!Array.isArray(data.savedRecipes)||recipes.length!==data.savedRecipes.length)throw new Error('Ricette non valide nel backup.');
+        const foodIds=new Set((own('foods')?data.foods:foods).map(f=>f.id));
+        if(recipes.some(r=>r.ingredients.some(i=>!foodIds.has(i.foodId))))throw new Error('Una ricetta usa alimenti assenti dal backup.');
+        updates.set('nutritrace_recipes_v5',JSON.stringify(recipes));sections.push('Ricette: '+recipes.length);
+      }
       let restoredMeals = null;
 
       if (own('meals')) {
@@ -2938,140 +2991,68 @@ function importBackup(event) {
     selectedDate!==deviceToday?h('button',{className:'ghost todayBtn',onClick:()=>setSelectedDate(deviceToday)},'Oggi'):null
   );
 
+
+  const mealLabel=meals.find(m=>m.id===activeMealId)?.name||'Alimenti del giorno';
+  const recipeReviewView=recipeReview?h(V5.RecipeReview,{review:recipeReview,onChange:setRecipeReview,busy:recipeBusy,message:recipeMsg,onFind:i=>{const ing=recipeReview.ingredients[i];updateRecipeIngredient(i,ingredientCandidates(ing,'none'));},onAI:estimateRecipeIngredient,onCommit:commitRecipe,onSave:()=>commitRecipe({saveOnly:true})}):null;
+  const composer=h('article',{className:'card quickDiary v5-quick-diary'},
+    h('div',{className:'v5-composer-heading'},h('div',null,h('span',{className:'a-kicker'},mealLabel),h('h2',null,selectedDate===deviceToday?'Cosa hai mangiato oggi?':'Aggiungi al '+shortDate(selectedDate))),
+      h('div',{className:'v5-capture-buttons'},h('button',{className:'v5-icon-button',onClick:()=>openDirectCapture('photo'),'aria-label':'Fotografa il cibo',title:'Foto cibo'},h(window.NutriTraceAurora.Icon,{name:'camera',size:22})),h('button',{className:'v5-icon-button',onClick:()=>openDirectCapture('barcode'),'aria-label':'Scansiona codice a barre',title:'Codice a barre'},h(window.NutriTraceAurora.Icon,{name:'barcode',size:22})))),
+    h('div',{className:'v5-segmented v5-entry-tabs',role:'group','aria-label':'Metodo di inserimento'},[['food','Alimento'],['text','Voce / ricetta'],['recipes','Salvate']].map(([id,label])=>h('button',{key:id,'aria-pressed':entryMode===id,onClick:()=>{setEntryMode(id);setAiMsg('');}},label))),
+    entryMode==='food'&&h(React.Fragment,null,
+      h('div',{className:'quickInputs'},h('label',null,'Cerca un alimento',h(NutriTraceFastFoodInput,{value:quickQuery,onQueryChange:text=>{setQuickQuery(text);setQuickAiResult(null);setQuickSelected(null);setAiMsg('');}})),h('label',null,'Quantità · g',h('input',{'data-v5-grams':true,type:'number',inputMode:'decimal',min:'.1',max:'10000',step:'any',value:grams,placeholder:'Peso',onChange:e=>{setGrams(e.target.value);setAiMsg('');}}))),
+      quickSelected&&h('div',{className:'v5-selected-food'},h('b',null,quickSelected.name),h('button',{className:'cta',disabled:recipeBusy==='quick',onClick:()=>quickAdd(quickSelected)},recipeBusy==='quick'?'Aggiunta…':'Aggiungi al pasto')),
+      !quickQuery.trim()&&recentFoods.length>0&&h('span',{className:'v5-recent-label'},'Gli ultimi 3 · con la quantità dell’ultima volta'),
+      quickSuggestions.length?h('div',{className:'quickSuggestions v5-recent-list'},quickSuggestions.map(r=>h('button',{className:'quickChoice',key:r.resultType==='master'?'m:'+r.id:r.id||r.localId,onClick:()=>quickAdd(r),disabled:recipeBusy==='quick'},h('span',null,h('b',null,r.name),h('small',null,r.recentLog?fmt(r.recentLog.grams,2)+' g · ultima porzione':r.resultType==='personal'?'Il tuo archivio · scegli la quantità':'Database · scegli la quantità')),h('strong',{'aria-hidden':'true'},'+')))):quickQuery.trim()?h('p',{className:'v5-note'},'Nessuna corrispondenza. Prova Aiuto AI o inserisci un alimento manuale.'):h('p',{className:'v5-note'},'Cerca un alimento oppure usa foto, barcode e voce.'),
+      quickQuery.trim()&&h('div',{className:'v5-action-row'},h('button',{className:'ghost',disabled:Boolean(recipeBusy),onClick:quickSearchWithAI},recipeBusy==='quick-ai'?'Ricerca…':'Aiuto AI'),h('button',{className:'ghost',onClick:()=>{setFoodDraft({...emptyFood(),name:quickQuery.trim(),aliases:[quickQuery.trim()],barcodeDiary:{add:true,grams:'',mealId:activeMealId||'',date:selectedDate}});setEntryOpen(false);}},'Inserisci manualmente')),
+      aiMsg&&h('p',{className:'errorText',role:'alert'},aiMsg)),
+    entryMode==='text'&&h('div',{className:'v5-text-entry'},h('label',null,'Descrivi il pasto o gli ingredienti',h('textarea',{rows:3,value:recipeText,onChange:e=>setRecipeText(e.target.value),placeholder:'Es. 150 g di yogurt e una banana. Oppure: una ricetta con 200 g di farina…'})),
+      h('div',{className:'v5-action-row'},h('button',{className:'ghost','aria-pressed':listening,onClick:startDictation},listening?'Ferma dettatura':'Detta a voce'),h('button',{className:'cta',onClick:interpretRecipe,disabled:Boolean(recipeBusy)||!recipeText.trim()},recipeBusy==='parse'?'Interpretazione…':'Interpreta e verifica')),
+      h('small',{className:'v5-note'},'Con “Interpreta” il testo viene inviato al servizio AI. La dettatura usa il servizio vocale del browser, se disponibile.'),
+      recipeDestination&&recipeReview&&h('p',{className:'v5-note'},'Destinazione: '+shortDate(recipeDestination.date)+' · '+(meals.find(m=>m.id===recipeDestination.mealId)?.name||'Alimenti del giorno')),
+      !recipeReview&&recipeMsg&&h('p',{className:'errorText',role:'alert'},recipeMsg),recipeReviewView),
+    entryMode==='recipes'&&h(V5.Recipes,{recipes:savedRecipes,foods,onAdd:addSavedRecipe,onNew:()=>{setEntryMode('text');setRecipeReview(null);setRecipeText('');setRecipeMsg('');},onEdit:editSavedRecipe,onRemove:removeSavedRecipe})
+  );
+
   return h('main',{className:'aurora-app'},
     h(window.NutriTraceAurora.Header,{
       darkMode,
       onToggleTheme:()=>setDarkMode(value=>!value)
     }),
-    h(window.NutriTraceAurora.Navigation,{tab,onChange:setTab}),
+    h(window.NutriTraceAurora.Navigation,{tab,onChange:next=>{setTab(next);window.scrollTo({top:0,behavior:'instant'});}}),
+    v5Notice&&h('div',{className:'v5-toast',role:'status'},h('span',null,v5Notice.text),v5Notice.ids&&h('button',{className:'ghost',onClick:()=>{try{persistDiaryChange(foods,logs.filter(l=>!v5Notice.ids.includes(l.id)));setV5Notice(null);}catch(e){setV5Notice({text:e.message});}}},'Annulla'),h('button',{className:'v5-icon-button','aria-label':'Chiudi messaggio',onClick:()=>setV5Notice(null)},'×')),
     tab==='coach'&&h('section',{className:'aurora-coach'},h(window.NutriTraceAurora.PageIntro,{kicker:'INTELLIGENZA ALIMENTARE',title:'Coach AI',description:'Una conversazione intelligente per analizzare e comprendere la tua alimentazione.',icon:'sparkles'}),h(window.NutriTraceAICoach.View,{logs,foods,goals,profile})),
     tab==='oggi'&&h('section',{className:'aurora-today'},
       dateNavigator,
-                h('details',{
-  id:'nutritrace-meal-settings',
-  className:'card',
-  style:{marginBottom:'16px'}
-},
-  h('summary',null,'⚙️ Configura i pasti'),
-
-  h('p',{className:'muted tiny'},
-    'Aggiungi, rinomina, elimina o riordina i pasti. ' +
-    'La configurazione viene salvata automaticamente.'
-  ),
-
-  ...meals.map((meal,index)=>
-    h('div',{
-      key:meal.id,
-      style:{
-        display:'flex',
-        alignItems:'center',
-        gap:'8px',
-        flexWrap:'wrap',
-        marginBottom:'10px'
-      }
-    },
-      h('strong',{
-        style:{flex:'1',minWidth:'110px'}
-      },meal.name),
-
-      h('button',{
-        className:'ghost',
-        disabled:index===0,
-        onClick:()=>setMeals(current=>
-          window.NutriTraceMealConfig.move(
-            current,meal.id,-1
-          )
-        )
-      },'↑'),
-
-      h('button',{
-        className:'ghost',
-        disabled:index===meals.length-1,
-        onClick:()=>setMeals(current=>
-          window.NutriTraceMealConfig.move(
-            current,meal.id,1
-          )
-        )
-      },'↓'),
-
-      h('button',{
-        className:'ghost',
-        onClick:()=>{
-          const name=window.prompt(
-            'Nuovo nome del pasto:',
-            meal.name
-          );
-          if(name===null)return;
-          if(!name.trim()){
-            window.alert('Il nome non può essere vuoto.');
-            return;
-          }
-          setMeals(current=>
-            window.NutriTraceMealConfig.rename(
-              current,meal.id,name
-            )
-          );
-        }
-      },'Rinomina'),
-
-      h('button',{
-        className:'ghost danger',
-        onClick:()=>{
-          if(!window.confirm(
-            `Eliminare il pasto "${meal.name}"?`
-          ))return;
-          setMeals(current=>
-            window.NutriTraceMealConfig.remove(
-              current,meal.id
-            )
-          );
-        }
-      },'Elimina')
-    )
-  ),
-
-  h('button',{
-    className:'cta',
-    onClick:()=>{
-      const name=window.prompt(
-        'Nome del nuovo pasto:'
-      );
-      if(name===null)return;
-      if(!name.trim()){
-        window.alert('Inserisci un nome valido.');
-        return;
-      }
-      if(meals.length>=20){
-        window.alert('Massimo 20 pasti.');
-        return;
-      }
-      setMeals(current=>
-        window.NutriTraceMealConfig.add(
-          current,name
-        )
-      );
-    }
-  },'+ Aggiungi pasto')
-),
+      h(window.NutriTraceAurora.DailyOverview,{
+        metrics:[
+    ['kcal','Calorie','kcal'],
+    ['protein','Proteine','g'],
+    ['carbs','Carboidrati','g'],
+    ['fat','Grassi','g'],
+    ['fiber','Fibre','g']
+  ].map(([id,label,unit])=>{
+    const g=goals.find(x=>x.id===id);
+    return {
+      id,label,unit,
+      value:totals[id],
+      target:effectiveTarget(g||{},profile.weight),
+      coverage:dayLogs.length?macroCoverage(dayLogs,foods,id):1,
+      kind:g?.kind||'target'
+    };
+  }),
+        onAdd:()=>openEntry(activeMealId),
+        onSearch:()=>setTab('ricerca'),
+        onCoach:()=>setTab('coach')
+      }),
+      !entryOpen&&!directCapture&&composer,
     h(window.NutriTraceAurora.MealDiaryPanel,{
   meals,
   logs:dayLogs,
   foods,
   favorites:mealFavorites,
 
-  onAdd:mealId=>{
-    setSelectedMealId(
-      meals.some(m=>m.id===mealId)?mealId:null
-    );
-    setQuickQuery('');
-    requestAnimationFrame(()=>{
-      document.querySelector('.quickDiary')
-        ?.scrollIntoView({
-          behavior:'smooth',
-          block:'start'
-        });
-    });
-  },
+  showDayFoods:false,
+  onAdd:openEntry,
 
   onAssign:(logId,mealId)=>{
     const id=meals.some(m=>m.id===mealId)
@@ -3203,7 +3184,7 @@ function importBackup(event) {
         foods
       );
 
-      setLogs(previous=>[...previous,log]);
+      setLogs(previous=>[...previous,{...log,createdAt:new Date().toISOString(),quantity:favorite.quantity,unit:favorite.unit,gramsPerUnit:favorite.gramsPerUnit}]);
     }catch(error){
       window.alert(error.message);
     }
@@ -3225,7 +3206,7 @@ function importBackup(event) {
         return;
       }
 
-      setLogs(previous=>[...previous,...copied]);
+      setLogs(previous=>[...previous,...copied.map(log=>({...log,createdAt:new Date().toISOString()}))]);
     }catch(error){
       window.alert(error.message);
     }
@@ -3249,127 +3230,120 @@ function importBackup(event) {
         key:selectedDate,
         date:selectedDate
       }),
-      h(window.NutriTraceAurora.DailyOverview,{
-        metrics:[
-    ['kcal','Calorie','kcal'],
-    ['protein','Proteine','g'],
-    ['carbs','Carboidrati','g'],
-    ['fat','Grassi','g'],
-    ['fiber','Fibre','g']
-  ].map(([id,label,unit])=>{
-    const g=goals.find(x=>x.id===id);
-    return {
-      id,label,unit,
-      value:totals[id],
-      target:effectiveTarget(g||{},profile.weight),
-      coverage:dayLogs.length?macroCoverage(dayLogs,foods,id):1,
-      kind:g?.kind||'target'
-    };
-  }),
-        onAdd:()=>document.querySelector('.quickDiary')?.scrollIntoView({behavior:'smooth',block:'start'}),
-        onSearch:()=>setTab('ricerca'),
-        onCoach:()=>setTab('coach')
-      }),
-     h('article',{className:'card quickDiary'},
-  activeMealId&&h('p',{className:'statusMsg'},
-    'Stai aggiungendo a: '+
-    (meals.find(m=>m.id===activeMealId)?.name||'Pasto')
-  ),
-  h('div',{className:'cardTitle'},h('div',null,h('h2',null,selectedDate===deviceToday?'Cosa hai mangiato oggi?':`Aggiungi al ${shortDate(selectedDate)}`),h('p',null,'Il Master DB è la fonte primaria. Ogni voce resta associata al giorno selezionato.'))),
-        h('div', { className: 'quickInputs' },
+      h(window.NutriTraceMealDiary.DayFoods,{logs:dayLogs,foods,meals}),
+      h(V5.WeeklyOverview,{logs:weekLogs,foods,label:shortDate(weekStart)+' – '+shortDate(weekEnd)}),
+      h('article',{className:'card v5-micro-home'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,'I tuoi micronutrienti'),h('p',null,'Quantità registrate e scarto dai tuoi obiettivi.')),h('button',{className:'ghost',onClick:()=>setTab('micro')},'Apri Micro')),
+        pinnedGoals.length?h('div',{className:'v5-micro-grid'},pinnedGoals.slice(0,3).map(g=>h(V5.MicroCard,{key:g.id,goal:g,weight:profile.weight,stats:DiaryV5.stats(dayLogs,foods,g)}))):h('p',{className:'v5-note'},'Trovi il dettaglio del giorno, le medie e l’andamento in Altro → Micro. Aggiungi una stella ai nutrienti che vuoi vedere qui.')),
+                h('details',{
+  id:'nutritrace-meal-settings',
+  className:'card',
+  style:{marginBottom:'16px'}
+},
+  h('summary',null,'⚙️ Configura i pasti'),
 
-  h('label', null,
-    'Alimento',
-
-    h(NutriTraceFastFoodInput, {
-      value: quickQuery,
-      onQueryChange: text => {
-  setQuickQuery(text);
-  setQuickAiResult(null);
-  setAiMsg('');
-}
-    })
+  h('p',{className:'muted tiny'},
+    'Aggiungi, rinomina, elimina o riordina i pasti. ' +
+    'La configurazione viene salvata automaticamente.'
   ),
 
-  h('label', null,
-    ui('search.gramsLabel', 'Grammi'),
-
-    h('input', {
-      type: 'number',
-      min: '0.1',
-      step: 'any',
-      value: grams,
-      placeholder: 'Inserisci il peso in grammi',
-      onChange: event => {
-        setGrams(event.target.value);
-        setAiMsg('');
+  ...meals.map((meal,index)=>
+    h('div',{
+      key:meal.id,
+      style:{
+        display:'flex',
+        alignItems:'center',
+        gap:'8px',
+        flexWrap:'wrap',
+        marginBottom:'10px'
       }
-    })
-  )
-),
+    },
+      h('strong',{
+        style:{flex:'1',minWidth:'110px'}
+      },meal.name),
 
-aiMsg && h('p', {
-  className: 'errorText',
-  role: 'alert'
-}, aiMsg),
-        h('div',{className:'masterStatusLine'},h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus),h('small',null,'N/D ≠ 0 · valori multi-fonte quando esiste corrispondenza sicura')),
-        quickSuggestions.length?h('div',{className:'quickSuggestions'},quickSuggestions.map(r=>h('button',{className:'quickChoice',key:r.resultType==='master'?`m:${r.id}`:(r.id||r.localId),onClick:()=>quickAdd(r),disabled:recipeBusy==='quick'},h('span',null,h('b',null,r.name),h('small',null,r.resultType==='personal'?'Archivio personale':r.resultType==='master'?`Master DB · ${r.sc||1} ${Number(r.sc||1)===1?'fonte':'fonti'} · ${(r.sources||[]).join(', ')}`:(SOURCE_META[r.source]?.name||'Database locale'))),h('strong',null,recipeBusy==='quick'?'…':'+ Aggiungi')))):quickQuery.trim()?h('div',{className:'emptyAction'},h('span',{className:'muted'},ui('search.notFound','Nessuna corrispondenza nel Master DB o nei database personali.')),h('div',{className:'inlineActions'},h('button',{className:'ghost',onClick:()=>{setFoodDraft({...emptyFood(),name:quickQuery.trim(),aliases:[quickQuery.trim()]});setTab('alimenti');}},ui('search.manualButton','Inserisci manualmente')))):null,
-        quickQuery.trim()&&h('div',{className:'inlineActions'},h('button',{className:'cta',disabled:recipeBusy==='quick-ai',onClick:quickSearchWithAI},recipeBusy==='quick-ai'?ui('search.aiWorking','Ricerca AI…'):ui('search.aiButton','Ricerca con AI'))),
-        h('div',{className:'recipeComposer'},
-          h('div',{className:'recipeComposerHead'},h('div',null,h('b',null,ui('recipe.title','Voce libera / lista / ricetta')),h('p',{className:'muted tiny'},ui('recipe.subtitle','L’AI interpreta il testo; peso e corrispondenza database vengono poi validati dal codice.'))),h('span',{className:'aiRole'},'AI = interprete')),
-          h('textarea',{rows:3,value:recipeText,onChange:e=>setRecipeText(e.target.value),placeholder:'es. Ho mangiato 200 g di torta fatta con 100 g zucchero, 200 g farina 00, 50 g cacao e …'}),
-          h('div',{className:'inlineActions'},h('button',{className:'cta',onClick:interpretRecipe,disabled:recipeBusy==='parse'||!recipeText.trim()},recipeBusy==='parse'?'Interpretazione…':ui('recipe.interpretButton','Interpreta e verifica')),h('small',{className:'muted'},'Pesi mancanti o alimenti realmente ambigui vengono fermati prima del calcolo.')),
-          recipeMsg&&h('p',{className:/^(Ricetta aggiunta|Alimenti aggiunti|Alimento aggiunto)/.test(recipeMsg)?'statusMsg':'errorText'},recipeMsg),
-          recipeReview&&h('div',{className:'recipeReview'},
-            h('div',{className:'recipeSummary'},h('div',null,h('b',null,recipeReview.recipe_name||'Voce libera'),h('small',null,recipeReview.mode==='recipe'?'Ricetta composta':recipeReview.mode==='multi'?'Lista di alimenti':'Alimento singolo')),h('div',null,recipeReview.mode==='recipe'?h(React.Fragment,null,h('small',null,'Porzione dichiarata'),h('strong',null,recipeReview.consumed_grams?`${fmt(recipeReview.consumed_grams)} g`:'non specificata')):h(React.Fragment,null,h('small',null,'Alimenti interpretati'),h('strong',null,String(recipeReview.ingredients?.length||0))))),
-            (recipeReview.errors||[]).length?h('div',{className:'recipeErrors'},(recipeReview.errors||[]).map((x,i)=>h('div',{key:i},`• ${x}`))):null,
-            h('div',{className:'recipeIngredients'},(recipeReview.ingredients||[]).map((ing,i)=>{
-              const problem=!(Number(ing.grams)>0)||!ing.selectedKey||ing.ambiguity==='needs_detail';
-              return h('div',{className:`recipeIngredient ${problem?'problem':''}`,key:`ing-${i}`},
-                h('div',{className:'recipeIngredientTop'},h('b',null,`${recipeReview.mode==='recipe'?'Ingrediente':'Alimento'} ${i+1}`),problem?h('span',{className:'coverageTag warn'},'da verificare'):h('span',{className:'coverageTag ok'},'risolto')),
-                h('div',{className:'recipeGrid'},
-                  h('label',null,'Alimento interpretato',h('input',{value:ing.name||'',onChange:e=>updateRecipeIngredient(i,{name:e.target.value,ambiguity:'none',ambiguity_reason:'',selectedKey:''})})),
-                  h('label',null,'Grammi',h('input',{type:'number',min:'0',step:'any',value:ing.grams??'',placeholder:ing.quantity_text||'peso richiesto',onChange:e=>updateRecipeIngredient(i,{grams:e.target.value,gramsUserEdited:true})})),
-                  h('label',{className:'candidateSelect'},'Corrispondenza database',h('select',{value:ing.selectedKey||'',onChange:e=>updateRecipeIngredient(i,{selectedKey:e.target.value,ambiguity:e.target.value?'none':ing.ambiguity})},h('option',{value:''},'— seleziona —'),...(ing.candidates||[]).map(c=>h('option',{key:c.candidateKey,value:c.candidateKey},`${c.name} · ${c.resultType==='master'?`Master ${c.sc||1} fonti`:'personale'}`))))
-                ),
-                ing.preparation&&norm(ing.preparation)!=='none'&&h('small',{className:'muted'},`Preparazione: ${ing.preparation}`),
-                ing.portion_assumption&&h('small',{className:'muted portionAssumption'},`Porzione applicata: ${ing.portion_assumption}`),
-                ing.ambiguity_reason&&h('p',{className:'errorText tiny'},ing.ambiguity_reason),
-                h('div',{className:'recipeActions'},h('button',{className:'ghost',onClick:()=>rerunRecipeCandidates(i)},ui('recipe.dbSearchButton','Ricerche DB e dettagli')),!(ing.candidates||[]).length?h('button',{className:'ghost',disabled:recipeBusy===`ai-${i}`,onClick:()=>estimateRecipeIngredient(i)},recipeBusy===`ai-${i}`?'Ricerca…':ui('recipe.aiEstimateButton','Ricerca con AI')):null),
-                candidateBrowserIndex===i&&h('div',{className:'candidateBrowser'},
-                  h('div',{className:'candidateBrowserHead'},h('b',null,'Corrispondenze database'),h('small',null,'Apri la scheda completa prima di selezionare.')),
-                  !(ing.candidates||[]).length?h('p',{className:'muted tiny'},'Nessuna corrispondenza affidabile. Usa Ricerca con AI per espandere semanticamente la query.'):
-                  (ing.candidates||[]).map(c=>h('div',{className:'candidateRow',key:c.candidateKey},
-                    h('div',null,h('b',null,c.name),h('small',null,c.resultType==='master'?`Master · ${c.sc||1} ${Number(c.sc||1)===1?'fonte':'fonti'}${c.core?' · macro core completi':''}`:'Archivio personale')),
-                    h('div',{className:'inlineActions'},
-                      h('button',{className:'ghost',disabled:candidatePreviewBusy,onClick:()=>previewCandidate(c,ing.name)},candidatePreviewBusy?'Caricamento…':'Dettagli'),
-                      h('button',{className:'cta',onClick:()=>{updateRecipeIngredient(i,{selectedKey:c.candidateKey,ambiguity:'none'});setCandidateBrowserIndex(null);}},'Seleziona')
-                    )
-                  ))
-                )
-              );
-            })),
-            recipeReview.mode==='recipe'?h('div',{className:'recipeFinalize'},
-              h('label',null,'Peso finale ricetta (g, consigliato se cotta)',h('input',{type:'number',min:'0',step:'any',value:recipeReview.yieldOverride??'',placeholder:'se vuoto = somma ingredienti',onChange:e=>setRecipeReview({...recipeReview,yieldOverride:e.target.value})})),
-              h('p',{className:'muted tiny'},'Se non indichi il peso finale, viene usata la somma dei grammi degli ingredienti: per cotture con perdita/assorbimento d’acqua è solo un’approssimazione di resa.'),
-              h('button',{className:'cta',onClick:commitRecipe,disabled:recipeBusy==='commit'},recipeBusy==='commit'?'Calcolo…':`Aggiungi ricetta al ${shortDate(selectedDate)}`)
-            ):h('div',{className:'recipeFinalize'},
-              h('p',{className:'muted tiny'},recipeReview.mode==='multi'?'Ogni alimento verrà registrato separatamente con il proprio peso.':'L’alimento verrà registrato con il peso risolto sopra.'),
-              h('button',{className:'cta',onClick:commitRecipe,disabled:recipeBusy==='commit'},recipeBusy==='commit'?'Aggiunta…':recipeReview.mode==='multi'?`Aggiungi tutti al ${shortDate(selectedDate)}`:`Aggiungi al ${shortDate(selectedDate)}`)
-            )
+      h('button',{
+        className:'ghost',
+        disabled:index===0,
+        onClick:()=>setMeals(current=>
+          window.NutriTraceMealConfig.move(
+            current,meal.id,-1
           )
         )
-      ),
-      h('div',{className:'twoCol'},
-        h('article',{className:'card'},h('h2',null,'Settimana selezionata'),h('p',{className:'muted'},`${shortDate(weekStart)} – ${shortDate(weekEnd)}`),h('div',{className:'miniGrid'},h('div',null,h('small',null,'Energia'),h('strong',null,`${fmt(weekTotals.kcal)} kcal`)),h('div',null,h('small',null,'Proteine'),h('strong',null,`${fmt(weekTotals.protein)} g`)),h('div',null,h('small',null,'Carboidrati'),h('strong',null,`${fmt(weekTotals.carbs)} g`)),h('div',null,h('small',null,'Grassi'),h('strong',null,`${fmt(weekTotals.fat)} g`))))
-      ),
-      pinnedGoals.length?h('article',{className:'card'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,'Micronutrienti pinnati'),h('p',null,'I nutrienti che vuoi controllare sempre, senza scorrere l’intero elenco.')),h('button',{className:'ghost',onClick:()=>setTab('obiettivi')},'Gestisci pin')),h('div',{className:'pinnedGrid'},pinnedGoals.map(g=>{const current=valueForGoal(g,totals),target=effectiveTarget(g,profile.weight),coverage=goalCoverageFromLogs(dayLogs,foods,g);return h('div',{className:'pinnedMicro',key:g.id},h('div',null,h('b',null,g.name),h('small',null,dayLogs.length?`Copertura dati ${fmt(coverage*100,0)}%`:'Nessun alimento registrato')),h('strong',null,`${fmt(current,3)} / ${fmt(target,3)} ${g.unit}`),h('div',{className:'miniBar'},h('span',{style:{width:`${Math.min(100,target?current/target*100:0)}%`}})));}))) : null,
-      h('article',{className:'card deficitCard'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,'Micronutrienti più carenti · settimana'),h('p',null,`Top 6 rispetto ai tuoi obiettivi sui ${trackedWeekDays||0} giorni registrati. Giorni non registrati e nutrienti con copertura dati <65% non vengono falsamente trattati come zero.`)),h('button',{className:'ghost',onClick:()=>setShowAllDeficits(true)},'Vedi tutti')),
-        !topDeficits.length?h('p',{className:'empty'},weekLogs.length?'Nessuna carenza classificabile con copertura dati sufficiente. Controlla “Vedi tutti” per i nutrienti con dati incompleti.':'Nessun dato nella settimana selezionata.'):
-        h('div',{className:'deficitGrid'},topDeficits.map(x=>h('button',{className:'deficitItem',key:x.g.id,onClick:()=>setShowAllDeficits(true)},h('div',null,h('b',null,x.g.name),h('small',null,`Copertura ${fmt(x.coverage*100,0)}%`)),h('strong',null,`−${fmt(x.deficit*100,0)}%`),h('span',null,`${fmt(x.current,2)} / ${fmt(x.target,2)} ${x.g.unit}`))))
-      ),
-      h('article',{className:'card'},h('h2',null,'Micronutrienti del giorno'),!Object.keys(totals.nutrients).length?h('p',{className:'empty'},'Nessun micronutriente numerico registrato. I campi N/D non vengono sommati come zero.'):h('div',{className:'nutriTable'},Object.entries(totals.nutrients).sort().map(([k,v])=>{const [n,form,unit]=k.split('|');return h('div',{className:'bioRow',key:k},h('div',null,h('b',null,n),h('small',null,form)),h('strong',null,`${fmt(v.amount,3)} ${unit}`),h('span',null,[...v.sources].join(', ')));})))
+      },'↑'),
+
+      h('button',{
+        className:'ghost',
+        disabled:index===meals.length-1,
+        onClick:()=>setMeals(current=>
+          window.NutriTraceMealConfig.move(
+            current,meal.id,1
+          )
+        )
+      },'↓'),
+
+      h('button',{
+        className:'ghost',
+        onClick:()=>{
+          const name=window.prompt(
+            'Nuovo nome del pasto:',
+            meal.name
+          );
+          if(name===null)return;
+          if(!name.trim()){
+            window.alert('Il nome non può essere vuoto.');
+            return;
+          }
+          setMeals(current=>
+            window.NutriTraceMealConfig.rename(
+              current,meal.id,name
+            )
+          );
+        }
+      },'Rinomina'),
+
+      h('button',{
+        className:'ghost danger',
+        onClick:()=>{
+          if(!window.confirm(
+            `Eliminare il pasto "${meal.name}"?`
+          ))return;
+          setMeals(current=>
+            window.NutriTraceMealConfig.remove(
+              current,meal.id
+            )
+          );
+        }
+      },'Elimina')
+    )
+  ),
+
+  h('button',{
+    className:'cta',
+    onClick:()=>{
+      const name=window.prompt(
+        'Nome del nuovo pasto:'
+      );
+      if(name===null)return;
+      if(!name.trim()){
+        window.alert('Inserisci un nome valido.');
+        return;
+      }
+      if(meals.length>=20){
+        window.alert('Massimo 20 pasti.');
+        return;
+      }
+      setMeals(current=>
+        window.NutriTraceMealConfig.add(
+          current,name
+        )
+      );
+    }
+  },'+ Aggiungi pasto')
+)
+
     ),
+
+    tab==='micro'&&h(V5.MicroPage,{logs,foods,goals,profile,date:selectedDate,weekStart,weekEnd,dateNavigator,onGoals:()=>setTab('obiettivi'),onSources:()=>{setTab('dati');requestAnimationFrame(()=>document.getElementById('v5-scientific-sources')?.scrollIntoView({behavior:'smooth'}));},onPin:id=>setGoals(gs=>gs.map(g=>g.id===id?{...g,pinned:!g.pinned}:g))}),
 
     tab==='ricerca'&&h('section',{className:'aurora-search'},
       h(window.NutriTraceAurora.SearchHero,{
@@ -3672,6 +3646,7 @@ h('div',{className:'card labelImportCard'},
     ),
 
     tab==='obiettivi'&&h('section',{className:'aurora-goals'},
+      h('article',{className:'v5-wizard-launch card'},h('div',null,h('span',{className:'a-kicker'},'UN PERCORSO SU MISURA'),h('h2',null,'Personalizza i miei obiettivi'),h('p',null,'Un passo alla volta, fino a 20 domande. Le risposte restano sul dispositivo e decidi tu se condividerle con il Coach. Gli obiettivi rimangono sempre modificabili.')),h('div',{className:'v5-action-row'},h('button',{className:'cta',onClick:()=>setWizardOpen(true)},profile.wizardV5?'Rivedi il percorso':'Inizia il percorso'),wizardUndo&&h('button',{className:'ghost',onClick:undoWizard},'Ripristina obiettivi precedenti'))),
       h(window.NutriTraceAurora.GoalsHero,{
         metrics:[
     ['kcal','Calorie','kcal'],
@@ -3689,12 +3664,12 @@ h('div',{className:'card labelImportCard'},
       kind:g?.kind||'target'
     };
   }),
-        micros:pinnedGoals.map(g=>({
-          id:g.id,name:g.name,unit:g.unit,
-          value:valueForGoal(g,totals),
-          target:effectiveTarget(g,profile.weight),
-          coverage:dayLogs.length?goalCoverageFromLogs(dayLogs,foods,g):0
-        }))
+        micros:pinnedGoals.map(g=>{const stat=DiaryV5.stats(dayLogs,foods,g);return {
+          id:g.id,name:g.name,unit:g.unit,value:stat.sum,
+          kind:g.kind,referenceType:g.referenceType,noOfficialTarget:g.noOfficialTarget,referenceNote:g.referenceNote,group:g.group,
+          target:goalDailyReference(g,profile.weight),comparisonAvailable:stat.comparisonAvailable,
+          coverage:stat.coverage,qualityNote:stat.basisReason||(stat.estimatedCount||stat.limitedQualityCount?'Include stime o dati di qualità limitata':'')
+        };})
       }),
       
       h('div',{className:'twoCol goalsTop'},
@@ -3755,7 +3730,7 @@ h('div',{className:'card labelImportCard'},
             h('label',null,'Gestione calorie',h('select',{value:profile.macroPlan.calorieMode,onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,calorieMode:e.target.value}})},h('option',{value:'fixed'},'Calorie fisse · un macro automatico'),h('option',{value:'derived'},'Calorie automatiche dai macro'))),
             profile.macroPlan.calorieMode==='fixed'&&h('label',null,'Calorie target',h('input',{type:'number',step:'1',value:profile.macroPlan.kcal,onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,kcal:e.target.value}})})),
             profile.macroPlan.calorieMode==='fixed'&&h('label',null,'Macro automatico',h('select',{value:profile.macroPlan.autoMacro,onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,autoMacro:e.target.value}})},h('option',{value:'carbs'},'Carboidrati'),h('option',{value:'protein'},'Proteine'),h('option',{value:'fat'},'Grassi'))),
-            ...[['protein','Proteine'],['carbs','Carboidrati'],['fat','Grassi'],['sugar','Zuccheri semplici'],['fiber','Fibre']].map(([k,l])=>h('label',{key:k},`${l} (g/kg)`,h('input',{type:'number',step:'any',disabled:profile.macroPlan.calorieMode==='fixed'&&profile.macroPlan.autoMacro===k,value:macroPreview.perKg[k],onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,perKg:{...profile.macroPlan.perKg,[k]:e.target.value}}})})))
+            ...[['protein','Proteine'],['carbs','Carboidrati'],['fat','Grassi'],['sugar','Zuccheri semplici'],['fiber','Fibre']].map(([k,l])=>h('label',{key:k},`${l} (g/kg)`,h('input',{type:'number',step:'any',disabled:profile.macroPlan.calorieMode==='fixed'&&profile.macroPlan.autoMacro===k,value:profile.macroPlan.calorieMode==='fixed'&&profile.macroPlan.autoMacro===k?Number(Number(macroPreview.perKg[k]).toFixed(2)):(typeof profile.macroPlan.perKg[k]==='number'?Number(profile.macroPlan.perKg[k].toFixed(2)):profile.macroPlan.perKg[k]),onChange:e=>setProfile({...profile,macroPlan:{...profile.macroPlan,perKg:{...profile.macroPlan.perKg,[k]:e.target.value}}})})))
           ),
           h('div',{className:'planPreview'},h('b',null,`${fmt(macroPreview.kcal,0)} kcal`),h('span',null,`P ${fmt(macroPreview.grams.protein)} g · C ${fmt(macroPreview.grams.carbs)} g · G ${fmt(macroPreview.grams.fat)} g · zuccheri ${fmt(macroPreview.grams.sugar)} g · fibre ${fmt(macroPreview.grams.fiber)} g`)),
           profile.macroPlan.calorieMode==='fixed'&&macroPreview.derivedKcal>macroPreview.kcal+1&&h('p',{className:'errorText tiny'},`Combinazione impossibile: i macro fissati richiedono già ${fmt(macroPreview.derivedKcal,0)} kcal, oltre il target di ${fmt(macroPreview.kcal,0)} kcal.`),
@@ -3801,16 +3776,10 @@ tab==='peso'&&h('section',{className:'aurora-peso'},
   to:reportRange[1]
 }),
                        h('div',{className:'reportMetricGrid'},
-        [['kcal','kcal/die'],['protein','g proteine/die'],['carbs','g carboidrati/die'],['fat','g grassi/die'],['fiber','g fibre/die']].map(([k,label])=>h('article',{className:'metric',key:k},h('span',null,label),h('div',{className:'reportMetricValue'},h('strong',null,fmt(reportAvg[k],1))),h('small',null,previousTrackedDays?`Periodo precedente: ${fmt(previousAvg[k],1)}${previousAvg[k]?` · ${reportAvg[k]>=previousAvg[k]?'+':''}${fmt((reportAvg[k]-previousAvg[k])/previousAvg[k]*100,0)}%`:''}`:'Nessun confronto precedente')))
+        [['kcal','kcal/die'],['protein','g proteine/die'],['carbs','g carboidrati/die'],['fat','g grassi/die'],['fiber','g fibre/die']].map(([k,label])=>h('article',{className:'metric',key:k},h('span',null,label),h('div',{className:'reportMetricValue'},h('strong',null,fmtMaybe(reportAvg[k],2))),h('small',null,previousTrackedDays?`Periodo precedente: ${fmtMaybe(previousAvg[k],2)}${previousAvg[k]?` · ${reportAvg[k]>=previousAvg[k]?'+':''}${fmt((reportAvg[k]-previousAvg[k])/previousAvg[k]*100,0)}%`:''}`:'Nessun confronto precedente')))
       ),
       h('div',{className:'twoCol reportColumns'},
-        h('article',{className:'card'},h('div',{className:'cardTitle'},h('div',null,h('h2',null,'Micronutrienti e obiettivi'),h('p',null,'Valutazione basata solo sui giorni registrati e sui dati strutturati con copertura sufficiente.'))),
-          !reportTrackedDays?h('p',{className:'empty'},'Nessun giorno registrato nel periodo.'):
-          h('div',{className:'reportGoalList'},...reportGoalStats.map(x=>h('div',{className:`reportGoalRow ${x.status}`,key:x.g.id},
-            h('div',null,h('b',null,x.g.name),h('small',null,`Copertura ${fmt(x.coverage*100,0)}%${x.g.components?.length?` · ${x.g.components.join(' + ')}`:''}`)),
-            h('div',{className:'reportGoalNumbers'},h('span',null,`${fmt(x.current,3)} / ${fmt(x.target,3)} ${x.g.unit}`),h('strong',null,x.status==='insufficient'?'Dati insufficienti':x.status==='high'?'Alto':x.status==='low'?'Basso':'Adeguato'))
-          )))
-        ),
+        h('article',{className:'card'},h('h2',null,'Micronutrienti'),h('p',{className:'muted'},'Quantità, barre di avanzamento, medie e copertura sono raccolte nella sezione Micro.'),h('button',{className:'cta',onClick:()=>setTab('micro')},'Apri Micro')),
         h('article',{className:'card reportHistory'},h('h2',null,'Cronologia'),h('p',{className:'muted'},'Apri qualsiasi periodo passato: il report viene ricalcolato dai dati reali del diario.'),
           h('details',{open:true},h('summary',null,`Settimane · ${reportHistory.weeks.length}`),h('div',{className:'historyList'},...reportHistory.weeks.map(x=>h('button',{className:'historyRow',key:x.from,onClick:()=>{setReportMode('week');setReportAnchor(x.from);}},h('span',null,`${shortDate(x.from)} – ${shortDate(x.to)}`),h('small',null,`${x.trackedDays}/7 giorni · ${x.count} registrazioni`))))),
           h('details',null,h('summary',null,`Mesi · ${reportHistory.months.length}`),h('div',{className:'historyList'},...reportHistory.months.map(x=>h('button',{className:'historyRow',key:x.from,onClick:()=>{setReportMode('month');setReportAnchor(x.from);}},h('span',null,parseDateKey(x.from).toLocaleDateString('it-IT',{month:'long',year:'numeric'})),h('small',null,`${x.trackedDays} giorni · ${x.count} registrazioni`))))),
@@ -3820,6 +3789,7 @@ tab==='peso'&&h('section',{className:'aurora-peso'},
     ),
 
     tab==='dati'&&h('section',{className:'aurora-dati'},
+      h('div',{id:'v5-scientific-sources'},h(window.NutriTraceNutritionReferences.SourcesView,{profile,goals})),
       h(window.NutriTraceAurora.PageIntro,{kicker:'QUALITÀ DEI DATI',title:'Dati e database',description:'Fonti scientifiche, archivi personali e backup, tutti sotto il tuo controllo.',icon:'grid'}),
       h('article',{className:'card masterCard'},
         h('div',{className:'cardTitle'},h('div',null,h('span',{className:'eyebrow'},'DATABASE INTEGRATO'),h('h2',null,`NutriTrace Runtime DB ${masterManifest?.runtime_version||'v1'}`),h('p',null,'Fonte primaria dell’app: valori normalizzati per 100 g, provenance conservata, fusioni conservative e N/D espliciti.')),h('span',{className:`masterBadge ${masterManifest?'ok':'loading'}`},masterStatus)),
@@ -3846,15 +3816,13 @@ tab==='peso'&&h('section',{className:'aurora-peso'},
       h('article',{className:'card notice'},h('h3',null,'Ruolo dell’AI dopo il Master DB'),h('p',null,'OpenRouter serve soprattutto a interpretare testo libero, ricette e ambiguità. La stima numerica AI è l’ultima risorsa: non sovrascrive dati strutturati, non usa 0 per “sconosciuto”, impone unità lato codice e rifiuta stime a bassa confidenza o nutrienti ad alto rischio. OPENROUTER_API_KEY resta esclusivamente nella Vercel Function.'))
     ),
 
-    showAllDeficits&&h('div',{className:'modalBackdrop'},h('div',{className:'modal allDeficits'},
-      h('div',{className:'modalHead'},h('div',null,h('span',{className:'eyebrow'},'SETTIMANA SELEZIONATA'),h('h2',null,'Micronutrienti ordinati per carenza'),h('p',{className:'muted'},`${shortDate(weekStart)} – ${shortDate(weekEnd)}`)),h('button',{className:'close',onClick:()=>setShowAllDeficits(false)},'×')),
-      h('p',{className:'qualityNotice'},'Un nutriente entra nella classifica di carenza solo con almeno il 65% di copertura ponderata degli alimenti registrati. Copertura inferiore = dati insufficienti, non assunzione zero.'),
-      h('div',{className:'deficitList'},weeklyDeficits.map(x=>h('div',{className:`deficitRow ${x.dataSufficient?'':'insufficient'}`,key:x.g.id},
-        h('div',null,h('b',null,x.g.name),h('small',null,`Copertura dati ${fmt(x.coverage*100,0)}% · ${x.g.period==='week'?'target settimanale':'target giornaliero × 7'}`)),
-        h('div',{className:'deficitNumbers'},h('span',null,`${fmt(x.current,3)} / ${fmt(x.target,3)} ${x.g.unit}`),h('strong',null,!x.dataSufficient?'Dati insufficienti':x.deficit>0?`−${fmt(x.deficit*100,0)}%`:'Target raggiunto'))
-      ))),
-      h('div',{className:'modalActions'},h('button',{className:'cta',onClick:()=>setShowAllDeficits(false)},'Chiudi'))
-    )),
+
+    entryOpen&&h(V5.Dialog,{title:'Aggiungi a '+mealLabel,subtitle:shortDate(selectedDate),onClose:()=>{if(!mutationLock.current){recipeRequest.current++;setRecipeBusy('');setEntryOpen(false);speechRef.current?.stop?.();}}},composer),
+    directCapture&&h(V5.Dialog,{title:directCapture.product?'Conferma la porzione':directCapture.review?'Controlla il pasto':directCapture.mode==='photo'?'Foto del cibo':'Codice a barre',subtitle:shortDate(directCapture.context.date)+' · '+(meals.find(m=>m.id===directCapture.context.mealId)?.name||'Alimenti del giorno'),onClose:closeDirectCapture},
+      directCapture.product?h(V5.ProductReview,{key:directCapture.product.barcode||directCapture.product.name,product:directCapture.product,foods,mealLabel:meals.find(m=>m.id===directCapture.context.mealId)?.name||'Alimenti del giorno',dateLabel:shortDate(directCapture.context.date),onBack:()=>setDirectCapture(prev=>({...prev,product:null})),onConfirm:commitCapturedProduct}):
+      directCapture.review?recipeReviewView:
+      directCapture.mode==='photo'?h(window.NutriTraceFoodCamera,{onLabel:captureLabel,onDish:captureDish,confirmLabel:'Controlla la porzione'}):h(window.NutriTraceBarcodeScanner,{onProduct:product=>setDirectCapture(prev=>prev?{...prev,product}:prev)})),
+    wizardOpen&&h(window.NutriTraceGoalsWizard.View,{profile,goals,onApply:applyWizardResult,onClose:()=>setWizardOpen(false)}),
 
     candidatePreview&&h(CandidatePreviewModal,{food:candidatePreview,onClose:()=>setCandidatePreview(null)}),
 

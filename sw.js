@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v3-aurora-v4-' + '20261122';
+const CACHE = 'nutritrace-v5-20261123';
 
 const CORE = [
   './',
@@ -9,6 +9,13 @@ const CORE = [
   './app.js',
   './aurora-components.js',
   './aurora-v4.css',
+  './aurora-v5.css',
+  './aurora-v5-surfaces.css',
+  './goals-wizard-v5.css',
+  './goals-wizard-v5.js',
+  './diary-v5.js',
+  './aurora-v5.js',
+  './nutrition-reference-v5.js',
   './ai-coach.js',
   './ai-coach-chat.js',
   './coach-markdown.js',
@@ -18,6 +25,7 @@ const CORE = [
   './food-search-bridge.js',
   './data/food-lexicon-it-en.json',
   './food-camera.js',
+  './barcode-scanner.js',
   './meal-config.js',
 './meal-shortcuts.js',
 './meal-analytics.js',
@@ -47,11 +55,12 @@ const CORE = [
 const VENDOR = [
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js',
-  'https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js'
+  'https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js',
+  'https://unpkg.com/@zxing/browser@0.2.1'
 ];
 
 
-const APP_ASSET = /\/(?:app\.js|food-camera\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v4\.css|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
+const APP_ASSET = /\/(?:app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
@@ -74,7 +83,7 @@ self.addEventListener('activate', event => {
 
     await Promise.all(
       keys
-        .filter(key => key !== CACHE)
+        .filter(key => key !== CACHE && /^nutritrace-(?:v3-aurora-v4-|v5-)/.test(key))
         .map(key => caches.delete(key))
     );
 
@@ -84,6 +93,8 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  // API responses are live; preserve offline food caches across app upgrades.
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
 
   event.respondWith((async () => {
     const url = new URL(event.request.url);

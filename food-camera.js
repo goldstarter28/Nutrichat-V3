@@ -111,7 +111,7 @@
     }
   }
 
-  function FoodCamera({onLabel,onDish}) {
+  function FoodCamera({onLabel,onDish,confirmLabel='Crea scheda alimento'}) {
     const [busy,setBusy] = useState(false);
     const [result,setResult] = useState(null);
     const [error,setError] = useState('');
@@ -554,7 +554,7 @@
         },
           type==='dish'
             ? 'Conferma e prepara il diario'
-            : 'Crea scheda alimento'
+            : confirmLabel
         )
       ),
 

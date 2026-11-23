@@ -1,4 +1,4 @@
-/* NutriTrace Aurora v4 — presentation-only React primitives.
+/* NutriTrace Aurora V5 — presentation-only React primitives.
  * All records, events, API and AI calls remain in the original app.js.
  * No persistence and no network calls are introduced by this file.
  */
@@ -13,6 +13,7 @@
     { id: 'alimenti', title: 'Alimenti', icon: 'food' },
     { id: 'obiettivi', title: 'Obiettivi', icon: 'target' },
     { id: 'peso', title: 'Peso', icon: 'scale' },
+    { id: 'micro', title: 'Micronutrienti', icon: 'leaf' },
     { id: 'analisi', title: 'Analisi', icon: 'chart' },
     { id: 'coach', title: 'Coach AI', icon: 'sparkles' },
     { id: 'dati', title: 'Dati', icon: 'grid' }
@@ -70,6 +71,25 @@
   }
   function Navigation({tab,onChange}) {
     const [more,setMore]=React.useState(false);
+    const panelRef=React.useRef(null), triggerRef=React.useRef(null);
+    React.useEffect(()=>{
+      if(!more)return;
+      const previousFocus=document.activeElement, oldOverflow=document.body.style.overflow;
+      document.body.style.overflow='hidden';
+      const frame=requestAnimationFrame(()=>panelRef.current?.querySelector('button')?.focus());
+      function keydown(event){
+        if(event.key==='Escape'){event.preventDefault();setMore(false);return;}
+        if(event.key!=='Tab')return;
+        const nodes=[...(panelRef.current?.querySelectorAll('button:not(:disabled),[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')||[])];
+        if(!nodes.length)return;
+        const first=nodes[0],last=nodes[nodes.length-1];
+        if(event.shiftKey&&(document.activeElement===first||!panelRef.current.contains(document.activeElement))){event.preventDefault();last.focus();}
+        else if(!event.shiftKey&&(document.activeElement===last||!panelRef.current.contains(document.activeElement))){event.preventDefault();first.focus();}
+      }
+      document.addEventListener('keydown',keydown);
+      return()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',keydown);document.body.style.overflow=oldOverflow;
+        (previousFocus?.isConnected?previousFocus:triggerRef.current)?.focus?.();};
+    },[more]);
     function go(id) { setMore(false);onChange(id);window.scrollTo(0,0); }
     function button(item,kind) {return h('button',{
       key:item.id,type:'button',className:'a-nav-item'+(tab===item.id?' is-active':''),
@@ -80,18 +100,19 @@
       h('nav',{className:'a-nav-desktop','aria-label':'Sezioni NutriTrace'},NAV.map(item=>button(item,'desktop'))),
       h('nav',{className:'a-nav-mobile','aria-label':'Navigazione principale'},
         PRIMARY.map(id=>button(NAV.find(item=>item.id===id),'mobile')),
-        h('button',{type:'button',className:'a-nav-item a-nav-more'+(more||!PRIMARY.includes(tab)?' is-active':''),'aria-expanded':more,'aria-controls':'a-more-menu',onClick:()=>setMore(v=>!v)},
+        h('button',{ref:triggerRef,type:'button',className:'a-nav-item a-nav-more'+(more||!PRIMARY.includes(tab)?' is-active':''),'aria-expanded':more,'aria-haspopup':'dialog','aria-controls':'a-more-menu',onClick:()=>setMore(v=>!v)},
           h(Icon,{name:'more',size:21}),h('span',null,'Altro'))),
-      more&&h('div',{className:'a-more-overlay',onClick:()=>setMore(false)},
-        h('div',{id:'a-more-menu',className:'a-more-panel',role:'dialog','aria-label':'Tutte le sezioni',onClick:e=>e.stopPropagation()},
-          h('div',{className:'a-more-title'},h('strong',null,'Tutte le sezioni'),h('button',{type:'button',onClick:()=>setMore(false),'aria-label':'Chiudi menu'},'✕')),
-          h('div',{className:'a-more-grid'},NAV.map(item=>button(item,'mobile'))))));
+      more&&h('div',{className:'a-more-overlay v5-more-overlay',onClick:()=>setMore(false)},
+        h('div',{ref:panelRef,id:'a-more-menu',className:'a-more-panel',role:'dialog','aria-modal':true,'aria-labelledby':'v5-more-title',onClick:e=>e.stopPropagation()},
+          h('div',{className:'a-more-title'},h('strong',{id:'v5-more-title'},'Altre sezioni'),h('button',{type:'button',onClick:()=>setMore(false),'aria-label':'Chiudi menu'},'✕')),
+          h('div',{className:'a-more-grid'},NAV.filter(item=>!PRIMARY.includes(item.id)).map(item=>button(item,'mobile'))))));
   }
   function format(value,digits=0){
-    if (!Number.isFinite(Number(value))) return 'N/D';
+    if (value===null||value===undefined||value===''||!Number.isFinite(Number(value))) return 'N/D';
     return new Intl.NumberFormat('it-IT',{maximumFractionDigits:digits,minimumFractionDigits:0}).format(Number(value));
   }
   function percent(value,target){
+    if(value===null||value===undefined||value==='')return null;
     const n=Number(value),t=Number(target);
     if(!Number.isFinite(n)||!Number.isFinite(t)||t<=0)return null;
     return Math.max(0,Math.round(n/t*100));
@@ -143,57 +164,9 @@
         h('button',{type:'button',className:'a-button-outline',onClick:onSearch},h(Icon,{name:'search',size:19}),'Cerca nel database'),
         h('button',{type:'button',className:'a-button-outline a-coach-link',onClick:onCoach},h(Icon,{name:'sparkles',size:18}),'Chiedi al Coach')));
   }
-  /* A compact, real-data meal summary. The complete original MealDiary is
-     mounted below in native <details>, with all callbacks passed through. */
+  /* One live diary: meal actions and foods stay inside their meal card. */
   function MealDiaryPanel(props) {
-    const detailsRef=React.useRef(null);
-    const meals=Array.isArray(props.meals)?props.meals:[];
-    const logs=Array.isArray(props.logs)?props.logs:[];
-    const foods=Array.isArray(props.foods)?props.foods:[];
-    const icons={breakfast:'☕',colazione:'☕',lunch:'🥗',pranzo:'🥗',dinner:'🍲',cena:'🍲',snack:'🍎',spuntino:'🍎',extras:'✨'};
-    function summaryFor(meal) {
-      const selected=logs.filter(log=>log.mealId===meal.id);
-      let kcal=0,missing=0;
-      for(const log of selected){
-        const food=foods.find(f=>f.id===log.foodId);
-        const grams=Number(log.grams),base=Number(food?.servingGrams);
-        const energy=food?.label?.kcal;
-        if(!food||energy===null||energy===undefined||energy===''||
-          !Number.isFinite(Number(energy))||!Number.isFinite(grams)||grams<=0||
-          !Number.isFinite(base)||base<=0){missing++;continue;}
-        kcal+=Number(energy)*grams/base;
-      }
-      return {
-        count:selected.length,
-        text:selected.length===0?'Nessun alimento':
-          missing===selected.length?'Dati nutrizionali non disponibili':
-          format(kcal,0)+' kcal'+(missing?' · parziali':'')
-      };
-    }
-    function openFull(){
-      if(detailsRef.current){
-        detailsRef.current.open=true;
-        requestAnimationFrame(()=>detailsRef.current?.scrollIntoView({behavior:'smooth',block:'start'}));
-      }
-    }
-    return h('div',{className:'a-meal-panel'},
-      h('div',{className:'a-meal-header'},
-        h('div',null,h('span',{className:'a-kicker'},'REGISTRAZIONI'),h('h2',null,'I pasti della giornata')),
-        h('button',{type:'button',className:'a-meal-all',onClick:openFull},'Diario completo',h(Icon,{name:'chevron',size:15}))),
-      h('div',{className:'a-meal-list'},meals.map(meal=>{
-        const item=summaryFor(meal);
-        const lower=String(meal.id||meal.name||'').toLowerCase();
-        const emoji=icons[lower]||icons[String(meal.name||'').toLowerCase()]||'🥣';
-        return h('div',{className:'a-meal-row',key:meal.id},
-          h('span',{className:'a-meal-avatar','aria-hidden':'true'},emoji),
-          h('div',{className:'a-meal-meta'},h('strong',null,meal.name),
-            h('small',null,item.text,' · ',item.count,' ',item.count===1?'alimento':'alimenti')),
-          h('button',{type:'button',className:'a-meal-row-add',
-            onClick:()=>props.onAdd?.(meal.id),'aria-label':`Aggiungi a ${meal.name}`},h(Icon,{name:'plus',size:19})));
-      })),
-      h('details',{ref:detailsRef,className:'a-meal-details'},
-        h('summary',null,h(Icon,{name:'grid',size:18}),'Preferiti, copia pasti, modifica e diario dettagliato',h(Icon,{name:'chevron',size:16})),
-        h(root.NutriTraceMealDiary,props)));
+    return h('div',{className:'a-meal-panel v5-meal-panel'},h(root.NutriTraceMealDiary,props));
   }
   function PageIntro({kicker,title,description,icon}) {
     return h('div',{className:'a-page-intro'},
@@ -237,7 +210,7 @@
         h('article',{className:'a-goals-progress'},
           h('h2',null,'Progressi della giornata'),
           metrics.map(m=>{
-            const pct=percent(m.value,m.target);
+            const pct=m.comparisonAvailable===false?null:percent(m.value,m.target);
             return h('div',{className:'a-goal-row',key:m.id},
               h('span',{className:'a-goal-identity'},h(Icon,{name:({kcal:'flame',protein:'muscle',carbs:'wheat',fat:'droplet',fiber:'leaf'})[m.id],size:21}),m.label),
               h('span',{className:'a-goal-value'},format(m.value,1),' / ',m.target>0?format(m.target,1):'—',` ${m.unit}`),
@@ -248,14 +221,19 @@
         h('aside',{className:'a-goals-micros'},
           h('h2',null,'Micronutrienti in evidenza'),
           micros.length?h('div',{className:'a-micros-grid'},micros.slice(0,6).map(m=>{
-            const pct=percent(m.value,m.target);
+            const reviewOnly=m.noOfficialTarget===true||['special-review','not-established','combined-reference'].includes(m.referenceType);
+            const reduction=m.referenceType==='reduction-goal',upper=m.kind==='upper'||reduction;
+            const comparable=!reviewOnly&&m.comparisonAvailable!==false;
+            const pct=comparable?percent(m.value,m.target):null;
             return h('div',{className:'a-micro-card',key:m.id},
               h('span',{className:'a-micro-icon'},h(Icon,{name:'leaf',size:20})),
               h('b',null,m.name),
-              h('small',null,`${format(m.value,2)} / ${m.target>0?format(m.target,2):'—'} ${m.unit}`),
-              h('strong',null,pct===null?'—':`${pct}%`),
-              h('div',{className:'a-bar'},h('span',{style:{width:Math.min(pct||0,100)+'%'}})),
-              m.coverage<.65?h('small',{className:'a-warning'},'Dati insufficienti'):null);
+              h('small',null,`${format(m.value,2)} ${m.unit} registrati`),
+              h('small',null,`${reviewOnly?'Impostazione salvata':upper?'Soglia personale':'Obiettivo'}: ${m.target>0?format(m.target,2):'—'} ${m.unit}`),
+              h('strong',null,reviewOnly?'Da verificare':pct===null?'—':upper?`${pct}% della soglia`:`${pct}%`),
+              comparable?h('div',{className:'a-bar','aria-label':upper?'Rapporto con la soglia di contenimento':'Rapporto con l’obiettivo'},h('span',{style:{width:Math.min(pct||0,100)+'%',background:upper&&m.value>m.target?'#b86a30':undefined}})):null,
+              reviewOnly?h('small',{className:'a-warning'},m.referenceNote||'Consulta Fonti scientifiche: nessuna quota da completare.'):reduction?h('small',{className:'a-warning'},'Soglia di contenimento, non quota da raggiungere.'):null,
+              m.qualityNote?h('small',{className:'a-warning'},m.qualityNote):m.coverage<.999?h('small',{className:'a-warning'},'Dati parziali'):null);
           })):
           h('div',{className:'a-soft-empty'},'Personalizza i micronutrienti da evidenziare nella sezione sottostante.'))));
   }
