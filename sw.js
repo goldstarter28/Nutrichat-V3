@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v5-20261123-fix1';
+const CACHE = 'nutritrace-v5-20261123-fix2';
 
 const CORE = [
   './',

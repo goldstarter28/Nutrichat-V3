@@ -125,7 +125,15 @@
     if (a.careContext !== 'none') return blocked('Il tuo piano personale ha la precedenza. Salviamo le preferenze e manteniamo gli obiettivi già presenti.');
     const bmi = a.weight / Math.pow(a.height / 100, 2);
     if (bmi < 18.5 || bmi >= 40) return blocked('I dati inseriti richiedono una valutazione più individuale di quella disponibile in questo percorso. Gli obiettivi restano invariati.');
-    if (a.goal === 'lose' && (bmi < 20 || a.age >= 65)) return blocked('Per prudenza questo percorso non applica automaticamente una riduzione dell’energia con il profilo indicato. Puoi usare un obiettivo concordato con un professionista.');
+    if (a.goal === 'lose' && (bmi < 20 || a.age >= 65)) {
+      const reasons = [];
+      if (bmi < 20) reasons.push('il BMI calcolato è inferiore a 20');
+      if (a.age >= 65) reasons.push('l’età inserita è di almeno 65 anni');
+      // Keep the existing deficit guard. A maintenance alternative is offered
+      // only if that plan independently passes all the original checks.
+      const alternative = calculatePlan({ ...a, goal: 'maintain' });
+      return { ...blocked('Non applichiamo automaticamente una riduzione dell’energia perché ' + reasons.join(' e ') + '. Puoi concordare un obiettivo personale con un professionista.'), restriction: 'DEFICIT_GUARD', maintenanceAvailable: alternative.eligible };
+    }
     if (a.goal === 'gain' && bmi >= 30) return blocked('Per il profilo indicato non applichiamo automaticamente un aumento dell’energia. Manteniamo i tuoi obiettivi.');
     const bmr = 10 * a.weight + 6.25 * a.height - 5 * a.age + (a.sex === 'male' ? 5 : -161);
     const pal = { low: 1.4, light: 1.6, active: 1.8, veryActive: 2.0 }[a.activity];
@@ -359,6 +367,11 @@
         h('h2', { ref: headingRef, tabIndex: -1 }, plan.eligible ? 'I tuoi riferimenti iniziali' : 'Le tue preferenze, il tuo piano'),
         h('p', { className: 'v5-wizard-description' }, plan.eligible ? 'Controlla il riepilogo. Puoi tornare alle risposte oppure applicare gli obiettivi e modificarli in qualsiasi momento.' : plan.reason),
         plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, 'Gli obiettivi attuali restano invariati'), h('p', null, 'Salviamo solo le risposte e le preferenze del percorso. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
+        !plan.eligible && plan.maintenanceAvailable ? h('div', { className: 'v5-wizard-notice' },
+          h('strong', null, 'Vuoi calcolare invece gli obiettivi di mantenimento?'),
+          h('p', null, 'Non prevede una riduzione dell’energia. Ti mostreremo la stima di calorie e macro prima di applicarla. Le altre risposte rimangono uguali.'),
+          h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setAnswers(a => ({ ...a, goal: 'maintain' })); setUpdateMicros(false); setError(''); } }, 'Calcola mantenimento')
+        ) : null,
         plan.eligible ? h('div', { className: 'v5-wizard-targets' }, Object.entries(names).map(([id, meta]) => {
           const old = (props.goals || []).find(g => g.id === id);
           let oldValue = numericGoal(old, props.profile && props.profile.weight);

@@ -170,14 +170,14 @@ html[data-theme=dark] .v5-estimate { background:#433a20;color:#e3cb83 }
 .v5-meal-summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;min-height:32px;color:var(--muted)}
 .v5-meal-summary::-webkit-details-marker{display:none}
 .v5-meal-inline-names{flex:1;min-width:0;font-size:12px;line-height:1.4;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.v5-meal-expand{flex:none;font-size:10px;font-weight:750;color:var(--accent)}
+.v5-meal-expand{flex:none;font-size:12px;font-weight:750;color:var(--accent)}
 .v5-meal-details[open] .v5-meal-inline-names{-webkit-line-clamp:unset;overflow:visible}
 .v5-meal-details[open] .v5-meal-expand{display:none}
-.v5-meal-details[open] .v5-meal-summary:after{content:'Chiudi ▴';font-size:10px;color:var(--accent);font-weight:750}
+.v5-meal-details[open] .v5-meal-summary:after{content:'Chiudi ▴';font-size:12px;color:var(--accent);font-weight:750}
 .v5-day-food-main{display:grid!important;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 8px;align-items:center}
 .v5-day-remove{color:var(--danger);grid-column:3;grid-row:1;min-width:36px;min-height:36px}
 .v5-day-food-main>span{grid-column:2}
-.v5-weekly .a-kicker{font-size:14px;letter-spacing:.055em}
+.v5-weekly .a-kicker{font-size:18px;letter-spacing:.025em;line-height:1.25}
 .v5-hydration-compact{margin-top:12px}
 .aurora-app .v5-hydration-compact>.card{padding:11px 13px!important;margin:0!important;border-radius:16px;box-shadow:none;background:var(--card)}
 .v5-hydration-compact .card h2{font-size:16px!important}
@@ -216,3 +216,18 @@ html[data-theme=dark] .aurora-app .pinBtn.pinned{background:#443d26;color:#f2d78
 html[data-theme=dark] .v5-dialog .v5-capture-buttons .v5-icon-button{color:white}
 html[data-theme=dark] .v5-toast .v5-icon-button{color:white}
 html[data-theme=dark] .v5-wizard-backdrop input:not([type=radio]):not([type=checkbox]){background:var(--vw-card);color:var(--vw-ink);border-color:var(--vw-border)}
+
+/* V5.7.2: compact only the existing Home hydration widget; no controls hidden. */
+.v5-hydration-compact{margin-top:8px}
+.aurora-app .v5-hydration-compact>.card{padding:8px 10px!important}
+.v5-hydration-compact>.card>div:nth-child(1){gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(2){margin:5px 0 4px!important;gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(2)>strong{font-size:20px!important}
+.v5-hydration-compact>.card>[role=progressbar]{height:8px!important}
+.v5-hydration-compact>.card>div:nth-child(4){margin:3px 0 5px!important;gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(5){gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(5)>button{min-height:38px!important;padding:3px 4px!important;gap:1px!important}
+.v5-hydration-compact>.card>div:nth-child(6){margin-top:5px!important;gap:5px!important}
+.v5-hydration-compact>.card>div:nth-child(6)>input{min-height:38px!important;padding:4px 7px!important}
+.v5-hydration-compact>.card>div:nth-child(6)>button{min-height:38px!important;padding:4px 7px!important}
+.v5-hydration-compact>.card>p:last-child{margin:4px 0 0!important}

@@ -39,13 +39,21 @@ function wizardContext(profile){
 }
 function sharedContext({share=false,shareProfile=false,profile,analysis={},weightData=null}){
  if(!share)return{};
- const data={period:'ultimi 7 giorni',trackedDays:analysis.trackedDays,previousTrackedDays:analysis.previousTrackedDays,
+ const optionalProfile=shareProfile?wizardContext(profile):null;
+ // The backend caps the JSON length; put the explicitly consented profile first.
+ const data={...(optionalProfile?{preferences:optionalProfile}:{}),period:'ultimi 7 giorni',trackedDays:analysis.trackedDays,previousTrackedDays:analysis.previousTrackedDays,
   metrics:(analysis.metrics||[]).map(m=>({key:m.key,avg:m.avg,target:m.target,validDays:m.validDays,trackedDays:m.trackedDays,deltaPct:m.deltaPct})),
   insights:(analysis.insights||[]).map(x=>({title:x.title,body:x.body}))};
- const optionalProfile=shareProfile?wizardContext(profile):null;
- if(optionalProfile)data.preferences=optionalProfile;
  if(weightData)data.weight=weightData;
  return data;
+}
+// Persist the invitation once per browser, not once per chat. A voluntary opt-in
+// also counts as a decision; never ask again after the user later revokes it.
+let profileInviteClaimed=false;
+function claimProfileInvite(storage){
+ if(profileInviteClaimed)return false;
+ try{if(storage.getItem(PROFILE_INVITE)==='yes'){profileInviteClaimed=true;return false;}storage.setItem(PROFILE_INVITE,'yes');}catch{}
+ profileInviteClaimed=true;return true;
 }
 function View(props){
  const [data,setData]=useState(read);
@@ -57,7 +65,6 @@ function View(props){
  const [compact,setCompact]=useState(()=>{try{return localStorage.getItem(SETTINGS_COMPACT)==='yes';}catch{return false;}});
  const [settingsOpen,setSettingsOpen]=useState(false);
  const [profileInvite,setProfileInvite]=useState(false);
- const inviteShown=useRef(false);
  const [shareProfile,setShareProfile]=useState(false);
  const [weight,setWeight]=useState(false);
  const [editing,setEditing]=useState(null);
@@ -89,9 +96,9 @@ function View(props){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='nutritrace-coach-chat.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
  function collapseSettings(){setCompact(true);setSettingsOpen(false);try{localStorage.setItem(SETTINGS_COMPACT,'yes');}catch{}}
  function offerProfileOnce(){
-  if(!profileContext||shareProfile||inviteShown.current)return;
-  try{if(localStorage.getItem(PROFILE_INVITE)==='yes')return;localStorage.setItem(PROFILE_INVITE,'yes');}catch{}
-  inviteShown.current=true;setProfileInvite(true);
+  if(!profileContext)return;
+  let storage;try{storage=root.localStorage;}catch{}
+  if(claimProfileInvite(storage)&&!shareProfile)setProfileInvite(true);
  }
  function context(){
   if(!share)return{};
@@ -190,7 +197,7 @@ function View(props){
     h('span',{className:'v5-coach-sharing-badge'},share?'Attivo':'Spento')),
    share&&h('div',{className:'v5-coach-sharing-options'},
     h('label',null,h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),h('span',null,'Includi anche le ultime 10 misurazioni e l’obiettivo di peso')),
-    h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>setShareProfile(e.target.checked)}),h('span',null,'Includi le preferenze e le abitudini del percorso obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
+    h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>{setShareProfile(e.target.checked);if(e.target.checked){let storage;try{storage=root.localStorage;}catch{}claimProfileInvite(storage);setProfileInvite(false);}}}),h('span',null,'Includi le preferenze e le abitudini del percorso obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
     h('small',null,'Le risposte cliniche, età e sesso del questionario non sono incluse. Puoi spegnere la condivisione in qualsiasi momento.')),
    h('p',{className:'v5-coach-sharing-note'},share?'Queste informazioni saranno inviate a GroqCloud solo quando invii un messaggio autorizzato.':'Il diario rimane sul dispositivo. Puoi usare la chat anche senza condividere le statistiche.'),
    share&&h('button',{type:'button',className:'ghost v5-coach-sharing-done',onClick:collapseSettings},'Fatto'),
@@ -247,5 +254,5 @@ function View(props){
   h('small',{className:'coach-disclaimer'},'Conversazioni salvate su questo dispositivo/browser. Per registrare un alimento da foto usa Foto in Oggi. Dettatura e lettura vocale dipendono dal browser. Le risposte del Coach sono informative e non sostituiscono indicazioni cliniche.')
  );
 }
-root.NutriTraceAICoach={...previous,View,sharedContext,wizardContext,version:'5.0.0'};
+root.NutriTraceAICoach={...previous,View,sharedContext,wizardContext,claimProfileInvite,version:'5.0.0'};
 })(window);
