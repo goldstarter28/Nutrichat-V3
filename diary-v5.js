@@ -21,11 +21,11 @@
     var result = a === b ? n : f[a] && f[b] ? n * f[a] / f[b] : null;
     return result !== null && Number.isFinite(result) ? result : null;
   }
-  function recentFoods(logs, foods, limit, untilDate) {
+  function recentFoods(logs, foods, limit, untilDate, mealId = null) {
     var byId = new Map((foods || []).map(function (f) { return [f.id, f]; })), seen = new Set();
     function timestamp(log) { var v = log.createdAt || log.timestamp; var n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Date.parse(v) : NaN; return Number.isFinite(n) ? n : null; }
     return (logs || []).map(function (log, index) { return { log: log, index: index }; })
-      .filter(function (x) { return x.log && validDate(x.log.date) && (!untilDate || x.log.date <= untilDate) && positive(x.log.grams) && byId.has(x.log.foodId); })
+      .filter(function (x) { return x.log && (mealId === null || x.log.mealId === mealId) && validDate(x.log.date) && (!untilDate || x.log.date <= untilDate) && positive(x.log.grams) && byId.has(x.log.foodId); })
       .sort(function (a, b) { var day = String(b.log.date).localeCompare(String(a.log.date)); if (day) return day; var at = timestamp(a.log), bt = timestamp(b.log); return at !== null && bt !== null && at !== bt ? bt - at : b.index - a.index; })
       .filter(function (x) { if (seen.has(x.log.foodId)) return false; seen.add(x.log.foodId); return true; })
       .slice(0, limit === undefined ? 3 : Math.max(0, Math.floor(number(limit) || 0)))
