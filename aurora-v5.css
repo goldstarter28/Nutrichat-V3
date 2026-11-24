@@ -231,3 +231,25 @@ html[data-theme=dark] .v5-wizard-backdrop input:not([type=radio]):not([type=chec
 .v5-hydration-compact>.card>div:nth-child(6)>input{min-height:38px!important;padding:4px 7px!important}
 .v5-hydration-compact>.card>div:nth-child(6)>button{min-height:38px!important;padding:4px 7px!important}
 .v5-hydration-compact>.card>p:last-child{margin:4px 0 0!important}
+
+/* V5.8 rapid logging — scoped to the diary and new controls. */
+.v5-meal-inline-names{font-size:13px}
+.v5-meal-favorite button{padding:4px 6px;min-height:40px}
+.v5-meal-favorite .v5-meal-favorite-add{font-size:12px}
+.v5-meal-favorite .v58-favorite-weight{font-size:12px;font-weight:650;text-decoration:underline;text-underline-offset:2px;white-space:nowrap;border-left:1px solid var(--line)}
+.v5-meal-favorite .v5-meal-favorite-remove{min-width:34px;font-size:17px}
+.v58-entry-feedback{margin:6px 0;font-size:13px;font-weight:700;color:var(--accent)}
+.v58-wizard-summary{margin:0;display:grid;gap:0}
+.v58-wizard-summary>div{padding:11px 0;border-bottom:1px solid var(--line)}
+.v58-wizard-summary dt{font-weight:700;font-size:14px;color:var(--ink)}
+.v58-wizard-summary dd{margin:4px 0 0;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.v58-favorite-form{display:grid;gap:12px}
+.v58-global-add-slot{display:none;flex:none;width:44px;height:44px}
+.aurora-app .v58-global-add{position:fixed;top:max(12px,env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));width:44px;height:44px;min-height:44px;padding:0;border:1px solid #25704c;border-radius:50%;display:grid;place-items:center;z-index:80;background:#23714d;color:#fff;font-size:29px;line-height:1;box-shadow:0 3px 12px #0003;touch-action:manipulation}
+.aurora-app .v58-global-add:focus-visible{outline:3px solid #8fbf80;outline-offset:3px}
+
+.aurora-app .v58-nav-add{flex:none;align-self:center;width:44px;height:44px;min-height:44px;border-radius:50%;border:1px solid #25704c;background:#23714d;color:white;font-size:27px;line-height:1;padding:0;display:grid;place-items:center}
+@media(max-width:760px){.v58-global-add-slot{display:block}.aurora-app .v58-global-add{top:max(12px,calc(env(safe-area-inset-top,0px) + 6px))}}
+@media print{.v58-global-add-slot,.v58-nav-add{display:none!important}}
+/* Keep the desktop shortcut visible when the tab strip itself scrolls horizontally. */
+.aurora-app .v58-nav-add{position:sticky;right:0;z-index:1;box-shadow:-4px 0 8px var(--card)}

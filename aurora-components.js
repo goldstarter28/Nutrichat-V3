@@ -59,7 +59,7 @@
         h('path',{d:'M22 36C20 18 27 9 42 6c3 17-3 28-20 30z',fill:'#8CD632'})
       ), h('span',null,'NutriTrace'));
   }
-  function Header({darkMode,onToggleTheme}) {
+  function Header({darkMode,onToggleTheme,onQuickAdd}) {
     return h('header',{className:'a-header'},
       h('div',{className:'a-brand-block'},
         h(Logo),
@@ -67,9 +67,10 @@
       h('div',{className:'a-header-actions'},
         h('span',{className:'a-local-badge'},h('span',{className:'a-status-dot'}),'Diario locale'),
         h('button',{type:'button',className:'a-theme-toggle',title:darkMode?'Attiva tema chiaro':'Attiva tema scuro','aria-label':darkMode?'Attiva tema chiaro':'Attiva tema scuro','aria-pressed':!!darkMode,onClick:onToggleTheme},
-          h(Icon,{name:darkMode?'sun':'moon',size:20}))));
+          h(Icon,{name:darkMode?'sun':'moon',size:20})),
+        onQuickAdd && h('span',{className:'v58-global-add-slot'},h('button',{type:'button',className:'v58-global-add',onClick:onQuickAdd,'aria-label':'Aggiungi alimento rapidamente',title:'Aggiungi alimento'},'+'))));
   }
-  function Navigation({tab,onChange}) {
+  function Navigation({tab,onChange,onQuickAdd}) {
     const [more,setMore]=React.useState(false);
     const panelRef=React.useRef(null), triggerRef=React.useRef(null);
     React.useEffect(()=>{
@@ -97,7 +98,7 @@
       onClick:()=>go(item.id)
     },h(Icon,{name:item.icon,size:kind==='desktop'?19:21}),h('span',null,item.title));}
     return h(React.Fragment,null,
-      h('nav',{className:'a-nav-desktop','aria-label':'Sezioni NutriTrace'},NAV.map(item=>button(item,'desktop'))),
+      h('nav',{className:'a-nav-desktop','aria-label':'Sezioni NutriTrace'},NAV.map(item=>button(item,'desktop')),onQuickAdd&&h('button',{type:'button',className:'v58-nav-add',onClick:onQuickAdd,'aria-label':'Aggiungi alimento rapidamente',title:'Aggiungi alimento'},'+')),
       h('nav',{className:'a-nav-mobile','aria-label':'Navigazione principale'},
         PRIMARY.map(id=>button(NAV.find(item=>item.id===id),'mobile')),
         h('button',{ref:triggerRef,type:'button',className:'a-nav-item a-nav-more'+(more||!PRIMARY.includes(tab)?' is-active':''),'aria-expanded':more,'aria-haspopup':'dialog','aria-controls':'a-more-menu',onClick:()=>setMore(v=>!v)},

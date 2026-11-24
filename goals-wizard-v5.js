@@ -23,7 +23,7 @@
     { id: 'trainingDays', title: 'Quante volte ti alleni in una settimana tipica?', description: 'Aiuta a descrivere le tue abitudini. Non raddoppia l’energia già considerata nel movimento quotidiano.', type: 'choice', options: [choice('0', 'Per ora non mi alleno'), choice('1-2', '1–2 volte'), choice('3-4', '3–4 volte'), choice('5+', '5 o più volte')] },
     { id: 'trainingType', title: 'Che tipo di attività preferisci?', description: 'Questa risposta aggiunge contesto alle tue preferenze. Non genera una dieta sportiva.', type: 'choice', when: a => a.trainingDays !== '0', options: [choice('strength', 'Forza e palestra'), choice('endurance', 'Corsa, bici e resistenza'), choice('mixed', 'Un po’ di entrambe'), choice('gentle', 'Mobilità e attività leggera'), choice('other', 'Altra attività')] },
     { id: 'dietaryPattern', title: 'Come descriveresti la tua alimentazione?', description: 'Nessun alimento verrà escluso automaticamente. Le preferenze resteranno modificabili.', type: 'choice', options: [choice('omnivore', 'Varia, senza esclusioni particolari'), choice('vegetarian', 'Vegetariana'), choice('vegan', 'Vegana'), choice('pescatarian', 'Pescetariana'), choice('other', 'Diversa / preferisco non definirla')] },
-    { id: 'mealsPerDay', title: 'Quanti momenti per mangiare ti sono comodi?', description: 'Con la conferma finale aggiorneremo anche i pasti del diario. Le registrazioni già effettuate non vengono cancellate.', type: 'choice', options: [choice('3', 'Tre pasti'), choice('4', 'Tre pasti e uno spuntino', 'Spuntino del pomeriggio'), choice('4-morning', 'Tre pasti e uno spuntino al mattino'), choice('5', 'Tre pasti e due spuntini'), choice('flexible', 'Preferisco decidere giorno per giorno', 'Mantieni i pasti già configurati')] },
+    { id: 'mealsPerDay', title: 'Quanti momenti per mangiare ti sono comodi?', description: 'Con la conferma finale aggiorneremo anche i pasti del diario. Le registrazioni già effettuate non vengono cancellate.', type: 'choice', options: [choice('3', 'Tre pasti'), choice('4', 'Tre pasti e uno spuntino al pomeriggio'), choice('4-morning', 'Tre pasti e uno spuntino al mattino'), choice('5', 'Tre pasti e due spuntini'), choice('flexible', 'Preferisco decidere giorno per giorno', 'Mantieni i pasti già configurati')] },
     { id: 'schedule', title: 'Quanto sono regolari i tuoi orari?', description: 'Per suggerimenti compatibili con la vita reale, se deciderai di condividere il contesto con il Coach.', type: 'choice', options: [choice('regular', 'Abbastanza regolari'), choice('variable', 'Cambiano spesso'), choice('shifts', 'Lavoro o studio su turni'), choice('unspecified', 'Preferisco non indicarlo')] },
     { id: 'cookingTime', title: 'Quanto tempo vuoi dedicare a preparare un pasto?', description: 'Non modifica i fabbisogni: aiuta a rendere pratici eventuali suggerimenti.', type: 'choice', options: [choice('quick', 'Fino a 15 minuti'), choice('medium', '15–30 minuti'), choice('relaxed', 'Anche più di 30 minuti'), choice('ready', 'Preferisco pasti pronti o fuori casa')] },
     { id: 'foodPriorities', title: 'Che cosa conta di più nella scelta dei cibi?', description: 'Puoi scegliere più risposte.', type: 'multi', options: [choice('simple', 'Pochi ingredienti e semplicità'), choice('budget', 'Spesa contenuta'), choice('variety', 'Varietà'), choice('family', 'Pasti adatti a tutta la famiglia'), choice('portable', 'Facili da portare con me'), choice('none', 'Nessuna preferenza particolare')] },
@@ -66,6 +66,31 @@
     const weight = number(profile && profile.weight);
     if (weight !== null && weight >= 15 && weight <= 500) answers.weight = weight;
     return answers;
+  }
+  // Read-only view of the last applied questionnaire, never a draft.
+  function completedAnswers(profile) {
+    const saved = profile && profile.wizardV5;
+    if (!saved || !saved.completedAt || !saved.answers) return [];
+    const answers = sanitizeAnswers(saved.answers);
+    return getQuestions(answers).filter(q => validateAnswer(q, answers[q.id])).map(q => ({
+      id: q.id, question: q.title,
+      answer: q.type === 'number' ? displayNumber(answers[q.id]) + ' ' + q.unit :
+        q.type === 'multi' ? answers[q.id].map(v => labelFor(q.id, v)).join(' · ') : labelFor(q.id, answers[q.id])
+    }));
+  }
+  function answerWith(answers, questionId, value) {
+    const next = { ...answers, [questionId]: value };
+    if (questionId === 'sex' && value !== 'female') { delete next.physiologicalState; delete next.menstrualStatus; }
+    if (questionId === 'physiologicalState' && value !== 'none') delete next.menstrualStatus;
+    if (questionId === 'trainingDays' && value === '0') delete next.trainingType;
+    return next;
+  }
+  function nextStep(answers, questionId) {
+    const questions = getQuestions(answers);
+    const index = questions.findIndex(q => q.id === questionId);
+    if (index >= 0 && index < questions.length - 1) return { questionId: questions[index + 1].id, review: false };
+    const missing = questions.find(q => !validateAnswer(q, answers[q.id]));
+    return missing ? { questionId: missing.id, review: false, missing: true } : { review: true };
   }
   function safeStorage() {
     try { return root.localStorage || null; } catch (_) { return null; }
@@ -249,6 +274,7 @@
     const contentRef = R.useRef(null);
     const applyingRef = R.useRef(false);
     const exitRef = R.useRef(false);
+    const choiceAdvanceRef = R.useRef(null);
     const questions = getQuestions(answers);
     const index = Math.max(0, questions.findIndex(q => q.id === questionId));
     const question = questions[index];
@@ -299,6 +325,7 @@
       };
     }, []);
     R.useEffect(() => {
+      choiceAdvanceRef.current = null;
       if (headingRef.current) headingRef.current.focus();
       if (contentRef.current) contentRef.current.scrollTop = 0;
     }, [question.id, stage, exitOpen]);
@@ -306,23 +333,23 @@
     function close() { if (typeof props.onClose === 'function') props.onClose(); }
     function setAnswer(value) {
       setError('');
-      setAnswers(a => {
-        const next = { ...a, [question.id]: value };
-        if (question.id === 'sex' && value !== 'female') { delete next.physiologicalState; delete next.menstrualStatus; }
-        if (question.id === 'physiologicalState' && value !== 'none') delete next.menstrualStatus;
-        if (question.id === 'trainingDays' && value === '0') delete next.trainingType;
-        return next;
-      });
+      setAnswers(a => answerWith(a, question.id, value));
     }
     function forward(event) {
       if (event) event.preventDefault();
       if (!validateAnswer(question, currentValue)) { setError(question.type === 'number' ? `Inserisci un valore tra ${question.min} e ${question.max} ${question.unit}.` : 'Scegli una risposta per continuare.'); return; }
-      if (index < questions.length - 1) setQuestionId(questions[index + 1].id);
-      else {
-        const missing = questions.find(q => !validateAnswer(q, answers[q.id]));
-        if (missing) { setQuestionId(missing.id); setError('Completa questa risposta prima del riepilogo.'); }
-        else setStage('review');
-      }
+      advance(answers);
+    }
+    function advance(nextAnswers) {
+      const next = nextStep(nextAnswers, question.id);
+      if (next.review) setStage('review');
+      else { setQuestionId(next.questionId); if (next.missing) setError('Completa questa risposta prima del riepilogo.'); }
+    }
+    function chooseAnswer(value) {
+      if (question.type !== 'choice' || !validateAnswer(question, value) || choiceAdvanceRef.current === question.id) return;
+      choiceAdvanceRef.current = question.id;
+      const next = answerWith(answers, question.id, value);
+      setError(''); setAnswers(next); advance(next);
     }
     async function apply() {
       if (applyingRef.current) return;
@@ -343,10 +370,11 @@
       }
     }
     function renderQuestion() {
-      return h('form', { className: 'v5-wizard-question', onSubmit: forward },
+      return h('form', { id: 'v58-wizard-question-form', className: 'v5-wizard-question', onSubmit: forward },
         h('p', { className: 'v5-wizard-kicker' }, index < 8 ? 'UNA BASE ADATTA A TE' : index < 13 ? 'LA TUA GIORNATA' : 'PICCOLE SCELTE, OGNI GIORNO'),
         h('h2', { id: 'v5-wizard-question-title', ref: headingRef, tabIndex: -1 }, question.title),
         h('p', { className: 'v5-wizard-description', id: 'v5-wizard-question-description' }, question.description),
+        question.type === 'multi' && h('p', { className: 'v58-multi-label' }, 'Risposta multipla · scegli tutte le opzioni pertinenti'),
         question.type === 'number' ? h('label', { className: 'v5-wizard-number', htmlFor: 'v5-wizard-answer' },
           h('span', { className: 'v5-wizard-sr' }, question.title),
           h('input', { id: 'v5-wizard-answer', type: 'number', inputMode: question.step === 1 ? 'numeric' : 'decimal', min: question.min, max: question.max, step: question.step, value: currentValue === undefined ? '' : currentValue, placeholder: question.placeholder, onChange: event => setAnswer(event.target.value), 'aria-describedby': 'v5-wizard-question-description', autoComplete: 'off' }),
@@ -355,6 +383,9 @@
           h('legend', { className: 'v5-wizard-sr' }, question.title),
           question.options.map(option => {
             const checked = question.type === 'multi' ? (currentValue || []).includes(option.value) : currentValue === option.value;
+            if (question.type === 'choice') return h('button', { type: 'button', key: option.value, className: 'v5-wizard-option v58-choice' + (checked ? ' is-selected' : ''), 'aria-pressed': checked, onClick: () => chooseAnswer(option.value) },
+              h('span', { className: 'v58-choice-dot', 'aria-hidden': true }),
+              h('span', { className: 'v5-wizard-option-text' }, h('strong', null, option.label), option.detail ? h('small', null, option.detail) : null));
             return h('label', { className: 'v5-wizard-option' + (checked ? ' is-selected' : ''), key: option.value },
               h('input', { type: question.type === 'multi' ? 'checkbox' : 'radio', name: question.id, value: option.value, checked, onChange: () => {
                 if (question.type !== 'multi') return setAnswer(option.value);
@@ -367,10 +398,6 @@
               h('span', { className: 'v5-wizard-option-text' }, h('strong', null, option.label), option.detail ? h('small', null, option.detail) : null)
             );
           })
-        ),
-        h('div', { className: 'v5-wizard-question-actions' },
-          h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: index === 0, onClick: () => { setError(''); setQuestionId(questions[index - 1].id); } }, '← Indietro'),
-          h('button', { type: 'submit', className: 'v5-wizard-primary', disabled: !validateAnswer(question, currentValue) }, index === questions.length - 1 ? 'Vedi il riepilogo' : 'Continua →')
         )
       );
     }
@@ -422,9 +449,13 @@
       h('header', { className: 'v5-wizard-header' }, h('div', { className: 'v5-wizard-brand' }, h('span', { 'aria-hidden': true }, '◒'), h('div', null, h('strong', null, 'NutriTrace'), h('small', null, 'Personalizza i miei obiettivi'))), h('button', { type: 'button', className: 'v5-wizard-close', 'aria-label': exitOpen ? 'Torna al percorso' : 'Esci dal percorso', disabled: applying, onClick: () => { setError(''); setExitOpen(!exitOpen); } }, '×')),
       !exitOpen && stage !== 'resume' ? h('div', { className: 'v5-wizard-progress-area' }, h('div', { className: 'v5-wizard-progress-label', 'aria-live': 'polite' }, h('strong', null, stage === 'review' ? 'Riepilogo finale' : 'Domanda ' + (index + 1) + ' di ' + questions.length), h('span', null, answered + ' risposte · ' + (questions.length - answered) + ' da completare')), h('div', { className: 'v5-wizard-progress', role: 'progressbar', 'aria-label': 'Risposte completate', 'aria-valuemin': 0, 'aria-valuemax': questions.length, 'aria-valuenow': answered }, h('span', { style: { width: (100 * answered / questions.length) + '%' } }))) : null,
       h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
-      !exitOpen && stage === 'questions' ? h('footer', { className: 'v5-wizard-footer' }, 'Solo sul tuo dispositivo · Puoi uscire e riprendere quando vuoi') : null
+      !exitOpen && stage === 'questions' ? h('footer', { className: 'v5-wizard-footer v58-wizard-footer' },
+        h('div', { className: 'v58-wizard-actions' },
+          h('button', { type: 'button', className: 'v5-wizard-secondary v58-back', disabled: index === 0, onClick: () => { setError(''); setQuestionId(questions[index - 1].id); } }, '← Indietro'),
+          question.type !== 'choice' && h('button', { type: 'submit', form: 'v58-wizard-question-form', className: 'v5-wizard-primary v58-next', disabled: !validateAnswer(question, currentValue) }, index === questions.length - 1 ? 'Riepilogo →' : 'Continua →')),
+        h('small', null, 'Solo sul tuo dispositivo · Puoi uscire e riprendere quando vuoi')) : null
     ));
     return root.ReactDOM && root.ReactDOM.createPortal ? root.ReactDOM.createPortal(content, root.document.body) : content;
   }
-  return Object.freeze({ View, VERSION, DRAFT_KEY, MAX_QUESTIONS, QUESTIONS, getQuestions, validateAnswer, sanitizeAnswers, initialAnswers, calculatePlan, mealPlan, referenceChanges, applyPlan, contextForCoach, readDraft, saveDraft, clearDraft, displayNumber });
+  return Object.freeze({ View, VERSION, DRAFT_KEY, MAX_QUESTIONS, QUESTIONS, getQuestions, validateAnswer, sanitizeAnswers, initialAnswers, calculatePlan, mealPlan, referenceChanges, applyPlan, contextForCoach, readDraft, saveDraft, clearDraft, displayNumber, completedAnswers, answerWith, nextStep });
 });
