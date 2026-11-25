@@ -27,6 +27,11 @@
       Math.random().toString(36).slice(2);
   }
 
+  function normalizedRecipe(value) {
+    if(!value)return null;
+    const diary=root.NutriTraceDiaryV5 || (typeof module!=='undefined'&&module.exports?require('./diary-v5.js'):null);
+    return diary?.normalizeRecipes([value])[0]||null;
+  }
   function normalize(favorites) {
   if (!Array.isArray(favorites)) return [];
 
@@ -40,6 +45,15 @@
     const foodId = clean(item.foodId);
     const grams = validGrams(item.grams);
 
+    if(item.recipe){
+      const recipe=normalizedRecipe(item.recipe);
+      if(!mealId||!recipe||grams===null)continue;
+      const key=JSON.stringify([mealId,'recipe',recipe.id,grams]);
+      if(seen.has(key))continue;seen.add(key);
+      out.push({id:clean(item.id)||newId(),mealId,recipe,grams,quantity:grams,unit:'g',gramsPerUnit:1,label:recipe.name});
+      if(out.length>=MAX_FAVORITES)break;
+      continue;
+    }
     if (!mealId || !foodId || grams === null) continue;
 
     const unit = ['g', 'ml', 'pz'].includes(item.unit)
@@ -98,6 +112,13 @@ function addFavorite(favorites, entry, meals, foods) {
     throw new Error('Seleziona un pasto valido.');
   }
 
+  if(entry?.recipe){
+    const recipe=normalizedRecipe(entry.recipe);
+    if(!recipe||grams===null||recipe.ingredients.some(i=>!(foods||[]).some(f=>f.id===i.foodId)))throw Error('Ricetta o porzione non valida.');
+    if(current.some(f=>f.mealId===mealId&&f.recipe?.id===recipe.id&&f.grams===grams))return current;
+    if(current.length>=MAX_FAVORITES)throw Error('Limite massimo di 100 preferiti.');
+    return normalize([...current,{id:newId(),mealId,recipe,grams,label:recipe.name}]);
+  }
   if (!(foods || []).some(f => f.id === foodId)) {
     throw new Error('Alimento non presente nell’archivio.');
   }
@@ -151,6 +172,7 @@ function addFavorite(favorites, entry, meals, foods) {
     meals,
     foods
   ) {
+    if(favorite?.recipe)throw Error('Le ricette preferite richiedono l’inserimento di tutti gli ingredienti.');
     const mealId = clean(favorite?.mealId);
     const foodId = clean(favorite?.foodId);
     const grams = validGrams(favorite?.grams);

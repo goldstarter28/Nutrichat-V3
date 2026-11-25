@@ -1593,12 +1593,13 @@ const draftNdRows=draftCatalogRows.filter(
   async function commitCapturedProduct(product,amount){
     if(mutationLock.current)return;
     if(!directCapture||!DiaryV5.positive(amount))throw new Error('Controlla la quantità.');
+    if(product.barcode&&product.microBasis!=='mass'&&!foods.some(f=>String(f.barcode||'')===String(product.barcode)))throw Error('Conferma prima che la tabella sia per 100 g.');
     mutationLock.current=true;
     try{
       const mealId=await chooseMeal(directCapture.context.mealId);if(!mealId)return false;
       const result=DiaryV5.productFood(product,foods,newId()),food=result.food;
       const log={id:newId(),createdAt:new Date().toISOString(),...directCapture.context,mealId,foodId:food.id,grams:amount,entryOrigin:product.barcode?'barcode-direct-v5':'photo-label-direct-v5'};
-      persistDiaryBatch(result.existing?[]:[food],[log]);
+      if(result.existing&&food!==foods.find(f=>f.id===food.id)){const latest=liveData.current;const current=latest.foods.find(f=>f.id===food.id);if(!current)throw Error('Alimento non più disponibile.');const merged=DiaryV5.mergeBarcodeFood(current,product);persistDiaryChange(latest.foods.map(f=>f.id===merged.id?merged:f),[...latest.logs,log]);}else persistDiaryBatch(result.existing?[]:[food],[log]);
       setV5Notice({text:food.name+' aggiunto al pasto',ids:[log.id]});resetTextEntry();setDirectCapture(null);
     }finally{mutationLock.current=false;}
   }
@@ -1613,10 +1614,10 @@ const draftNdRows=draftCatalogRows.filter(
     recognition.onend=()=>{if(speechRef.current===recognition){speechRef.current=null;setListening(false);}};speechRef.current=recognition;
     try{recognition.start();setListening(true);}catch{setRecipeMsg('Impossibile avviare la dettatura.');}
   }
-  async function addSavedRecipe(recipe,amount){
+  async function addSavedRecipe(recipe,amount,portionUnit){
     if(mutationLock.current)return;
     mutationLock.current=true;
-    try{const portions=DiaryV5.scaleRecipe(recipe,amount,foods),groupId=newId(),now=new Date().toISOString();
+    try{const portions=DiaryV5.scaleRecipe(recipe,amount,foods,portionUnit),groupId=newId(),now=new Date().toISOString();
       const mealId=await chooseMeal(activeMealId);if(!mealId)return false;
       const added=portions.map(x=>({...x,id:newId(),createdAt:now,recipeGroupId:groupId,date:selectedDate,mealId}));
       persistDiaryBatch([],added);setV5Notice({text:recipe.name+' · '+fmt(amount,2)+' g aggiunti',ids:added.map(l=>l.id)});resetTextEntry();setEntryOpen(false);
@@ -1673,13 +1674,14 @@ const draftNdRows=draftCatalogRows.filter(
   if (found) {
     window.alert(
       'Alimento già presente: apriamo la scheda esistente. ' +
-      'I nutrienti salvati non verranno sovrascritti automaticamente.'
+      'I nutrienti salvati non verranno sovrascritti; aggiungiamo solo quelli disponibili e assenti.'
     );
   }
 
   const label = emptyLabel();
+  if(!found&&product.microBasis!=='mass'){const confirmed=window.confirm('Verifica sulla confezione: i valori nutrizionali sono riferiti a 100 g (non 100 ml)? Se annulli, apriamo una scheda da completare manualmente.');if(confirmed)product={...product,microBasis:'mass'};}
 
-  if (!found) {
+  if (!found&&product.microBasis==='mass') {
     for (const key of Object.keys(label)) {
       const value = product.label?.[key];
 
@@ -1695,7 +1697,7 @@ const draftNdRows=draftCatalogRows.filter(
 
   const draft = found
     ? {
-        ...structuredClone(found),
+        ...structuredClone(DiaryV5.mergeBarcodeFood(found,product)),
         barcode
       }
     : {
@@ -1704,11 +1706,13 @@ const draftNdRows=draftCatalogRows.filter(
         name,
         brand,
         ingredients: String(product.ingredients || ''),
+        nutrients:DiaryV5.barcodeNutrients(product,'barcode-'+barcode),
+        nutrientStatus:Object.fromEntries(DiaryV5.barcodeNutrients(product,'barcode-'+barcode).map(n=>[n.name,{status:'numeric',canonicalId:n.canonicalId,sources:['Open Food Facts']} ])),
         label,
         aliases: [name],
         servingGrams: 100,
         notes:
-          'Dati Open Food Facts: verifica con l’etichetta originale.',
+          product.microBasis==='mass'?'Dati Open Food Facts: verifica con l’etichetta originale.':'Base di misura non confermata: completa manualmente i valori per 100 g.',
         sources: [{
           id: newId(),
           name: 'Open Food Facts',
@@ -1785,7 +1789,7 @@ async function saveFood() {
 
   setFoodDraft(null);
 }
-  function removeFood(id){ const f=foods.find(x=>x.id===id); if(!f) return; const n=logs.filter(l=>l.foodId===id).length; if(!confirm(`Rimuovere “${f.name}” dall'archivio?${n?` Verranno eliminate anche ${n} registrazioni del diario.`:''}`)) return; setFoods(p=>p.filter(x=>x.id!==id)); setLogs(p=>p.filter(l=>l.foodId!==id)); }
+  function removeFood(id){ const f=foods.find(x=>x.id===id); if(!f) return; if(logs.some(l=>l.foodId===id&&DiaryV5.recipeKey(l))||savedRecipes.some(r=>r.ingredients.some(i=>i.foodId===id))||mealFavorites.some(f=>f.recipe?.ingredients.some(i=>i.foodId===id))){window.alert('Questo alimento è utilizzato in una ricetta o nei suoi preferiti. Rimuovi prima i riferimenti alla ricetta, per non alterarne la composizione.');return;} const n=logs.filter(l=>l.foodId===id).length; if(!confirm(`Rimuovere “${f.name}” dall'archivio?${n?` Verranno eliminate anche ${n} registrazioni del diario.`:''}`)) return; setFoods(p=>p.filter(x=>x.id!==id)); setLogs(p=>p.filter(l=>l.foodId!==id)); }
   function addFoodLog(foodId, g = grams, extra = {}) {
   const amount = Number(g);
 
@@ -2693,6 +2697,9 @@ async function commitRecipe(options={}) {
         log.recipeName =
           recipeReview.recipe_name || 'Ricetta';
         log.recipeIngredient = ing.name;
+        log.recipeConsumedGrams=consumed;
+        log.recipeYieldGrams=consumed/factor;
+        if(DiaryV5.number(recipeReview.servings)>0){log.recipePortionCount=Number(recipeReview.servings)*factor;log.recipePortionUnit='porzioni';}
       }
 
       if (ing.portion_assumption) {
@@ -2705,7 +2712,7 @@ async function commitRecipe(options={}) {
     }
 
     let recipes=null;
-    if(isRecipe&&(recipeReview.saveRecipe||saveOnly)){
+    if(isRecipe&&(saveOnly||recipeReview.saveRecipe||(!recipeReview.source?.startsWith('photo')&&recipeReview.mode==='recipe'))){
       const saved={id:recipeReview.recipeId||newId(),name:recipeReview.recipe_name||'Ricetta',yieldGrams:String(recipeReview.yieldOverride??'').trim()===''?ingredientSum:DiaryV5.number(recipeReview.yieldOverride),servings:recipeReview.servings||null,createdAt:new Date().toISOString(),ingredients:savedIngredients};
       recipes=DiaryV5.normalizeRecipes([...liveData.current.recipes.filter(r=>r.id!==saved.id),saved]);
       if(!recipes.some(r=>r.id===saved.id))throw new Error('La ricetta non può essere salvata: controlla ingredienti e peso finale.');
@@ -2752,7 +2759,7 @@ async function commitRecipe(options={}) {
     }
 
     const backup = {
-  version: 7,
+  version: 8,
   savedRecipes,
   foods,
   logs,
@@ -2801,7 +2808,7 @@ function importBackup(event) {
         throw new Error('Formato del backup non valido.');
       }
 
-      if (Number(data.version || 4) > 7) {
+      if (Number(data.version || 4) > 8) {
         throw new Error(
           'Backup creato con una versione più recente di NutriTrace.'
         );
@@ -2905,7 +2912,7 @@ function importBackup(event) {
 
         if (favorites.some(x =>
           !mealIds.has(x.mealId) ||
-          !foodIds.has(x.foodId)
+          (x.recipe ? x.recipe.ingredients.some(i=>!foodIds.has(i.foodId)) : !foodIds.has(x.foodId))
         )) {
           throw new Error(
             'Alcuni preferiti fanno riferimento a pasti ' +
@@ -3134,23 +3141,27 @@ function importBackup(event) {
   showDayFoods:false,
   onAdd:openEntry,
   onEditFood:foodId=>{const food=foods.find(f=>f.id===foodId);if(food)setFoodDraft(structuredClone(food));},
-  onEditFavorite:favoriteId=>{const favorite=mealFavorites.find(f=>f.id===favoriteId);if(favorite)setFavoriteEditor({id:favorite.id,grams:String(favorite.grams),name:favorite.label||foods.find(f=>f.id===favorite.foodId)?.name||'Alimento',error:''});},
+  onEditFavorite:favoriteId=>{const favorite=mealFavorites.find(f=>f.id===favoriteId);if(favorite)setFavoriteEditor({id:favorite.id,grams:String(favorite.grams),name:favorite.label||favorite.recipe?.name||foods.find(f=>f.id===favorite.foodId)?.name||'Alimento',error:''});},
 
   onAssign:(logId,mealId)=>{
-    const id=meals.some(m=>m.id===mealId)
-      ?mealId:null;
-
-    setLogs(previous=>previous.map(log=>
-      log.id===logId
-        ?{...log,mealId:id}
-        :log
-    ));
+    const id=meals.some(m=>m.id===mealId)?mealId:null;
+    setLogs(previous=>DiaryV5.assignGroup(previous,logId,id,newId));
+  },
+  onRemove:logId=>setLogs(previous=>{const ids=new Set(DiaryV5.groupEntries(previous,logId).map(l=>l.id));return previous.filter(l=>!ids.has(l.id));}),
+  onEditRecipe:logId=>{
+    try{const latest=liveData.current, entries=DiaryV5.groupEntries(latest.logs,logId);let old=DiaryV5.recipeWeight(entries);
+      if(old===null){const input=window.prompt('Peso originale consumato della ricetta in grammi (non il peso degli ingredienti)','');if(input===null)return;old=DiaryV5.number(input);}
+      if(!DiaryV5.positive(old))throw Error('Indica un peso originale valido.');
+      const amount=window.prompt('Nuovo peso consumato · g',String(old));if(amount===null)return;
+      const next=DiaryV5.resizeRecipeGroup(latest.logs,logId,amount,old);persistDiaryChange(latest.foods,next);setV5Notice({text:'Porzione della ricetta aggiornata'});
+    }catch(e){window.alert(e.message);}
   },
 
-  onRemove:logId=>{
-    setLogs(previous=>previous.filter(
-      log=>log.id!==logId
-    ));
+  onCopyRecipe:logId=>{
+    if(mutationLock.current)return;
+    try{const latest=liveData.current;const entries=DiaryV5.groupEntries(latest.logs,logId);if(!entries.length||!DiaryV5.recipeKey(entries[0]))throw Error('Ricetta non disponibile.');if(!window.confirm('Aggiungere un’altra porzione di questa ricetta allo stesso pasto?'))return;
+      const added=DiaryV5.duplicateRecipeGroup(latest.logs,logId,newId,new Date().toISOString());persistDiaryBatch([],added);setV5Notice({text:'Ricetta copiata nel pasto',ids:added.map(l=>l.id)});
+    }catch(e){window.alert(e.message);}
   },
 
   onAddFavorite:(mealId,logId)=>{
@@ -3161,6 +3172,13 @@ function importBackup(event) {
       throw new Error('Alimento non trovato nel diario.');
     }
 
+    if(DiaryV5.recipeKey(log)){
+      const entries=DiaryV5.groupEntries(dayLogs,logId);let grams=DiaryV5.recipeWeight(entries);
+      if(grams===null){const input=window.prompt('Peso consumato della ricetta in grammi','');if(input===null)return;grams=DiaryV5.number(input);}
+      const recipe=DiaryV5.recipeSnapshot(entries,grams);
+      const next=window.NutriTraceMealShortcuts.addFavorite(mealFavorites,{mealId,recipe,grams,label:recipe.name},meals,foods);
+      localStorage.setItem('nutritrace_meal_favorites_v3',JSON.stringify(next));setMealFavorites(next);setV5Notice({text:'Ricetta aggiunta ai preferiti'});return;
+    }
     const food=foods.find(f=>f.id===log.foodId);
 
     if(!food){
@@ -3259,6 +3277,7 @@ function importBackup(event) {
 
   onQuickFavorite:favorite=>{
     try{
+      if(favorite.recipe){if(!meals.some(m=>m.id===favorite.mealId))throw Error('Pasto non disponibile.');const groupId=newId(),now=new Date().toISOString();const added=DiaryV5.scaleRecipe(favorite.recipe,favorite.grams,liveData.current.foods).map(l=>({...l,id:newId(),recipeGroupId:groupId,mealId:favorite.mealId,date:selectedDate,createdAt:now,entryOrigin:'recipe-favorite-v59',favoriteId:favorite.id}));persistDiaryBatch([],added);setV5Notice({text:favorite.recipe.name+' aggiunta al pasto',ids:added.map(l=>l.id)});return;}
       const log=window.NutriTraceMealShortcuts.createFavoriteLog(
         favorite,
         selectedDate,
@@ -3283,12 +3302,12 @@ function importBackup(event) {
       );
 
       if(!window.confirm(
-        `Copia ${copied.length} alimenti dal pasto di ieri?`
+        `Copia ${DiaryV5.displayGroups(copied,foods).length} voci dal pasto di ieri?`
       )){
         return;
       }
 
-      setLogs(previous=>[...previous,...copied.map(log=>({...log,createdAt:new Date().toISOString()}))]);
+      setLogs(previous=>[...previous,...DiaryV5.copyRecipeGroupIds(copied,newId).map(log=>({...log,createdAt:new Date().toISOString()}))]);
     }catch(error){
       window.alert(error.message);
     }
@@ -3418,7 +3437,7 @@ function importBackup(event) {
     }
   },'+ Aggiungi pasto')
 ),
-      h(window.NutriTraceMealDiary.DayFoods,{logs:dayLogs,foods,meals,onRemove:logId=>setLogs(previous=>previous.filter(l=>l.id!==logId))})
+      h(window.NutriTraceMealDiary.DayFoods,{logs:dayLogs,foods,meals,onRemove:logId=>setLogs(previous=>{const ids=new Set(DiaryV5.groupEntries(previous,logId).map(l=>l.id));return previous.filter(l=>!ids.has(l.id));})})
     ),
 
     tab==='micro'&&h(V5.MicroPage,{logs,foods,goals,profile,date:selectedDate,weekStart,weekEnd,dateNavigator,onGoals:()=>setTab('obiettivi'),onSources:()=>{setTab('dati');requestAnimationFrame(()=>document.getElementById('v5-scientific-sources')?.scrollIntoView({behavior:'smooth'}));},onPin:id=>setGoals(gs=>gs.map(g=>g.id===id?{...g,pinned:!g.pinned}:g))}),
@@ -3824,7 +3843,7 @@ h('div',{className:'card labelImportCard'},
     ),
 tab==='peso'&&h('section',{className:'aurora-peso'},
       h(window.NutriTraceAurora.PageIntro,{kicker:'IL TUO BENESSERE',title:'Peso e composizione',description:'Misurazioni, progressi e grafici salvati nel tuo diario.',icon:'scale'}),
-  h(window.NutriTraceBodyWeight),
+  h('div',{className:'v59-body-weight'},h(window.NutriTraceBodyWeight)),
   h(window.NutriTraceWeightCalorieChart,{
     logs,
     foods

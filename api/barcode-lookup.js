@@ -15,6 +15,11 @@ const FIELDS = [
   'quantity',
   'image_front_small_url',
   'ingredients_text',
+  'ingredients_text_it',
+  'nutrition_data_per',
+  'product_quantity_unit',
+  'serving_size',
+  'serving_quantity_unit',
   'nutriments'
 ].join(',');
 
@@ -48,6 +53,17 @@ function numberOrNull(value) {
   return value;
 }
 
+// OFF <nutrient>_100g is already normalized to grams (or per 100 ml for liquids).
+// The *_unit field describes entry units, not the normalized number.
+const MICRO_KEYS=['calcium','iron','magnesium','phosphorus','potassium','sodium','zinc','copper','manganese','selenium','iodine','chloride','chromium','molybdenum','fluoride','vitamin-c','vitamin-d','vitamin-b1','vitamin-b2','vitamin-b6','vitamin-b12','biotin','pantothenic-acid','choline','vitamin-a','vitamin-e','vitamin-k','vitamin-pp','folates','vitamin-b9'];
+function microBasis(product) {
+  const per=String(product.nutrition_data_per||'').toLowerCase().replace(/\s/g,'');
+  const qty=[product.product_quantity_unit,product.quantity,product.serving_quantity_unit,product.serving_size].map(v=>String(v||'').toLowerCase()).join(' ');
+  const volume=/(?:^|[^a-z])(?:ml|cl|dl|l|litri?|liters?|litres?|fl\s*oz)(?:$|[^a-z])/.test(qty)||per==='100ml';
+  const mass=/(?:^|[^a-z])(?:kg|g|mg|grams?|grammi?|oz)(?:$|[^a-z])/.test(qty);
+  if(volume)return 'volume';
+  return mass&&['100g','serving',''].includes(per)?'mass':'unknown';
+}
 function normalizeProduct(product, barcode) {
   const n = product.nutriments || {};
 
@@ -82,9 +98,11 @@ function normalizeProduct(product, barcode) {
     quantity: String(product.quantity || '').trim(),
     image: product.image_front_small_url || null,
     ingredients: String(
-      product.ingredients_text || ''
+      product.ingredients_text_it || product.ingredients_text || ''
     ).trim(),
     servingGrams: 100,
+    microBasis: microBasis(product),
+    microGrams: Object.fromEntries(MICRO_KEYS.map(key=>[key,nutrient(key)]).filter(([,value])=>value!==null&&value<=100)),
     label,
     source: {
       code: 'OPEN_FOOD_FACTS',

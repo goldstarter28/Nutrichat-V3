@@ -54,6 +54,7 @@
     opinion('efsa-carbohydrate', 'Carboidrati e fibre', 2010, '1462'),
     opinion('efsa-energy', 'Energia e attività fisica (PAL)', 2013, '3005'),
     src('energy-mifflin', 'Mifflin et al. · Equazione del dispendio energetico a riposo', 'https://pubmed.ncbi.nlm.nih.gov/2305711/', 1990),
+    src('energy-henry-2005', 'Henry 2005 · Equazioni 18–30 anni (Health Council of the Netherlands 2022, tabella A1)', 'https://www.healthcouncil.nl/site/binaries/site-content/collections/documents/2022/08/16/dietary-reference-values-for-energy/Background-document_%2BDRVs-for-energy.pdf', 2005),
     src('who-sodium', 'OMS · Riduzione del sodio', 'https://www.who.int/tools/elena/interventions/sodium-cvd-adults', 2012),
     src('who-amino', 'WHO/FAO/UNU · Proteine e aminoacidi, TRS 935, tabella 49', 'https://iris.who.int/handle/10665/43411', 2007),
     src('efsa-b6-ul', 'EFSA · UL vitamina B6, valore finale 12 mg/die', 'https://efsa.onlinelibrary.wiley.com/doi/10.2903/j.efsa.2023.8006', 2023, 'safety'),

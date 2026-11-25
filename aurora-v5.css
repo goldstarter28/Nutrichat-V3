@@ -253,3 +253,16 @@ html[data-theme=dark] .v5-wizard-backdrop input:not([type=radio]):not([type=chec
 @media print{.v58-global-add-slot,.v58-nav-add{display:none!important}}
 /* Keep the desktop shortcut visible when the tab strip itself scrolls horizontally. */
 .aurora-app .v58-nav-add{position:sticky;right:0;z-index:1;box-shadow:-4px 0 8px var(--card)}
+
+/* V5.9: only recipe action and body-weight layout. */
+.v5-saved-recipe-head .v59-recipe-add{flex:0 0 auto;white-space:nowrap;padding:6px 8px;font-size:inherit;min-height:34px}
+.v59-body-weight .sectionHead h2{font-size:clamp(25px,3vw,32px);line-height:1.2}
+.v59-body-weight form:has(input[type="time"]){display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:20px!important;row-gap:13px!important;align-items:end}
+.v59-body-weight form:has(input[type="time"])>label{min-width:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.v59-body-weight form:has(input[type="time"])>label input{width:100%;min-width:0;box-sizing:border-box}
+.v59-body-weight form:has(input[type="time"]) label:has(input[type="number"]){font-size:18px;font-weight:700;grid-column:1;grid-row:2}
+.v59-body-weight form:has(input[type="time"]) label:has(input[type="time"]){grid-column:2;grid-row:2}
+.v59-body-weight form:has(input[type="time"]) label:has(input[type="date"]){grid-column:1/-1}
+.v59-body-weight form:has(input[type="time"]) label:has(input[type="text"]){grid-column:1/-1}
+.v59-recipe-ingredients{margin:5px 0;font-size:13px}
+.v59-recipe-ingredients ul{margin:4px 0 6px;padding-left:20px}

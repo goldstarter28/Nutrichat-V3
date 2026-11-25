@@ -143,7 +143,6 @@
     if (required.some(id => !Object.prototype.hasOwnProperty.call(a, id))) return { eligible: false, reason: 'Completa i dati necessari prima del riepilogo.', code: 'INCOMPLETE' };
     const blocked = reason => ({ eligible: false, reason, code: 'MANUAL_PLAN', sourceIds: ['energy-mifflin', 'efsa-energy'] });
     if (a.age < 18) return blocked('Per chi ha meno di 18 anni il percorso salva solo le preferenze. Gli obiettivi nutrizionali richiedono riferimenti adatti alla crescita.');
-    if (a.age < 19) return blocked('L’equazione utilizzata è stata studiata a partire dai 19 anni. A 18 anni manteniamo gli obiettivi attuali e salviamo le preferenze.');
     if (a.age > 78) return blocked('Fuori dall’intervallo di età studiato per questa equazione, manteniamo gli obiettivi attuali.');
     if (!['female', 'male'].includes(a.sex)) return blocked('Hai scelto gli obiettivi manuali. Le tue preferenze possono comunque essere salvate.');
     if (a.sex === 'female' && a.physiologicalState !== 'none') return blocked('Questa fase richiede riferimenti specifici. Manteniamo i tuoi obiettivi e non calcoliamo una variazione di energia.');
@@ -160,7 +159,9 @@
       return { ...blocked('Non applichiamo automaticamente una riduzione dell’energia perché ' + reasons.join(' e ') + '. Puoi concordare un obiettivo personale con un professionista.'), restriction: 'DEFICIT_GUARD', maintenanceAvailable: alternative.eligible };
     }
     if (a.goal === 'gain' && bmi >= 30) return blocked('Per il profilo indicato non applichiamo automaticamente un aumento dell’energia. Manteniamo i tuoi obiettivi.');
-    const bmr = 10 * a.weight + 6.25 * a.height - 5 * a.age + (a.sex === 'male' ? 5 : -161);
+    const henry = a.age === 18;
+    const method = henry ? 'Henry 2005 (18–30 anni) × PAL' : 'Mifflin–St Jeor × PAL';
+    const bmr = henry ? (a.sex === 'male' ? 14.4 * a.weight + 313 * a.height / 100 + 113 : 10.4 * a.weight + 615 * a.height / 100 - 282) : 10 * a.weight + 6.25 * a.height - 5 * a.age + (a.sex === 'male' ? 5 : -161);
     const pal = { low: 1.4, deskTraining: 1.5, light: 1.6, active: 1.8, veryActive: 2.0 }[a.activity];
     const maintenance = bmr * pal;
     const adjustment = a.goal === 'lose' ? -0.10 : a.goal === 'gain' ? 0.05 : 0;
@@ -170,9 +171,9 @@
     const fat = kcal * 0.30 / 9;
     const carbs = (kcal - protein * 4 - fat * 9) / 4;
     return {
-      eligible: true, reason: '', method: 'Mifflin–St Jeor × PAL', bmr, pal, maintenance, adjustment, kcal,
+      eligible: true, reason: '', method, bmr, pal, maintenance, adjustment, kcal,
       grams: { protein, carbs, fat, fiber: 25 },
-      sourceIds: ['energy-mifflin', 'efsa-energy', 'efsa-protein', 'efsa-carbohydrate', 'efsa-fats'],
+      sourceIds: [henry ? 'energy-henry-2005' : 'energy-mifflin', 'efsa-energy', 'efsa-protein', 'efsa-carbohydrate', 'efsa-fats'],
       notes: [
         'La stima non misura il metabolismo: valuta nel tempo quanto è adatta a te.',
         'Il movimento comprende già l’allenamento; non vengono aggiunte calorie per le sessioni. Il PAL 1,5 per giornate sedentarie con allenamento è una stima iniziale dell’app, non una misurazione: rivaluta il fabbisogno in base all’andamento e al benessere.',
@@ -422,9 +423,9 @@
           return h('div', { className: 'v5-wizard-target', key: id }, h('span', null, meta[0]), h('strong', null, displayNumber(value, id === 'kcal' ? 0 : 2), ' ', meta[1]), h('small', null, 'Prima: ', displayNumber(oldValue), ' ', meta[1], '/giorno'));
         })) : null,
         plan.eligible ? h('details', { className: 'v5-wizard-explanation' }, h('summary', null, 'Come sono stati calcolati?'),
-          h('p', null, 'Mifflin–St Jeor: ', displayNumber(plan.bmr, 0), ' kcal a riposo × PAL ', displayNumber(plan.pal), ' = ', displayNumber(plan.maintenance, 0), ' kcal di mantenimento stimate. ', plan.adjustment ? 'Variazione scelta dall’app: ' + displayNumber(plan.adjustment * 100) + '%.' : 'Nessuna variazione per il peso.'),
+          h('p', null, plan.method + ': ', displayNumber(plan.bmr, 0), ' kcal a riposo × PAL ', displayNumber(plan.pal), ' = ', displayNumber(plan.maintenance, 0), ' kcal di mantenimento stimate. ', plan.adjustment ? 'Variazione scelta dall’app: ' + displayNumber(plan.adjustment * 100) + '%.' : 'Nessuna variazione per il peso.'),
           h('ul', null, plan.notes.map((note, i) => h('li', { key: i }, note))),
-          h('p', null, 'Fonti: ', h('a', { href: 'https://pubmed.ncbi.nlm.nih.gov/2305711/', target: '_blank', rel: 'noopener noreferrer' }, 'Mifflin 1990'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/efsajournal/pub/3005', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA energia'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/press/news/nda100326', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA carboidrati, grassi e fibre'), '. I dettagli sono anche in Dati → Fonti scientifiche.')
+          h('p', null, 'Fonti: ', h('a', { href: 'https://pubmed.ncbi.nlm.nih.gov/2305711/', target: '_blank', rel: 'noopener noreferrer' }, 'Mifflin 1990'), plan.method.startsWith('Henry') && h('a', { href: 'https://www.healthcouncil.nl/site/binaries/site-content/collections/documents/2022/08/16/dietary-reference-values-for-energy/Background-document_%2BDRVs-for-energy.pdf', target: '_blank', rel: 'noopener noreferrer' }, ' · Henry 2005 (tabella A1)'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/efsajournal/pub/3005', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA energia'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/press/news/nda100326', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA carboidrati, grassi e fibre'), '. I dettagli sono anche in Dati → Fonti scientifiche.')
         ) : null,
         plan.eligible && microChanges.length ? h('section', { className: 'v5-wizard-micros' },
           h('label', { className: 'v5-wizard-toggle' }, h('input', { type: 'checkbox', checked: updateMicros, onChange: event => setUpdateMicros(event.target.checked) }), h('span', null, h('strong', null, 'Aggiorna anche i riferimenti dei micronutrienti'), h('small', null, 'Facoltativo: sostituisce ', microChanges.length, ' obiettivi standard compatibili con il profilo. Le voci personalizzate e i dati senza riferimento applicabile restano invariati.'))),
