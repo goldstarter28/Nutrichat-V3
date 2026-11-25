@@ -55,18 +55,21 @@ function claimProfileInvite(storage){
  try{if(storage.getItem(PROFILE_INVITE)==='yes'){profileInviteClaimed=true;return false;}storage.setItem(PROFILE_INVITE,'yes');}catch{}
  profileInviteClaimed=true;return true;
 }
+const SHARING_V61='nutritrace_coach_sharing_v61';
+function readSharing(){try{return JSON.parse(root.localStorage.getItem(SHARING_V61)||'{}')||{};}catch{return {};}}
 function View(props){
  const [data,setData]=useState(read);
  const [draft,setDraft]=useState('');
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [consent,setConsent]=useState(()=>{try{return localStorage.getItem(CONSENT)==='yes';}catch{return false;}});
- const [share,setShare]=useState(false);
+ const [share,setShare]=useState(()=>readSharing().nutrition===true);
  const [compact,setCompact]=useState(()=>{try{return localStorage.getItem(SETTINGS_COMPACT)==='yes';}catch{return false;}});
  const [settingsOpen,setSettingsOpen]=useState(false);
  const [profileInvite,setProfileInvite]=useState(false);
- const [shareProfile,setShareProfile]=useState(false);
- const [weight,setWeight]=useState(false);
+ const [shareProfile,setShareProfile]=useState(()=>readSharing().nutrition===true&&readSharing().profile===true);
+ const [weight,setWeight]=useState(()=>readSharing().nutrition===true&&readSharing().weight===true);
+ const [shareHealth,setShareHealth]=useState(()=>readSharing().nutrition===true&&readSharing().profile===true&&readSharing().health===true);
  const [editing,setEditing]=useState(null);
  const [listening,setListening]=useState(false);
  const [speech,setSpeech]=useState({id:null,status:'stopped'});
@@ -76,7 +79,9 @@ function View(props){
  const [sending,setSending]=useState(false);
  const recognition=useRef(null);
  const bottom=useRef(null);
- const analysis=useMemo(()=>previous.evaluate(props),[props.logs,props.foods,props.goals,props.profile]);
+ const [localPeriod,setLocalPeriod]=useState('90');
+ const localHistory=useMemo(()=>root.NutriTraceIntelligence?.buildHistory(props),[props.logs,props.foods,props.goals,props.profile]);
+ const localWindow=localHistory?.windows[Number(localPeriod)];
  const profileContext=useMemo(()=>wizardContext(props.profile),[props.profile]);
  const thread=data.threads.find(t=>t.id===data.active)||data.threads[0];
  useEffect(()=>{
@@ -84,6 +89,7 @@ function View(props){
   catch{setStorageError('Memoria locale piena o non disponibile: esporta la chat prima di chiudere la pagina.');}
  },[data]);
  useEffect(()=>{try{localStorage.setItem(CONSENT,consent?'yes':'no');}catch{}},[consent]);
+ useEffect(()=>{try{localStorage.setItem(SHARING_V61,JSON.stringify({nutrition:share,profile:share&&shareProfile,weight:share&&weight,health:share&&shareProfile&&shareHealth}));}catch{}},[share,shareProfile,weight,shareHealth]);
  useEffect(()=>{bottom.current?.scrollIntoView?.({block:'nearest',behavior:'smooth'});},[thread?.messages.length,busy]);
  useEffect(()=>()=>{recognition.current?.stop?.();root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};},[]);
  useEffect(()=>{root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};setSpeech({id:null,status:'stopped'});},[data.active]);
@@ -100,13 +106,12 @@ function View(props){
   let storage;try{storage=root.localStorage;}catch{}
   if(claimProfileInvite(storage)&&!shareProfile)setProfileInvite(true);
  }
- function context(){
+ function context(question){
   if(!share)return{};
-  let weightData=null;
-  if(weight){try{const raw=JSON.parse(localStorage.getItem('nutritrace_body_weight_v1')||'{}');
-   weightData={recent:(Array.isArray(raw.entries)?raw.entries:[]).filter(x=>x.kg!==null&&x.kg!==''&&Number.isFinite(Number(x.kg))&&Number(x.kg)>0).sort((a,b)=>String(a.date).localeCompare(String(b.date))).slice(-10).map(x=>({date:x.date,kg:Number(x.kg)})),
-   target:raw.target==null?null:Number(raw.target)};}catch{}}
-  return sharedContext({share,shareProfile,profile:props.profile,analysis,weightData});
+  const Q=root.NutriTraceIntelligence;
+  if(!Q)throw Error('Modulo contesto non disponibile. Ricarica l’app.');
+  let weightData={};if(weight){try{weightData=JSON.parse(localStorage.getItem('nutritrace_body_weight_v1')||'{}');}catch{}}
+  return Q.fitContext(Q.coachContext(props,question,{share,shareProfile,shareHealth:shareProfile&&shareHealth,shareWeight:weight,weights:weightData.entries,weightTarget:weightData.target,state:props.qualityState}),8500);
  }
  async function ask(question,baseMessages,threadId,mode='new'){
   if(!consent){setError('Autorizza l’invio dei messaggi prima di continuare.');return;}
@@ -114,7 +119,7 @@ function View(props){
   try{
    const history=baseMessages.filter(m=>['user','assistant'].includes(m.role)).slice(-12).map(m=>({role:m.role,content:m.content}));
    const response=await fetch('/api/coach-chat',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({question,history,context:context()})});
+    body:JSON.stringify({question,history,context:context(question)})});
    const json=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(json.error||'Impossibile ottenere una risposta');
    const answer=String(json.answer||'');
@@ -137,7 +142,7 @@ function View(props){
    if(idx<0){setEditing(null);return;}
    messages=messages.slice(0,idx);
   }
-  const msg={id:mkid(),role:'user',content:question,createdAt:Date.now(),sharedScopes:share?['statistiche',...(weight?['peso']:[]),...(shareProfile&&profileContext?['preferenze']:[])]:[]};
+  const msg={id:mkid(),role:'user',content:question,createdAt:Date.now(),sharedScopes:share?['statistiche',...(weight?['peso']:[]),...(shareProfile&&profileContext?['percorso']:[]),...(shareProfile&&shareHealth?['informazioni fisiologiche e allergeni personali']:[])]:[]};
   updateThread(id,t=>({...t,title:t.messages.length===0?question.slice(0,58):t.title,messages:[...messages,msg].slice(-100)}));
   setDraft('');setEditing(null);
   collapseSettings();
@@ -192,13 +197,14 @@ function View(props){
  }
  const sharingPanel=h('section',{className:'v5-coach-sharing','aria-label':'Condivisione facoltativa con il Coach'},
    h('label',{className:'v5-coach-sharing-main'},
-    h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked){setWeight(false);setShareProfile(false);}}}),
-    h('span',null,h('strong',null,'Condividi informazioni nutrizionali'),h('small',null,'Facoltativo · invia le medie e gli obiettivi degli ultimi 7 giorni insieme alla prossima domanda.')),
+    h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked){setWeight(false);setShareProfile(false);setShareHealth(false);}}}),
+    h('span',null,h('strong',null,'Condividi informazioni nutrizionali'),h('small',null,'Facoltativo · obiettivi attuali, statistiche fino a 90 giorni e riepiloghi fino a 52 settimane; dettagli selezionati secondo la domanda e le quote. La scelta resta sul dispositivo.')),
     h('span',{className:'v5-coach-sharing-badge'},share?'Attivo':'Spento')),
    share&&h('div',{className:'v5-coach-sharing-options'},
-    h('label',null,h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),h('span',null,'Includi anche le ultime 10 misurazioni e l’obiettivo di peso')),
-    h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>{setShareProfile(e.target.checked);if(e.target.checked){let storage;try{storage=root.localStorage;}catch{}claimProfileInvite(storage);setProfileInvite(false);}}}),h('span',null,'Includi le preferenze e le abitudini del percorso obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
-    h('small',null,'Le risposte cliniche, età e sesso del questionario non sono incluse. Puoi spegnere la condivisione in qualsiasi momento.')),
+    h('label',null,h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),h('span',null,'Includi anche lo storico aggregato delle pesate e l’obiettivo di peso')),
+    h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>{setShareProfile(e.target.checked);if(!e.target.checked)setShareHealth(false);if(e.target.checked){let storage;try{storage=root.localStorage;}catch{}claimProfileInvite(storage);setProfileInvite(false);}}}),h('span',null,'Includi le risposte del percorso, età, altezza, peso del profilo, coefficiente fisiologico e calcolo degli obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
+    shareProfile&&h('label',null,h('input',{type:'checkbox',checked:shareHealth,onChange:e=>setShareHealth(e.target.checked)}),h('span',null,'Autorizzo separatamente le risposte fisiologiche e di assistenza del wizard e gli allergeni personali.')),
+    h('small',null,'Le informazioni vengono inviate a GroqCloud. Nessun invio a OpenRouter. Puoi revocare la condivisione in qualsiasi momento.')),
    h('p',{className:'v5-coach-sharing-note'},share?'Queste informazioni saranno inviate a GroqCloud solo quando invii un messaggio autorizzato.':'Il diario rimane sul dispositivo. Puoi usare la chat anche senza condividere le statistiche.'),
    share&&h('button',{type:'button',className:'ghost v5-coach-sharing-done',onClick:collapseSettings},'Fatto'),
    h('details',{className:'v5-coach-privacy-note'},h('summary',null,'Come funziona la privacy della chat'),
@@ -219,10 +225,11 @@ function View(props){
     btn('Elimina',()=>deleteThread(t.id),busy))),
    btn('Esporta JSON',exportChat)),
   !compact&&sharingPanel,
-  h('details',{className:'coach-details'},h('summary',null,'Osservazioni sul dispositivo · '+analysis.trackedDays+'/7 giorni registrati'),
-   h('div',{className:'coach-stats'},...analysis.metrics.map(m=>h('div',{className:'coach-stat',key:m.key},
-    h('small',null,m.name),h('strong',null,m.avg==null?'N/D':Number(m.avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
-   ...analysis.insights.map((x,i)=>h('p',{key:i},h('strong',null,x.title),': ',x.body))),
+  localWindow&&h('details',{className:'coach-details'},h('summary',null,'Riepilogo locale · '+localWindow.days+'/'+localPeriod+' giorni registrati'),
+   h('label',null,'Periodo del riepilogo',h('select',{value:localPeriod,onChange:e=>setLocalPeriod(e.target.value)},...[7,30,60,90,364].map(n=>h('option',{key:n,value:String(n)},n===364?'52 settimane':n+' giorni')))),
+   h('p',{className:'muted'},localWindow.entries+' registrazioni · '+(Number(localPeriod)-localWindow.days)+' giorni senza registrazioni. Medie dei soli giorni con dati, non consumi confermati.'),
+   h('div',{className:'coach-stats'},...localHistory.metrics.slice(0,5).map(m=>h('div',{className:'coach-stat',key:m.id},h('small',null,m.name),h('strong',null,localWindow.metrics[m.id]?.avg==null?'N/D':Number(localWindow.metrics[m.id].avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
+   h('small',{className:'muted'},share?'Il periodo qui scelto cambia solo questo riepilogo. Il Coach riceve contesto fino a 90 giorni e riepiloghi settimanali fino a 52 settimane, nei limiti del budget e dei consensi.':'Il riepilogo è locale. Il Coach non riceve statistiche finché non autorizzi la condivisione.')),
   h('div',{className:'coach-messages',role:'log','aria-label':'Messaggi della conversazione'},
    thread.messages.length===0&&h('div',{className:'coach-empty'},h('span',{className:'v5-coach-empty-symbol','aria-hidden':'true'},'✦'),h('h3',null,'Da dove vuoi iniziare?'),
     h('p',null,'Alimentazione, allenamento o una domanda sulle tue abitudini.'),
@@ -248,7 +255,7 @@ function View(props){
     btn(listening?'Ferma microfono':'🎙 Detta',dictate,busy),
     h('span',{className:'v5-coach-input-count','aria-live':'off'},draft.length+'/3000'),
     h('button',{type:'submit',className:'coach-btn coach-primary',disabled:busy||!draft.trim()},busy?'Invio…':editing?'Salva e rigenera':'Invia ↗'))),
-  profileInvite&&h('article',{className:'v5-coach-profile-invite',role:'status'},h('strong',null,'Vuoi includere anche le preferenze e le abitudini del tuo percorso?'),h('p',null,'È facoltativo: le risposte restano locali finché non autorizzi la condivisione.'),h('div',{className:'v5-action-row'},btn('Apri impostazioni',()=>{setCompact(true);setSettingsOpen(true);setProfileInvite(false);}),btn('No, grazie',()=>setProfileInvite(false)))),
+  profileInvite&&h('article',{className:'v5-coach-profile-invite',role:'status'},h('strong',null,'Vuoi includere anche le informazioni del tuo percorso?'),h('p',null,'È facoltativo: le risposte restano locali finché non autorizzi la condivisione.'),h('div',{className:'v5-action-row'},btn('Apri impostazioni',()=>{setCompact(true);setSettingsOpen(true);setProfileInvite(false);}),btn('No, grazie',()=>setProfileInvite(false)))),
   compact&&h('section',{className:'v5-coach-settings-compact'},h('button',{type:'button',className:'ghost v5-coach-settings-toggle','aria-expanded':settingsOpen,onClick:()=>setSettingsOpen(v=>!v)},'Condivisione e privacy · '+(share?'Statistiche attive':'Statistiche spente')+(share&&shareProfile?' · Preferenze attive':'')+(settingsOpen?' ▴':' ▾')),settingsOpen&&h('div',null,sharingPanel,consent&&consentControl,btn('Chiudi impostazioni',()=>setSettingsOpen(false)))),
   storageError&&h('p',{className:'coach-error',role:'alert'},storageError),
   h('small',{className:'coach-disclaimer'},'Conversazioni salvate su questo dispositivo/browser. Per registrare un alimento da foto usa Foto in Oggi. Dettatura e lettura vocale dipendono dal browser. Le risposte del Coach sono informative e non sostituiscono indicazioni cliniche.')

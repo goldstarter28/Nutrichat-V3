@@ -217,7 +217,7 @@
 
         h('button', {
           type: 'button',
-          className: 'ghost',
+          className: 'ghost v61-weight-refresh',
           onClick: () => {
             refresh(n => n + 1);
             setSelected(null);

@@ -20,7 +20,7 @@ const FIELDS = [
   'product_quantity_unit',
   'serving_size',
   'serving_quantity_unit',
-  'nutriments'
+  'nutriments','nutriscore_grade','nutriscore_version','nutriscore_2023_grade','nutriscore','nova_group','additives_tags','allergens_tags','traces_tags','categories_tags'
 ].join(',');
 
 function validateBarcode(value) {
@@ -64,6 +64,7 @@ function microBasis(product) {
   if(volume)return 'volume';
   return mass&&['100g','serving',''].includes(per)?'mass':'unknown';
 }
+function qualityMetadata(p){const tags=v=>[...new Set((Array.isArray(v)?v:[]).filter(x=>typeof x==='string').map(x=>x.slice(0,90)))].slice(0,150);const valid=v=>typeof v==='string'&&/^[a-e]$/i.test(v);const latest=p.nutriscore_2023_grade||p.nutriscore?.['2023']?.grade;const current=valid(latest);return {source:'Open Food Facts',nutriScore:current?latest:valid(p.nutriscore_grade)?p.nutriscore_grade:null,nutriScoreVersion:current?'2023':String(p.nutriscore_version||'non indicata').slice(0,24),nova:[1,2,3,4].includes(p.nova_group)?p.nova_group:null,additives:tags(p.additives_tags),allergens:tags(p.allergens_tags),traces:tags(p.traces_tags),categories:tags(p.categories_tags),allergenInfo:Array.isArray(p.allergens_tags)};}
 function normalizeProduct(product, barcode) {
   const n = product.nutriments || {};
 
@@ -101,6 +102,7 @@ function normalizeProduct(product, barcode) {
       product.ingredients_text_it || product.ingredients_text || ''
     ).trim(),
     servingGrams: 100,
+    qualityV61:qualityMetadata(product),
     microBasis: microBasis(product),
     microGrams: Object.fromEntries(MICRO_KEYS.map(key=>[key,nutrient(key)]).filter(([,value])=>value!==null&&value<=100)),
     label,
