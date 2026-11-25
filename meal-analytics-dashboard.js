@@ -73,6 +73,7 @@
   }
 
   function shortDate(value) {
+    if (/^P\d+$/.test(value)) return value;
     if (/^\d{4}-\d{2}$/.test(value)) {
       return value.slice(5) + '/' + value.slice(0, 4);
     }
@@ -356,8 +357,11 @@ function InteractiveChart({
     )
   }));
 
-  const W = Math.max(880, Math.min(3600, 120 + count * 16));
-  const H = 500;
+  const chartScrollRef = React.useRef(null);
+  const [chartWidth,setChartWidth] = React.useState(720);
+  React.useEffect(()=>{const el=chartScrollRef.current;if(!el)return;const measure=()=>{if(el.clientWidth>0)setChartWidth(Math.round(el.clientWidth));};measure();if(typeof ResizeObserver==='function'){const ro=new ResizeObserver(measure);ro.observe(el);return()=>ro.disconnect();}if(typeof window!=='undefined'){window.addEventListener('resize',measure);return()=>window.removeEventListener('resize',measure);}},[]);
+  const W = Math.max(300, chartWidth);
+  const H = 380;
   const L = 56;
   const R = comparisonMode === 'metrics' ? 60 : 18;
   const T = 22;
@@ -397,7 +401,6 @@ function InteractiveChart({
 
   const x = index =>
     L + (index + 0.5) * step;
-const chartScrollRef = React.useRef(null);
 const gestureRef = React.useRef(null);
 const lastTapRef = React.useRef(0);
 
@@ -675,12 +678,9 @@ function handleTouchEnd(event) {
       )
     ),
 
-      h('div', { className: 'v61-chart-navigation' },
-        h('button', { type: 'button', className: 'ghost', onClick: () => { const el=chartScrollRef.current; if(el) el.scrollLeft -= Math.max(150,el.clientWidth*.8); } }, '← Scorri grafico'),
-        h('button', { type: 'button', className: 'ghost', onClick: () => { const el=chartScrollRef.current; if(el) el.scrollLeft += Math.max(150,el.clientWidth*.8); } }, 'Scorri grafico →'),
-        h('small', { className: 'muted' }, 'Grafico ingrandito: scorri o usa lo zoom per esplorare i dati.')),
+      h('small',{className:'muted'},'Il periodo intero entra nel grafico. Usa lo zoom per leggere i singoli punti.'),
       h('div', {
-        ref: chartScrollRef, className: 'v61-chart-scroll', tabIndex: 0, 'aria-label': 'Grafico scorrevole', style: { overflowX: 'auto', touchAction: 'pan-y', width: '100%', minWidth: 0, maxWidth: '100%' }
+        ref: chartScrollRef, className: 'v61-chart-scroll', 'aria-label': 'Grafico analisi pasti', style: { overflow: 'hidden', touchAction: 'pan-y', width: '100%', minWidth: 0, maxWidth: '100%' }
       },
 
         h('svg', {
@@ -691,7 +691,7 @@ function handleTouchEnd(event) {
             : 'Grafico a barre verticali interattivo',
           style: {
   width: '100%',
-  minWidth: Math.round(W * .9) + 'px',
+  minWidth: 0,
   display: 'block',
   touchAction: 'none'
 },
@@ -775,7 +775,7 @@ onPointerLeave: () => {
           ...labels.map((label, index) => {
             const every = Math.max(
               1,
-              Math.ceil(labels.length / 11)
+              Math.ceil(labels.length / Math.max(3,Math.floor(plotWidth/64)))
             );
 
             if (
@@ -818,7 +818,7 @@ onPointerLeave: () => {
                   key: `${seriesIndex}-${index}`,
                   x: start,
                   y: y(point.value, seriesIndex),
-                  width: Math.max(2, width - 2),
+                  width: Math.max(.3, width * .85),
                   height: Math.max(
                     0,
                     T + plotHeight - y(point.value, seriesIndex)
@@ -867,7 +867,7 @@ onPointerLeave: () => {
                   key: `point-${seriesIndex}-${index}`,
                   cx: x(index),
                   cy: y(point.value, seriesIndex),
-                  r: active === index ? 6 : 3.4,
+                  r: active === index ? 6 : Math.max(.8,Math.min(3.4,step*.35)),
                   fill: exceeded
                     ? '#c44343'
                     : item.color,
@@ -927,7 +927,7 @@ onPointerLeave: () => {
             series.map(item => {
               const point = item.data[active];
 
-              return `${item.name}: ` +
+              return `${item.name}${comparisonMode==='periods'&&point?.key?' · '+point.key:''}: ` +
                 `${fmt(point?.value, 2)} ${item.unit}` +
                 (
                   point?.coverage !== null &&
@@ -947,8 +947,8 @@ onPointerLeave: () => {
     foods = [],
     meals = [],
     goals = [],
-    from,
-    to
+    from: defaultFrom,
+    to: defaultTo
   }) {
     const [chartType, setChartType] = React.useState('line');
     const [mode, setMode] = React.useState('meals');
@@ -958,6 +958,12 @@ onPointerLeave: () => {
     const [chosen, setChosen] = React.useState([]);
     const [limitText, setLimitText] = React.useState('');
     const [showTable, setShowTable] = React.useState(false);
+    const [firstFrom,setFirstFrom]=React.useState('');
+    const [firstTo,setFirstTo]=React.useState('');
+    const [secondFrom,setSecondFrom]=React.useState('');
+    const [secondTo,setSecondTo]=React.useState('');
+    const from=mode==='periods'?(firstFrom||defaultFrom):defaultFrom;
+    const to=mode==='periods'?(firstTo||defaultTo):defaultTo;
 
     const catalog = React.useMemo(
       () => metricCatalog(foods, goals),
@@ -998,16 +1004,10 @@ onPointerLeave: () => {
     const validRange =
       validDate(from) && validDate(to) && from <= to;
 
-    const previousEnd = validRange
-      ? addDays(from, -1)
-      : '';
-
-    const previousStart = validRange
-      ? addDays(
-          previousEnd,
-          -countDays(from, to) + 1
-        )
-      : '';
+    const defaultPreviousEnd = validRange ? addDays(from,-1) : '';
+    const previousEnd=secondTo||defaultPreviousEnd;
+    const previousStart=secondFrom||(validRange?addDays(defaultPreviousEnd,-countDays(from,to)+1):'');
+    const validComparison=validDate(previousStart)&&validDate(previousEnd)&&previousStart<=previousEnd&&countDays(previousStart,previousEnd)<=3660;
 
     const limit = limitText.trim() === ''
       ? null
@@ -1015,9 +1015,9 @@ onPointerLeave: () => {
 
     const data = React.useMemo(() => {
       if (!validRange) return null;
-      if (countDays(from, to) > 3660) return null;
+      if (countDays(from, to) > 3660 || (mode==='periods'&&!validComparison)) return null;
 
-      const labels = buckets(from, to, grouping);
+      let labels = buckets(from, to, grouping);
       const series = [];
 
       if (mode === 'metrics') {
@@ -1045,7 +1045,7 @@ onPointerLeave: () => {
 
         if (id) {
           series.push({
-            name: 'Periodo selezionato',
+            name: 'Periodo 1 · '+from+' → '+to,
             unit: metric.unit,
             color: COLORS[0],
             data: buildSeries(
@@ -1061,16 +1061,15 @@ onPointerLeave: () => {
           );
 
           series.push({
-            name: 'Periodo precedente',
+            name: 'Periodo 2 · '+previousStart+' → '+previousEnd,
             unit: metric.unit,
             color: COLORS[1],
-            data: labels.map((_, index) =>
-              previous[index] || {
-                value: null,
-                coverage: null
-              }
-            )
+            data: previous
           });
+          // Align by relative bucket index, not calendar date. Preserve both full periods.
+          const length=Math.max(...series.map(s=>s.data.length));
+          labels=Array.from({length},(_,i)=>'P'+(i+1));
+          for(const item of series)item.data=labels.map((_,i)=>item.data[i]||{value:null,coverage:null,key:null});
         }
 
       } else {
@@ -1095,7 +1094,7 @@ onPointerLeave: () => {
       logs, foods, meals,
       selectedIds.join('|'),
       mode, metricId, secondId,
-      from, to, grouping, validRange
+      from, to, grouping, validRange,previousStart,previousEnd,validComparison
     ]);
 
     const option = (id, name) =>
@@ -1140,7 +1139,7 @@ onPointerLeave: () => {
       }
     },
 
-      h('h2', null, 'Esplora i pasti'),
+      h('h2', null, 'Grafico analisi pasti'),
 
       h('p', { className: 'muted tiny' },
         'Seleziona dati, pasti, grafico e intervallo. ' +
@@ -1223,6 +1222,10 @@ onPointerLeave: () => {
         )
       ),
 
+      mode==='periods'&&h('div',{className:'v611-period-controls'},
+        h('fieldset',null,h('legend',null,'Periodo 1'),h('label',null,'Dal',h('input',{type:'date',value:from,onChange:e=>setFirstFrom(e.target.value)})),h('label',null,'Al',h('input',{type:'date',value:to,onChange:e=>setFirstTo(e.target.value)}))),
+        h('fieldset',null,h('legend',null,'Periodo 2'),h('label',null,'Dal',h('input',{type:'date',value:previousStart,onChange:e=>setSecondFrom(e.target.value)})),h('label',null,'Al',h('input',{type:'date',value:previousEnd,onChange:e=>setSecondTo(e.target.value)}))),
+        h('button',{type:'button',className:'ghost',onClick:()=>{setFirstFrom('');setFirstTo('');setSecondFrom('');setSecondTo('');}},'Ripristina periodi automatici'),h('small',{className:'muted'},'I periodi sono affiancati per posizione relativa (P1, P2…). Le date reali sono nei dettagli.')) ,
       h('div', { style: { margin: '12px 0' } },
 
         h('strong', null,
@@ -1298,7 +1301,7 @@ onPointerLeave: () => {
         }
       },
 
-        'Limite massimo personalizzato',
+        `Limite massimo · ${metric.name} (${metric.unit}/giorno)`,
 
         h('input', {
           type: 'number',
@@ -1309,12 +1312,7 @@ onPointerLeave: () => {
           onChange: event =>
             setLimitText(event.target.value),
           style: { maxWidth: '160px' }
-        }),
-
-        h('small', {
-          className: 'muted'
-        }, `${metric.unit} per giorno con dati. ` +
-           'Superamenti evidenziati in rosso.')
+        })
       ),
 
       mode === 'metrics' &&
@@ -1332,6 +1330,7 @@ onPointerLeave: () => {
               'Seleziona almeno un pasto.'
             )
           : h(InteractiveChart, {
+              key:[mode,from,to,mode==='periods'?previousStart:'',mode==='periods'?previousEnd:'',grouping].join('|'),
               labels: data.labels,
               series: data.series,
               chartType,
@@ -1563,7 +1562,7 @@ data && data.series.length > 0 && h('div', {
                       borderTop: '1px solid #ddd'
                     }
                   },
-                    fmt(cell.value, 2) +
+                    (mode==='periods'&&cell.key?cell.key+' · ':'')+fmt(cell.value, 2) +
                     (
                       cell.coverage !== null &&
                       cell.coverage < 1

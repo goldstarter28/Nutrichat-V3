@@ -79,7 +79,9 @@ function View(props){
  const [sending,setSending]=useState(false);
  const recognition=useRef(null);
  const bottom=useRef(null);
- const analysis=useMemo(()=>previous.evaluate(props),[props.logs,props.foods,props.goals,props.profile]);
+ const [localPeriod,setLocalPeriod]=useState('90');
+ const localHistory=useMemo(()=>root.NutriTraceIntelligence?.buildHistory(props),[props.logs,props.foods,props.goals,props.profile]);
+ const localWindow=localHistory?.windows[Number(localPeriod)];
  const profileContext=useMemo(()=>wizardContext(props.profile),[props.profile]);
  const thread=data.threads.find(t=>t.id===data.active)||data.threads[0];
  useEffect(()=>{
@@ -223,10 +225,11 @@ function View(props){
     btn('Elimina',()=>deleteThread(t.id),busy))),
    btn('Esporta JSON',exportChat)),
   !compact&&sharingPanel,
-  h('details',{className:'coach-details'},h('summary',null,'Riepilogo locale recente · '+analysis.trackedDays+'/7 giorni registrati'),
-   h('div',{className:'coach-stats'},...analysis.metrics.map(m=>h('div',{className:'coach-stat',key:m.key},
-    h('small',null,m.name),h('strong',null,m.avg==null?'N/D':Number(m.avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
-   ...analysis.insights.map((x,i)=>h('p',{key:i},h('strong',null,x.title),': ',x.body))),
+  localWindow&&h('details',{className:'coach-details'},h('summary',null,'Riepilogo locale · '+localWindow.days+'/'+localPeriod+' giorni registrati'),
+   h('label',null,'Periodo del riepilogo',h('select',{value:localPeriod,onChange:e=>setLocalPeriod(e.target.value)},...[7,30,60,90,364].map(n=>h('option',{key:n,value:String(n)},n===364?'52 settimane':n+' giorni')))),
+   h('p',{className:'muted'},localWindow.entries+' registrazioni · '+(Number(localPeriod)-localWindow.days)+' giorni senza registrazioni. Medie dei soli giorni con dati, non consumi confermati.'),
+   h('div',{className:'coach-stats'},...localHistory.metrics.slice(0,5).map(m=>h('div',{className:'coach-stat',key:m.id},h('small',null,m.name),h('strong',null,localWindow.metrics[m.id]?.avg==null?'N/D':Number(localWindow.metrics[m.id].avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
+   h('small',{className:'muted'},share?'Il periodo qui scelto cambia solo questo riepilogo. Il Coach riceve contesto fino a 90 giorni e riepiloghi settimanali fino a 52 settimane, nei limiti del budget e dei consensi.':'Il riepilogo è locale. Il Coach non riceve statistiche finché non autorizzi la condivisione.')),
   h('div',{className:'coach-messages',role:'log','aria-label':'Messaggi della conversazione'},
    thread.messages.length===0&&h('div',{className:'coach-empty'},h('span',{className:'v5-coach-empty-symbol','aria-hidden':'true'},'✦'),h('h3',null,'Da dove vuoi iniziare?'),
     h('p',null,'Alimentazione, allenamento o una domanda sulle tue abitudini.'),

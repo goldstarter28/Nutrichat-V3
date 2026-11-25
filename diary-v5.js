@@ -171,7 +171,7 @@
       if (!r || typeof r.id !== 'string' || !r.id.trim() || seen.has(r.id) || !String(r.name || '').trim() || !positive(r.yieldGrams) || !Array.isArray(r.ingredients) || !r.ingredients.length || r.ingredients.length > 100 || !r.ingredients.every(function (i) { return i && typeof i.foodId === 'string' && i.foodId.trim() && positive(i.grams); })) return false;
       seen.add(r.id); return true;
     }).slice(0, 250).map(function (r) {
-      return { id: r.id, name: String(r.name).slice(0, 120), yieldGrams: number(r.yieldGrams), servings: number(r.servings) > 0 ? number(r.servings) : null, createdAt: String(r.createdAt || ''), ...(r.yieldEstimated===true?{yieldEstimated:true}:{}), ...(r.portionUnit==='fette'?{portionUnit:'fette'}:{}), ingredients: r.ingredients.map(function (i) { return { foodId: i.foodId, grams: number(i.grams), name: String(i.name || ''), metadata: recentMetadata(i.metadata || {}) }; }) };
+      return { id: r.id, name: String(r.name).slice(0, 120), yieldGrams: number(r.yieldGrams), servings: number(r.servings) > 0 ? number(r.servings) : null, createdAt: String(r.createdAt || ''), ...(r.pinned===true?{pinned:true}:{}), ...(r.yieldEstimated===true?{yieldEstimated:true}:{}), ...(r.portionUnit==='fette'?{portionUnit:'fette'}:{}), ingredients: r.ingredients.map(function (i) { return { foodId: i.foodId, grams: number(i.grams), name: String(i.name || ''), metadata: recentMetadata(i.metadata || {}) }; }) };
     });
   }
   function scaleRecipe(recipe, consumedGrams, foods, portionUnit) {
@@ -273,6 +273,7 @@
     for(const n of added){next.nutrients.push({...n,amount:n.amount*base/100});next.nutrientStatus[n.name]={status:'numeric',canonicalId:n.canonicalId,sources:['Open Food Facts']};}
     if(!String(food.ingredients||'').trim()&&String(product.ingredients||'').trim())next.ingredients=String(product.ingredients).trim();
     if(!food.qualityV61&&product.qualityV61)next.qualityV61=product.qualityV61;
+    else if(product.qualityV61&&food.qualityV61){const q=food.qualityV61,p=product.qualityV61,patch={};if(!q.nutriScore&&!q.scoreInput?.confirmed&&p.nutriScore){patch.nutriScore=p.nutriScore;patch.nutriScoreVersion=p.nutriScoreVersion;}if(!q.nova&&p.nova)patch.nova=p.nova;for(const key of ['additives','allergens','traces','categories'])if((!Array.isArray(q[key])||!q[key].length)&&Array.isArray(p[key])&&p[key].length)patch[key]=p[key];if(q.allergenInfo!==true&&p.allergenInfo===true)patch.allergenInfo=true;if(p.estimateV611&&p.estimateV611!==q.estimateV611)patch.estimateV611=p.estimateV611;if(Object.keys(patch).length)next.qualityV61={...q,...patch};}
     if(!added.length&&next.ingredients===food.ingredients&&next.qualityV61===food.qualityV61)return food;
     return next;
   }

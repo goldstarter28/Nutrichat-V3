@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v6-20261125-v61';
+const CACHE = 'nutritrace-v6-20261125-v611';
 
 const CORE = [
   './',
@@ -84,7 +84,7 @@ self.addEventListener('activate', event => {
 
     await Promise.all(
       keys
-        .filter(key => key !== CACHE && /^nutritrace-(?:v3-aurora-v4-|v5-)/.test(key))
+        .filter(key => key !== CACHE && /^nutritrace-(?:v3-aurora-v4-|v5-|v6-)/.test(key))
         .map(key => caches.delete(key))
     );
 
