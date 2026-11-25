@@ -356,8 +356,8 @@ function InteractiveChart({
     )
   }));
 
-  const W = 880;
-  const H = 326;
+  const W = Math.max(880, Math.min(3600, 120 + count * 16));
+  const H = 500;
   const L = 56;
   const R = comparisonMode === 'metrics' ? 60 : 18;
   const T = 22;
@@ -397,6 +397,7 @@ function InteractiveChart({
 
   const x = index =>
     L + (index + 0.5) * step;
+const chartScrollRef = React.useRef(null);
 const gestureRef = React.useRef(null);
 const lastTapRef = React.useRef(0);
 
@@ -674,8 +675,12 @@ function handleTouchEnd(event) {
       )
     ),
 
+      h('div', { className: 'v61-chart-navigation' },
+        h('button', { type: 'button', className: 'ghost', onClick: () => { const el=chartScrollRef.current; if(el) el.scrollLeft -= Math.max(150,el.clientWidth*.8); } }, '← Scorri grafico'),
+        h('button', { type: 'button', className: 'ghost', onClick: () => { const el=chartScrollRef.current; if(el) el.scrollLeft += Math.max(150,el.clientWidth*.8); } }, 'Scorri grafico →'),
+        h('small', { className: 'muted' }, 'Grafico ingrandito: scorri o usa lo zoom per esplorare i dati.')),
       h('div', {
-        style: { overflowX: 'auto', touchAction: 'pan-y' }
+        ref: chartScrollRef, className: 'v61-chart-scroll', tabIndex: 0, 'aria-label': 'Grafico scorrevole', style: { overflowX: 'auto', touchAction: 'pan-y', width: '100%', minWidth: 0, maxWidth: '100%' }
       },
 
         h('svg', {
@@ -686,7 +691,7 @@ function handleTouchEnd(event) {
             : 'Grafico a barre verticali interattivo',
           style: {
   width: '100%',
-  minWidth: '360px',
+  minWidth: Math.round(W * .9) + 'px',
   display: 'block',
   touchAction: 'none'
 },

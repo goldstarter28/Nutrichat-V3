@@ -50,7 +50,7 @@
       if(!mealId||!recipe||grams===null)continue;
       const key=JSON.stringify([mealId,'recipe',recipe.id,grams]);
       if(seen.has(key))continue;seen.add(key);
-      out.push({id:clean(item.id)||newId(),mealId,recipe,grams,quantity:grams,unit:'g',gramsPerUnit:1,label:recipe.name});
+      const portion=recipe.yieldEstimated&&recipe.servings>0, factor=portion?recipe.yieldGrams/recipe.servings:1;out.push({id:clean(item.id)||newId(),mealId,recipe,grams,quantity:grams/factor,unit:portion?(recipe.portionUnit||'porzioni'):'g',gramsPerUnit:factor,label:recipe.name});
       if(out.length>=MAX_FAVORITES)break;
       continue;
     }

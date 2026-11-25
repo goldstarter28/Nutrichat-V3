@@ -11,6 +11,7 @@
     { id: 'oggi', title: 'Oggi', icon: 'home' },
     { id: 'ricerca', title: 'Ricerca', icon: 'search' },
     { id: 'alimenti', title: 'Alimenti', icon: 'food' },
+    { id: 'ricette', title: 'Ricette', icon: 'food' },
     { id: 'obiettivi', title: 'Obiettivi', icon: 'target' },
     { id: 'peso', title: 'Peso', icon: 'scale' },
     { id: 'micro', title: 'Micronutrienti', icon: 'leaf' },
