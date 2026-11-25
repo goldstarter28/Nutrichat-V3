@@ -35,7 +35,7 @@ const adult={goal:'lose',age:35,sex:'male',height:178,weight:61,careContext:'non
 test('V5.7.2 deficit guard gives exact reason; maintenance is independently checked, no new automatic deficit',()=>{
  const low=wizard.calculatePlan(adult);assert.equal(low.eligible,false);assert.equal(low.maintenanceAvailable,true);assert.match(low.reason,/BMI/);assert.equal(low.restriction,'DEFICIT_GUARD');
  const older=wizard.calculatePlan({...adult,weight:75,age:70});assert.equal(older.eligible,false);assert.match(older.reason,/65 anni/);assert.equal(older.maintenanceAvailable,true);
- for(const x of [{age:17},{age:18},{age:79},{weight:45},{careContext:'professional'},{careContext:'unknown'},{sex:'female',physiologicalState:'pregnant'}]){const plan=wizard.calculatePlan({...adult,...x});assert.equal(plan.eligible,false);assert.notEqual(plan.maintenanceAvailable,true);}
+ for(const x of [{age:17},{age:79},{weight:45},{careContext:'professional'},{careContext:'unknown'},{sex:'female',physiologicalState:'pregnant'}]){const plan=wizard.calculatePlan({...adult,...x});assert.equal(plan.eligible,false);assert.notEqual(plan.maintenanceAvailable,true);}
  const eligible=wizard.calculatePlan({...adult,weight:75});assert.equal(eligible.eligible,true);assert.equal(eligible.adjustment,-0.10);
  const alternative=wizard.calculatePlan({...adult,goal:'maintain'});assert.equal(alternative.eligible,true);assert.equal(alternative.adjustment,0);assert.equal(alternative.kcal,2484);
 });

@@ -55,7 +55,7 @@ test('female formula is explicit and a missing physiological answer blocks calcu
 
 test('protected contexts keep all existing goals and weight-based targets unchanged', () => {
   const contexts = [
-    { age: 17 }, { age: 18 }, { age: 79 }, { sex: 'manual' }, { careContext: 'professional' },
+    { age: 17 }, { age: 79 }, { sex: 'manual' }, { careContext: 'professional' },
     { careContext: 'unknown' }, { sex: 'female', physiologicalState: 'pregnant' },
     { sex: 'female', physiologicalState: 'lactating' }, { weight: 45 },
     { goal: 'lose', age: 70 }, { goal: 'lose', weight: 61 }

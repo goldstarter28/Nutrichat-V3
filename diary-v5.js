@@ -171,10 +171,10 @@
       if (!r || typeof r.id !== 'string' || !r.id.trim() || seen.has(r.id) || !String(r.name || '').trim() || !positive(r.yieldGrams) || !Array.isArray(r.ingredients) || !r.ingredients.length || r.ingredients.length > 100 || !r.ingredients.every(function (i) { return i && typeof i.foodId === 'string' && i.foodId.trim() && positive(i.grams); })) return false;
       seen.add(r.id); return true;
     }).slice(0, 250).map(function (r) {
-      return { id: r.id, name: String(r.name).slice(0, 120), yieldGrams: number(r.yieldGrams), servings: number(r.servings) > 0 ? number(r.servings) : null, createdAt: String(r.createdAt || ''), ingredients: r.ingredients.map(function (i) { return { foodId: i.foodId, grams: number(i.grams), name: String(i.name || ''), metadata: recentMetadata(i.metadata || {}) }; }) };
+      return { id: r.id, name: String(r.name).slice(0, 120), yieldGrams: number(r.yieldGrams), servings: number(r.servings) > 0 ? number(r.servings) : null, createdAt: String(r.createdAt || ''), ...(r.portionUnit==='fette'?{portionUnit:'fette'}:{}), ingredients: r.ingredients.map(function (i) { return { foodId: i.foodId, grams: number(i.grams), name: String(i.name || ''), metadata: recentMetadata(i.metadata || {}) }; }) };
     });
   }
-  function scaleRecipe(recipe, consumedGrams, foods) {
+  function scaleRecipe(recipe, consumedGrams, foods, portionUnit) {
     if (!positive(consumedGrams) || !positive(recipe && recipe.yieldGrams)) throw new Error('Inserisci una porzione e un peso finale validi, fino a 10.000 g.');
     var known = new Set((foods || []).map(function (f) { return f.id; }));
     if (!Array.isArray(recipe.ingredients) || !recipe.ingredients.length) throw new Error('La ricetta non contiene ingredienti.');
@@ -185,15 +185,102 @@
       if (!positive(i.grams) || !positive(grams)) throw new Error('Quantità dell’ingrediente non valida.');
       var metadata = recentMetadata(i.metadata || {});
       ['quantity', 'portionEstimatedMinGrams', 'portionEstimatedMaxGrams'].forEach(function (key) { if (number(metadata[key]) > 0) metadata[key] *= factor; });
-      return Object.assign(metadata, { foodId: i.foodId, grams: grams, recipeName: recipe.name, recipeIngredient: i.name, recipeYieldGrams: number(recipe.yieldGrams), recipeConsumedGrams: number(consumedGrams), entryOrigin: 'saved-recipe-v5' });
+      return Object.assign(metadata, { foodId: i.foodId, grams: grams, recipeName: recipe.name, recipeIngredient: i.name, recipeYieldGrams: number(recipe.yieldGrams), recipeConsumedGrams: number(consumedGrams), ...(number(recipe.servings)>0 ? {recipePortionCount:factor*number(recipe.servings),recipePortionUnit:(portionUnit==='fette'||(!portionUnit&&recipe.portionUnit==='fette'))?'fette':'porzioni'} : {}), entryOrigin: 'saved-recipe-v5' });
     });
+  }
+  // V5.9: grouping is a view over the original ingredient records, never a second nutritional entry.
+  function recipeKey(log) {
+    return log && typeof log.recipeGroupId === 'string' && log.recipeGroupId.trim() ? JSON.stringify([log.date || '', log.mealId || null, log.recipeGroupId]) : null;
+  }
+  function groupEntries(logs, id) {
+    const first=(logs||[]).find(l=>l.id===id); if(!first)return [];
+    const key=recipeKey(first); return key ? logs.filter(l=>recipeKey(l)===key) : [first];
+  }
+  function assignGroup(logs,id,mealId,makeId) {
+    const group=groupEntries(logs,id);if(!group.length)return logs;
+    const first=group[0];if((first.mealId||null)===(mealId||null))return logs;
+    const ids=new Set(group.map(l=>l.id));let groupId=first.recipeGroupId;
+    if(recipeKey(first)&&logs.some(l=>!ids.has(l.id)&&l.date===first.date&&(l.mealId||null)===(mealId||null)&&l.recipeGroupId===groupId))groupId=makeId();
+    return logs.map(l=>ids.has(l.id)?{...l,mealId,...(recipeKey(l)?{recipeGroupId:groupId}:{})}:l);
+  }
+  function recipeWeight(entries) {
+    if(!entries.length)return null;
+    const n=number(entries[0].recipeConsumedGrams);
+    return positive(n)&&entries.every(l=>number(l.recipeConsumedGrams)===n) ? n : null;
+  }
+  function recipePortionText(entries) {
+    const grams=recipeWeight(entries), first=entries[0]||{}, count=number(first.recipePortionCount);
+    if(grams===null)return 'Porzione non specificata';
+    const unit=first.recipePortionUnit;
+    if(count>0 && ['porzioni','fette'].includes(unit) && entries.every(l=>number(l.recipePortionCount)===count&&l.recipePortionUnit===unit)) return format(count,2)+' '+(count===1?(unit==='fette'?'fetta':'porzione'):unit)+' · '+format(grams,2)+' g';
+    return format(grams,2)+' g';
+  }
+  function displayGroups(logs,foods) {
+    const result=[], byKey=new Map(), byId=new Map((foods||[]).map(f=>[f.id,f]));
+    for(const log of logs||[]){
+      const key=recipeKey(log);
+      if(key&&byKey.has(key)){byKey.get(key).entries.push(log);continue;}
+      const group={log,entries:[log],isRecipe:!!key,name:key?String(log.recipeName||'Ricetta'):byId.get(log.foodId)?.name||'Alimento non trovato'};
+      result.push(group);if(key)byKey.set(key,group);
+    }
+    return result;
+  }
+  function resizeRecipeGroup(logs,id,grams,originalGrams) {
+    const entries=groupEntries(logs,id), old=recipeWeight(entries)??number(originalGrams), target=number(grams);
+    if(!entries.length||!recipeKey(entries[0])||!positive(old)||!positive(target))throw Error('Indica il peso effettivo della porzione originale e quello nuovo.');
+    const factor=target/old, ids=new Set(entries.map(l=>l.id));
+    return logs.map(l=>{if(!ids.has(l.id))return l; if(!positive(l.grams))throw Error('Quantità ingrediente non valida.');const next={...l,grams:number(l.grams)*factor,recipeConsumedGrams:target};
+      if(!positive(next.grams))throw Error('Quantità ingrediente fuori intervallo.');
+      for(const k of ['quantity','portionEstimatedMinGrams','portionEstimatedMaxGrams','recipePortionCount'])if(number(l[k])>0)next[k]=number(l[k])*factor;
+      return next;
+    });
+  }
+  function recipeSnapshot(entries,originalGrams) {
+    const first=entries[0], grams=recipeWeight(entries)??number(originalGrams);
+    if(!first||!recipeKey(first)||!positive(grams))throw Error('Indica il peso effettivo della porzione originale.');
+    const count=number(first.recipePortionCount);
+    const recipe={id:first.recipeGroupId,name:first.recipeName||'Ricetta',yieldGrams:grams,servings:count>0?count:null,portionUnit:first.recipePortionUnit,ingredients:entries.map(l=>({foodId:l.foodId,name:l.recipeIngredient||'',grams:l.grams,metadata:recentMetadata(l)}))};
+    const normalized=normalizeRecipes([recipe])[0];if(!normalized)throw Error('Ricetta non valida.');return normalized;
+  }
+  function duplicateRecipeGroup(logs,id,makeId,now) {
+    const entries=groupEntries(logs,id);
+    if(!entries.length||!recipeKey(entries[0]))throw Error('Ricetta non disponibile nel diario.');
+    const groupId=makeId();return entries.map(l=>({...l,id:makeId(),recipeGroupId:groupId,createdAt:now,entryOrigin:'recipe-copy-v59',copiedFromLogId:l.id}));
+  }
+  function copyRecipeGroupIds(logs,makeId) {
+    const groups=new Map();return logs.map(l=>{const key=recipeKey(l);if(!key)return l;if(!groups.has(key))groups.set(key,makeId());return {...l,recipeGroupId:groups.get(key)};});
+  }
+  const OFF_MICROS = [
+    ['calcium','Calcio','calcium','mg'],['iron','Ferro','iron','mg'],['magnesium','Magnesio','magnesium','mg'],['phosphorus','Fosforo','phosphorus','mg'],['potassium','Potassio','potassium','mg'],['sodium','Sodio','sodium','mg'],['zinc','Zinco','zinc','mg'],['copper','Rame','copper','mg'],['manganese','Manganese','manganese','mg'],['selenium','Selenio','selenium','µg'],['iodine','Iodio','iodine','µg'],['chloride','Cloruro','chloride','mg'],['chromium','Cromo','chromium','µg'],['molybdenum','Molibdeno','molybdenum','µg'],['fluoride','Fluoro','fluoride','µg'],['vitamin-c','Vitamina C','vitamin_c','mg'],['vitamin-d','Vitamina D','vitamin_d','µg'],['vitamin-b1','Tiamina B1','thiamin_b1','mg'],['vitamin-b2','Riboflavina B2','riboflavin_b2','mg'],['vitamin-b6','Vitamina B6','vitamin_b6','mg'],['vitamin-b12','Vitamina B12','vitamin_b12','µg'],['biotin','Biotina B7','biotin_b7','µg'],['pantothenic-acid','Acido pantotenico B5','pantothenic_acid_b5','mg'],['choline','Colina','choline','mg'],
+    ['vitamin-a','Vitamina A','off_vitamin_a_unspecified','µg','Forma RE/RAE non specificata'],['vitamin-e','Vitamina E','off_vitamin_e_unspecified','mg','Forma non specificata'],['vitamin-k','Vitamina K','off_vitamin_k_unspecified','µg','Forma non specificata'],['vitamin-pp','Niacina B3','off_niacin_unspecified','mg','NE/niacina non specificato'],['folates','Folati','off_folates_unspecified','µg','DFE/folati non specificato'],['vitamin-b9','Folati','off_vitamin_b9_unspecified','µg','Forma B9 non specificata']
+  ];
+  function barcodeNutrients(product, id) {
+    if(!product?.barcode||product.microBasis!=='mass' || !product.microGrams || typeof product.microGrams!=='object')return [];
+    const seen=new Set(), out=[];
+    for(const [key,name,canonicalId,unit,form] of OFF_MICROS){
+      const raw=product.microGrams[key];if(typeof raw!=='number'||!Number.isFinite(raw)||raw<0||raw>100||seen.has(name))continue;
+      const amount=convert(raw,'g',unit);if(amount===null)continue;seen.add(name);
+      out.push({id:id+'-off-'+key,name,canonicalId,unit,amount,form:form||'',source:'Open Food Facts',reference:product.source?.url||'',evidence:'Dichiarato nel database collaborativo; non verificato',reliability:'single_source',...(form?{nutrientBasis:'unspecified'}:{})});
+    }return out;
+  }
+  function mergeBarcodeFood(food,product) {
+    if(!product?.barcode||String(food.barcode||'')!==String(product.barcode))return food;
+    const next={...food,label:{...(food.label||{})},nutrients:[...(food.nutrients||[])],nutrientStatus:{...(food.nutrientStatus||{})}};
+    const base=number(food.servingGrams??100);
+    if(!(base>0))return food;
+    const present=new Set(next.nutrients.map(n=>norm(n.name)));
+    const added=barcodeNutrients(product,food.id).filter(n=>!present.has(norm(n.name)));
+    for(const n of added){next.nutrients.push({...n,amount:n.amount*base/100});next.nutrientStatus[n.name]={status:'numeric',canonicalId:n.canonicalId,sources:['Open Food Facts']};}
+    if(!String(food.ingredients||'').trim()&&String(product.ingredients||'').trim())next.ingredients=String(product.ingredients).trim();
+    if(!added.length&&next.ingredients===food.ingredients)return food;
+    return next;
   }
   function productFood(product, foods, id) {
     if (!product || !String(product.name || '').trim()) throw new Error('Indica il nome dell’alimento.');
     var existing = (foods || []).find(function (f) { return product.barcode ? String(f.barcode || '').trim() === String(product.barcode).trim() : norm(f.name) === norm(product.name) && norm(f.brand) === norm(product.brand); });
-    if (existing) return { food: existing, existing: true };
+    if (existing) return { food: mergeBarcodeFood(existing, product), existing: true };
     var label = {}; ['kcal', 'protein', 'carbs', 'fat', 'sugar', 'saturatedFat', 'fiber', 'salt'].forEach(function (k) { var n = number(product.label && product.label[k]); label[k] = n !== null && n >= 0 ? n : ''; });
-    return { existing: false, food: { id: id, name: String(product.name).trim(), brand: String(product.brand || ''), barcode: product.barcode || undefined, servingGrams: 100, label: label, nutrients: [], nutrientStatus: {}, aliases: [String(product.name).trim()], ingredients: String(product.ingredients || ''), additives: [], sources: [{ id: id + '-source', name: product.barcode ? 'Open Food Facts' : 'Etichetta fotografata', reference: product.source && product.source.url || 'Trascrizione Vision da verificare con l’etichetta', quality: 'secondaria' }], notes: 'Valori per 100 g confermati durante l’inserimento rapido. I micronutrienti assenti sono N/D.' } };
+    return { existing: false, food: { id: id, name: String(product.name).trim(), brand: String(product.brand || ''), barcode: product.barcode || undefined, servingGrams: 100, label: label, nutrients: barcodeNutrients(product,id), nutrientStatus: Object.fromEntries(barcodeNutrients(product,id).map(n=>[n.name,{status:'numeric',canonicalId:n.canonicalId,sources:['Open Food Facts']}])) , aliases: [String(product.name).trim()], ingredients: String(product.ingredients || ''), additives: [], sources: [{ id: id + '-source', name: product.barcode ? 'Open Food Facts' : 'Etichetta fotografata', reference: product.source && product.source.url || 'Trascrizione Vision da verificare con l’etichetta', quality: 'secondaria' }], notes: 'Valori per 100 g confermati durante l’inserimento rapido. I micronutrienti assenti sono N/D.' } };
   }
-  return Object.freeze({ number: number, positive: positive, format: format, convert: convert, recentFoods: recentFoods, recentMetadata: recentMetadata, stats: stats, dailyTarget: dailyTarget, normalizeRecipes: normalizeRecipes, scaleRecipe: scaleRecipe, productFood: productFood });
+  return Object.freeze({ number: number, positive: positive, format: format, convert: convert, recentFoods: recentFoods, recentMetadata: recentMetadata, stats: stats, dailyTarget: dailyTarget, normalizeRecipes: normalizeRecipes, scaleRecipe: scaleRecipe, productFood: productFood, recipeKey, groupEntries, assignGroup, recipeWeight, recipePortionText, displayGroups, resizeRecipeGroup, recipeSnapshot, duplicateRecipeGroup, copyRecipeGroupIds, barcodeNutrients, mergeBarcodeFood });
 });

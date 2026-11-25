@@ -34,7 +34,7 @@
   }
   function metricValue(data,key,digits=1) {
     if (data.count && !data.known[key]) return 'N/D';
-    return fmt(data[key],digits)+(data.known[key] < data.count ? '*' : '');
+    return fmt(data[key],digits);
   }
   function amountText(log) {
     const grams=number(log.grams), quantity=number(log.quantity);
@@ -58,35 +58,38 @@
     const current = favorites.find(f => f.id === id);
     if (!current) throw new Error('Preferito non più disponibile.');
     const updated = favoriteWithWeight(current, grams);
-    if (favorites.some(f => f.id !== id && f.mealId === current.mealId && f.foodId === current.foodId && Math.abs(Number(f.grams)-updated.grams)<1e-8)) throw new Error('Esiste già un preferito con questo peso.');
+    if (favorites.some(f => f.id !== id && f.mealId === current.mealId && (current.recipe ? f.recipe?.id===current.recipe.id : !f.recipe&&f.foodId === current.foodId) && Math.abs(Number(f.grams)-updated.grams)<1e-8)) throw new Error('Esiste già un preferito con questo peso.');
     return favorites.map(f => f.id === id ? updated : f);
   }
-  function MealCard({meal,logs,foods,meals,favorites,onAdd,onAssign,onRemove,onAddFavorite,onRemoveFavorite,onQuickFavorite,onCopyYesterday,onEditFavorite,onEditFood}) {
+  function displayGroups(logs,foods){return root.NutriTraceDiaryV5?.displayGroups(logs,foods)||logs.map(log=>({log,entries:[log],isRecipe:false,name:foods.find(f=>f.id===log.foodId)?.name||'Alimento non trovato'}));}
+  function MealCard({meal,logs,foods,meals,favorites,onAdd,onAssign,onRemove,onAddFavorite,onRemoveFavorite,onQuickFavorite,onCopyYesterday,onEditFavorite,onEditFood,onEditRecipe,onCopyRecipe}) {
     const data=totals(logs,foods), isUnassigned=meal.id==='__unassigned__';
-    const mealFavorites=favorites.filter(item=>item.mealId===meal.id && foods.some(f=>f.id===item.foodId));
-    const partial=logs.length > 0 && Object.values(data.known).some(n=>n<data.count);
+    const groups=displayGroups(logs,foods);
+    const mealFavorites=favorites.filter(item=>item.mealId===meal.id && (item.recipe ? item.recipe.ingredients.every(i=>foods.some(f=>f.id===i.foodId)) : foods.some(f=>f.id===item.foodId)));
     return h('article',{className:'card v5-meal-card','aria-label':meal.name},
       h('header',{className:'v5-meal-heading'},
         h('span',{className:'v5-meal-icon','aria-hidden':'true'},ICONS[meal.id]||'🥣'),
         h('div',{className:'v5-meal-title'},h('h3',null,meal.name),
-          h('span',{className:'v5-meal-count'},logs.length ? logs.length+' '+(logs.length===1?'alimento':'alimenti') : 'Aggiungi il tuo primo alimento')),
+          h('span',{className:'v5-meal-count'},groups.length ? groups.length+' '+(groups.length===1?'voce':'voci') : 'Aggiungi il tuo primo alimento')),
         h('div',{className:'v5-meal-energy'},h('strong',null,metricValue(data,'kcal',0)),h('span',null,'kcal')),
         !isUnassigned && h('button',{type:'button',className:'v5-meal-add',onClick:()=>onAdd(meal.id),'aria-label':'Aggiungi a '+meal.name},'+')),
       h(MacroLine,{data}),
       logs.length>0&&h('details',{className:'v5-meal-details'},
-        h('summary',{className:'v5-meal-summary'},h('span',{className:'v5-meal-inline-names'},logs.map(log=>(foods.find(f=>f.id===log.foodId)?.name||'Alimento non trovato')+' '+(log.unit && log.unit!=='g' && number(log.quantity)>0 ? fmt(log.quantity)+' '+log.unit : number(log.grams)!==null ? fmt(log.grams)+' g' : 'N/D')).join(' · ')),h('span',{className:'v5-meal-expand'},'Dettagli ▾')),
-        h('div',{className:'v5-meal-foods'},partial && h('small',{className:'v5-meal-partial'},'* Totali incompleti · N/D = dato non disponibile'),...logs.map(log=>{
-        const food=foods.find(f=>f.id===log.foodId), single=totals([log],foods);
+        h('summary',{className:'v5-meal-summary'},h('span',{className:'v5-meal-inline-names'},groups.map(g=>g.name+' '+(g.isRecipe?root.NutriTraceDiaryV5.recipePortionText(g.entries):(g.log.unit && g.log.unit!=='g' && number(g.log.quantity)>0 ? fmt(g.log.quantity)+' '+g.log.unit : number(g.log.grams)!==null ? fmt(g.log.grams)+' g' : 'N/D'))).join(' · ')),h('span',{className:'v5-meal-expand'},'Dettagli ▾')),
+        h('div',{className:'v5-meal-foods'},...groups.map(group=>{
+        const log=group.log, food=group.isRecipe?{name:group.name}:foods.find(f=>f.id===log.foodId), single=totals(group.entries,foods);
         return h('div',{className:'v5-meal-food',key:log.id},
           h('div',{className:'v5-meal-food-main'},
             h('div',{className:'v5-meal-food-name'},h('strong',null,food?.name||'Alimento non trovato'),
-              h('span',null,amountText(log))),
+              h('span',null,group.isRecipe?root.NutriTraceDiaryV5.recipePortionText(group.entries):amountText(log))),
             h('span',{className:'v5-meal-food-energy'},metricValue(single,'kcal',0)+' kcal')),
+          group.isRecipe&&h('details',{className:'v59-recipe-ingredients'},h('summary',null,'Ingredienti'),h('ul',null,...group.entries.map(l=>h('li',{key:l.id},(foods.find(f=>f.id===l.foodId)?.name||l.recipeIngredient||'Ingrediente')+' · '+amountText(l))))),
           h('div',{className:'v5-meal-food-actions'},
             h('label',{className:'v5-meal-move'},h('span',{className:'v5-sr-only'},'Sposta '+(food?.name||'alimento')+' nel pasto'),
               h('select',{value:meals.some(m=>m.id===log.mealId)?log.mealId:'','aria-label':'Pasto di '+(food?.name||'alimento'),onChange:e=>onAssign(log.id,e.target.value||null)},
                 h('option',{value:''},'Senza pasto'),...meals.map(target=>h('option',{key:target.id,value:target.id},target.name)))),
-            food && h('button',{type:'button',className:'v5-meal-action v58-edit-food',title:'Modifica scheda alimento (archivio)','aria-label':'Modifica scheda '+food.name,onClick:()=>onEditFood(food.id)},'✎',h('span',null,'Modifica')),
+            food && h('button',{type:'button',className:'v5-meal-action v58-edit-food',title:group.isRecipe?'Modifica porzione ricetta':'Modifica scheda alimento (archivio)','aria-label':'Modifica '+food.name,onClick:()=>group.isRecipe?onEditRecipe(log.id):onEditFood(food.id)},'✎',h('span',null,'Modifica')),
+            group.isRecipe&&!isUnassigned&&h('button',{type:'button',className:'v5-meal-action',title:'Copia la ricetta nel pasto',onClick:()=>onCopyRecipe(log.id)},'↺',h('span',null,'Copia')),
             !isUnassigned && food && h('button',{type:'button',className:'v5-meal-action',title:'Salva porzione nei preferiti','aria-label':'Salva '+food.name+' nei preferiti di '+meal.name,onClick:()=>onAddFavorite(meal.id,log.id)},'☆',h('span',null,'Preferito')),
             h('button',{type:'button',className:'v5-meal-action v5-meal-remove',title:'Rimuovi alimento','aria-label':'Rimuovi '+(food?.name||'alimento')+' da '+meal.name,onClick:()=>onRemove(log.id)},'×',h('span',null,'Rimuovi'))));
       }))),
@@ -94,7 +97,7 @@
         h('button',{type:'button',className:'v5-meal-copy',onClick:()=>onCopyYesterday(meal.id)},h('span',{'aria-hidden':'true'},'↺'),'Copia '+meal.name.toLowerCase()+' di ieri'),
         mealFavorites.length > 0 && h('div',{className:'v5-meal-favorites','aria-label':'Porzioni preferite di '+meal.name},
           ...mealFavorites.map(favorite=>{
-            const food=foods.find(f=>f.id===favorite.foodId), name=favorite.label||food.name;
+            const food=foods.find(f=>f.id===favorite.foodId), name=favorite.label||favorite.recipe?.name||food?.name||'Alimento';
             return h('div',{className:'v5-meal-favorite',key:favorite.id},
               h('button',{type:'button',className:'v5-meal-favorite-add',onClick:()=>onQuickFavorite(favorite)},'+ '+name),
               h('button',{type:'button',className:'v58-favorite-weight',title:'Modifica peso preferito','aria-label':'Modifica peso di '+name,onClick:()=>onEditFavorite(favorite.id)},fmt(favorite.quantity??favorite.grams)+' '+(favorite.unit||'g')),
@@ -102,17 +105,18 @@
           }))));
   }
   function DayFoods({logs,foods,meals,onRemove=()=>{}}) {
+    const groups=displayGroups(logs,foods);
     return h('section',{className:'card v5-day-foods','aria-labelledby':'v5-day-foods-title'},
-      h('div',{className:'v5-day-foods-heading'},h('span',{'aria-hidden':'true'},'▤'),h('h3',{id:'v5-day-foods-title'},'Alimenti del giorno'),h('span',{className:'v5-day-foods-count'},logs.length)),
+      h('div',{className:'v5-day-foods-heading'},h('span',{'aria-hidden':'true'},'▤'),h('h3',{id:'v5-day-foods-title'},'Alimenti del giorno'),h('span',{className:'v5-day-foods-count'},groups.length)),
       logs.length===0 ? h('p',{className:'muted'},'Gli alimenti che registri compaiono qui, in un unico elenco.') :
-      h('ul',null,...logs.map(log=>{
-        const food=foods.find(f=>f.id===log.foodId), meal=meals.find(m=>m.id===log.mealId), data=totals([log],foods);
+      h('ul',null,...groups.map(group=>{
+        const log=group.log, food=group.isRecipe?{name:group.name}:foods.find(f=>f.id===log.foodId), meal=meals.find(m=>m.id===log.mealId), data=totals(group.entries,foods);
         return h('li',{key:log.id},
-          h('div',{className:'v5-day-food-main'},h('strong',null,food?.name||'Alimento non trovato'),h('span',null,amountText(log)+' · '+(meal?.name||'Senza pasto')),h('button',{type:'button',className:'v5-day-remove','aria-label':'Rimuovi '+(food?.name||'alimento')+' dal diario',onClick:()=>onRemove(log.id)},'×')),
+          h('div',{className:'v5-day-food-main'},h('strong',null,food?.name||'Alimento non trovato'),h('span',null,(group.isRecipe?root.NutriTraceDiaryV5.recipePortionText(group.entries):amountText(log))+' · '+(meal?.name||'Senza pasto')),h('button',{type:'button',className:'v5-day-remove','aria-label':'Rimuovi '+(food?.name||'alimento')+' dal diario',onClick:()=>onRemove(log.id)},'×')),
           h('div',{className:'v5-day-food-metrics'},h('span',null,metricValue(data,'kcal',0)+' kcal'),...METRICS.map(([key,short,label])=>h('span',{key,title:label},short+' '+metricValue(data,key)+' g'))));
       })));
   }
-  function MealDiary({meals=[],logs=[],foods=[],favorites=[],showDayFoods=true,onAdd=()=>{},onAssign=()=>{},onRemove=()=>{},onConfigure=()=>{},onAddFavorite=()=>{},onRemoveFavorite=()=>{},onQuickFavorite=()=>{},onCopyYesterday=()=>{},onEditFavorite=()=>{},onEditFood=()=>{}}) {
+  function MealDiary({meals=[],logs=[],foods=[],favorites=[],showDayFoods=true,onAdd=()=>{},onAssign=()=>{},onRemove=()=>{},onConfigure=()=>{},onAddFavorite=()=>{},onRemoveFavorite=()=>{},onQuickFavorite=()=>{},onCopyYesterday=()=>{},onEditFavorite=()=>{},onEditFood=()=>{},onEditRecipe=()=>{},onCopyRecipe=()=>{}}) {
     const validIds=new Set(meals.map(meal=>meal.id));
     const unassigned=logs.filter(log=>!log.mealId||!validIds.has(log.mealId));
     const groups=meals.map(meal=>({meal,logs:logs.filter(log=>log.mealId===meal.id)}));
@@ -121,7 +125,7 @@
       h('header',{className:'v5-diary-heading'},
         h('div',null,h('span',{className:'a-kicker'},'IL TUO DIARIO'),h('h2',null,'I pasti della giornata')),
         h('button',{type:'button',className:'v5-meal-manage',onClick:onConfigure},'Gestisci pasti')),
-      h('div',{className:'v5-meal-grid'},...groups.map(group=>h(MealCard,{key:group.meal.id,...group,foods,meals,favorites,onAdd,onAssign,onRemove,onAddFavorite,onRemoveFavorite,onQuickFavorite,onCopyYesterday,onEditFavorite,onEditFood}))),
+      h('div',{className:'v5-meal-grid'},...groups.map(group=>h(MealCard,{key:group.meal.id,...group,foods,meals,favorites,onAdd,onAssign,onRemove,onAddFavorite,onRemoveFavorite,onQuickFavorite,onCopyYesterday,onEditFavorite,onEditFood,onEditRecipe,onCopyRecipe}))),
       !groups.length && h('p',{className:'muted'},'Configura almeno un pasto per iniziare.'),
       showDayFoods && h(DayFoods,{logs,foods,meals,onRemove}));
   }
