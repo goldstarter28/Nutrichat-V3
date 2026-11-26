@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v7-20261126-v70';
+const CACHE = 'nutritrace-v7-20261126-v72';
 
 const CORE = [
   './',
@@ -21,6 +21,7 @@ const CORE = [
   './nutrition-intelligence-v61.js',
   './strategy-v64.js',
   './metabolism-v70.js',
+  './planner-v72.js',
   './coach-markdown.js',
   './coach-markdown.css',
   './coach-chat-v3.css',
@@ -63,7 +64,7 @@ const VENDOR = [
 ];
 
 
-const APP_ASSET = /\/(?:app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|nutrition-intelligence-v61\.js|strategy-v64\.js|metabolism-v70\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
+const APP_ASSET = /\/(?:app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|nutrition-intelligence-v61\.js|strategy-v64\.js|metabolism-v70\.js|planner-v72\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);

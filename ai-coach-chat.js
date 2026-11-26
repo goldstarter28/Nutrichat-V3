@@ -80,6 +80,8 @@ function View(props){
  const recognition=useRef(null);
  const bottom=useRef(null);
  const [localPeriod,setLocalPeriod]=useState('90');
+ const [shareRecipes,setShareRecipes]=useState(()=>readSharing().nutrition===true&&readSharing().recipes===true);
+ const [sharePantry,setSharePantry]=useState(()=>readSharing().nutrition===true&&readSharing().pantry===true);
  const localHistory=useMemo(()=>root.NutriTraceIntelligence?.buildHistory(props),[props.logs,props.foods,props.goals,props.profile]);
  const localWindow=localHistory?.windows[Number(localPeriod)];
  const profileContext=useMemo(()=>wizardContext(props.profile),[props.profile]);
@@ -89,7 +91,7 @@ function View(props){
   catch{setStorageError('Memoria locale piena o non disponibile: esporta la chat prima di chiudere la pagina.');}
  },[data]);
  useEffect(()=>{try{localStorage.setItem(CONSENT,consent?'yes':'no');}catch{}},[consent]);
- useEffect(()=>{try{localStorage.setItem(SHARING_V61,JSON.stringify({nutrition:share,profile:share&&shareProfile,weight:share&&weight,health:share&&shareProfile&&shareHealth}));}catch{}},[share,shareProfile,weight,shareHealth]);
+ useEffect(()=>{try{localStorage.setItem(SHARING_V61,JSON.stringify({nutrition:share,profile:share&&shareProfile,weight:share&&weight,health:share&&shareProfile&&shareHealth,recipes:share&&shareRecipes,pantry:share&&sharePantry}));}catch{}},[share,shareProfile,weight,shareHealth,shareRecipes,sharePantry]);
  useEffect(()=>{bottom.current?.scrollIntoView?.({block:'nearest',behavior:'smooth'});},[thread?.messages.length,busy]);
  useEffect(()=>()=>{recognition.current?.stop?.();root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};},[]);
  useEffect(()=>{root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};setSpeech({id:null,status:'stopped'});},[data.active]);
@@ -111,7 +113,7 @@ function View(props){
   const Q=root.NutriTraceIntelligence;
   if(!Q)throw Error('Modulo contesto non disponibile. Ricarica l’app.');
   let weightData={};if(weight){try{weightData=JSON.parse(localStorage.getItem('nutritrace_body_weight_v1')||'{}');}catch{}}
-  return Q.fitContext(Q.coachContext(props,question,{share,shareProfile,shareHealth:shareProfile&&shareHealth,shareWeight:weight,weights:weightData.entries,weightTarget:weightData.target,state:props.qualityState}),8500);
+  return Q.fitContext(Q.coachContext(props,question,{share,shareProfile,shareHealth:shareProfile&&shareHealth,shareWeight:weight,shareRecipes,sharePantry,weights:weightData.entries,weightTarget:weightData.target,state:props.qualityState}),8500);
  }
  async function ask(question,baseMessages,threadId,mode='new'){
   if(!consent){setError('Autorizza l’invio dei messaggi prima di continuare.');return;}
@@ -142,7 +144,7 @@ function View(props){
    if(idx<0){setEditing(null);return;}
    messages=messages.slice(0,idx);
   }
-  const msg={id:mkid(),role:'user',content:question,createdAt:Date.now(),sharedScopes:share?['statistiche',...(weight?['peso']:[]),...(shareProfile&&profileContext?['percorso']:[]),...(shareProfile&&shareHealth?['informazioni fisiologiche e allergeni personali']:[])]:[]};
+  const msg={id:mkid(),role:'user',content:question,createdAt:Date.now(),sharedScopes:share?['statistiche',...(weight?['peso']:[]),...(shareProfile&&profileContext?['percorso']:[]),...(shareProfile&&shareHealth?['informazioni fisiologiche e allergeni personali']:[]),...(shareRecipes?['ricette']:[]),...(sharePantry?['dispensa e menu']:[])]:[]};
   updateThread(id,t=>({...t,title:t.messages.length===0?question.slice(0,58):t.title,messages:[...messages,msg].slice(-100)}));
   setDraft('');setEditing(null);
   collapseSettings();
@@ -197,13 +199,15 @@ function View(props){
  }
  const sharingPanel=h('section',{className:'v5-coach-sharing','aria-label':'Condivisione facoltativa con il Coach'},
    h('label',{className:'v5-coach-sharing-main'},
-    h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked){setWeight(false);setShareProfile(false);setShareHealth(false);}}}),
+    h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked){setWeight(false);setShareProfile(false);setShareHealth(false);setShareRecipes(false);setSharePantry(false);}}}),
     h('span',null,h('strong',null,'Condividi informazioni nutrizionali'),h('small',null,'Facoltativo · obiettivi attuali, statistiche fino a 90 giorni e riepiloghi fino a 52 settimane; dettagli selezionati secondo la domanda e le quote. La scelta resta sul dispositivo.')),
     h('span',{className:'v5-coach-sharing-badge'},share?'Attivo':'Spento')),
    share&&h('div',{className:'v5-coach-sharing-options'},
     h('label',null,h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),h('span',null,'Includi anche lo storico aggregato delle pesate e l’obiettivo di peso')),
     h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>{setShareProfile(e.target.checked);if(!e.target.checked)setShareHealth(false);if(e.target.checked){let storage;try{storage=root.localStorage;}catch{}claimProfileInvite(storage);setProfileInvite(false);}}}),h('span',null,'Includi le risposte del percorso, età, altezza, peso del profilo, coefficiente fisiologico e calcolo degli obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
     shareProfile&&h('label',null,h('input',{type:'checkbox',checked:shareHealth,onChange:e=>setShareHealth(e.target.checked)}),h('span',null,'Autorizzo separatamente le risposte fisiologiche e di assistenza del wizard e gli allergeni personali.')),
+    h('label',null,h('input',{type:'checkbox',checked:shareRecipes,onChange:e=>setShareRecipes(e.target.checked)}),h('span',null,'Includi ricette salvate pertinenti: ingredienti, nutrienti e procedimento se richiesto.')),
+    h('label',null,h('input',{type:'checkbox',checked:sharePantry,onChange:e=>setSharePantry(e.target.checked)}),h('span',null,'Includi ingredienti disponibili in dispensa, quantità e menu pertinenti.')),
     h('small',null,'Le informazioni vengono inviate a GroqCloud. Nessun invio a OpenRouter. Puoi revocare la condivisione in qualsiasi momento.')),
    h('p',{className:'v5-coach-sharing-note'},share?'Queste informazioni saranno inviate a GroqCloud solo quando invii un messaggio autorizzato.':'Il diario rimane sul dispositivo. Puoi usare la chat anche senza condividere le statistiche.'),
    share&&h('button',{type:'button',className:'ghost v5-coach-sharing-done',onClick:collapseSettings},'Fatto'),
@@ -218,7 +222,7 @@ function View(props){
  return h('section',{className:'nutritrace-ai-coach coach-v3 v5-coach'},
   h('header',{className:'coach-head'},
    h('div',null,h('span',{className:'v5-coach-kicker'},'UNO SPAZIO PER LE TUE DOMANDE'),h('h2',null,'✦ NutriTrace Coach'),h('p',null,'Rifletti sulle tue abitudini, un messaggio alla volta.')),
-   h('div',{className:'coach-head-actions'},btn('Conversazioni',()=>setSidebar(x=>!x)),btn('+ Nuova chat',newThread,busy,'coach-btn coach-primary'))),
+   h('div',{className:'coach-head-actions'},props.onPlanner&&btn('Pianifica pasti',props.onPlanner,busy),btn('Conversazioni',()=>setSidebar(x=>!x)),btn('+ Nuova chat',newThread,busy,'coach-btn coach-primary'))),
   sidebar&&h('nav',{className:'coach-thread-list','aria-label':'Conversazioni salvate'},
    ...data.threads.map(t=>h('div',{className:'coach-thread',key:t.id},
     btn(t.title,()=>selectThread(t.id),busy,'coach-btn coach-thread-title'),

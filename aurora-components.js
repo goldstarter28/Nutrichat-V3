@@ -11,6 +11,7 @@
     { id: 'oggi', title: 'Oggi', icon: 'home' },
     { id: 'ricerca', title: 'Ricerca', icon: 'search' },
     { id: 'alimenti', title: 'Archivio', icon: 'food' },
+    { id: 'pianifica', title: 'Pianificazione e spesa', icon: 'food' },
     { id: 'traguardi', title: 'Traguardi', icon: 'sparkles' },
     { id: 'obiettivi', title: 'Obiettivi', icon: 'target' },
     { id: 'peso', title: 'Peso', icon: 'scale' },
