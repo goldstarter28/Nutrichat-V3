@@ -63,7 +63,7 @@ test('Altro contains only destinations absent from the primary bar, including Mi
  const panel=cls(tree,'a-more-grid')[0];
  const labels=nodes(panel,'button').map(text);
  assert.equal(labels.length,5);
- assert.ok(labels.some(x=>x.includes('Ricette')));
+ assert.ok(labels.some(x=>x.includes('Archivio')));assert.ok(labels.some(x=>x.includes('Traguardi')));
  assert.ok(labels.some(x=>x.includes('Micronutrienti')));
  assert.ok(labels.every(x=>!['Oggi','Ricerca','Obiettivi','Coach AI','Analisi'].some(primary=>x.includes(primary))));
  nodes(panel,'button').find(x=>text(x).includes('Micronutrienti')).props.onClick();

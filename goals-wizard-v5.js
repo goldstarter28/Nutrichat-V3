@@ -269,6 +269,7 @@
     const [error, setError] = R.useState('');
     const [applying, setApplying] = R.useState(false);
     const [updateMicros, setUpdateMicros] = R.useState(false);
+    const [extra,setExtra]=R.useState(()=>({distribution:props.profile?.weeklyStrategyV64?.enabled?'variable':'uniform',days:props.profile?.weeklyStrategyV64?.days||[5,6],percent:props.profile?.weeklyStrategyV64?.percent??5,average:'',preferences:props.profile?.advancedV64||{}}));
     const backdropRef = R.useRef(null);
     const dialogRef = R.useRef(null);
     const headingRef = R.useRef(null);
@@ -343,7 +344,7 @@
     }
     function advance(nextAnswers) {
       const next = nextStep(nextAnswers, question.id);
-      if (next.review) setStage('review');
+      if (next.review) setStage(root.NutriTraceStrategy?.WizardExtras?'extras':'review');
       else { setQuestionId(next.questionId); if (next.missing) setError('Completa questa risposta prima del riepilogo.'); }
     }
     function chooseAnswer(value) {
@@ -360,6 +361,7 @@
       setApplying(true); setError('');
       try {
         const payload = applyPlan(props.profile, props.goals, answers, { updateMicros, meals: props.meals });
+        if(root.NutriTraceStrategy?.applyExtras)root.NutriTraceStrategy.applyExtras(payload,extra);
         if (typeof props.onApply !== 'function') throw new Error('Applicazione degli obiettivi non disponibile.');
         const result = await props.onApply(payload);
         if (result === false) throw new Error('Gli obiettivi non sono stati salvati. Riprova.');
@@ -404,6 +406,8 @@
     }
     function renderReview() {
       const plannedMeals = mealPlan(answers, props.meals);
+      let weeklyPreview=null, weeklySchedule=null, weeklyError='';
+      if(plan.eligible&&extra.distribution==='variable'&&root.NutriTraceStrategy){try{weeklyPreview=root.NutriTraceStrategy.adjustedBase({...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},extra.average);weeklySchedule=root.NutriTraceStrategy.buildSchedule(weeklyPreview,extra.days,extra.percent);}catch(e){weeklyError=e.message;}}
       const names = { kcal: ['Energia', 'kcal'], protein: ['Proteine', 'g'], carbs: ['Carboidrati', 'g'], fat: ['Grassi', 'g'], fiber: ['Fibre', 'g'] };
       return h('div', { className: 'v5-wizard-review' },
         h('p', { className: 'v5-wizard-kicker' }, 'PRONTO/A A PARTIRE'),
@@ -415,11 +419,12 @@
           h('p', null, 'Non prevede una riduzione dell’energia. Ti mostreremo la stima di calorie e macro prima di applicarla. Le altre risposte rimangono uguali.'),
           h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setAnswers(a => ({ ...a, goal: 'maintain' })); setUpdateMicros(false); setError(''); } }, 'Calcola mantenimento')
         ) : null,
+        weeklyError&&h('p',{role:'alert'},weeklyError), weeklySchedule&&h('div',{className:'v5-wizard-notice'},h('strong',null,'Obiettivo medio scelto: '+displayNumber(weeklyPreview.kcal,0)+' kcal/giorno'),h('p',null,'Budget: '+displayNumber(weeklyPreview.kcal*7,0)+' kcal/settimana'),h('div',{className:'v64-week-grid'},...weeklySchedule.map((d,i)=>h('div',{key:i},root.NutriTraceStrategy.days[i],h('b',null,displayNumber(d.kcal,0)+' kcal'))))),
         plan.eligible ? h('div', { className: 'v5-wizard-targets' }, Object.entries(names).map(([id, meta]) => {
           const old = (props.goals || []).find(g => g.id === id);
           let oldValue = numericGoal(old, props.profile && props.profile.weight);
           if (old && old.period === 'week' && oldValue !== null) oldValue /= 7;
-          const value = id === 'kcal' ? plan.kcal : plan.grams[id];
+          const value = weeklyPreview ? weeklyPreview[id] : id === 'kcal' ? plan.kcal : plan.grams[id];
           return h('div', { className: 'v5-wizard-target', key: id }, h('span', null, meta[0]), h('strong', null, displayNumber(value, id === 'kcal' ? 0 : 2), ' ', meta[1]), h('small', null, 'Prima: ', displayNumber(oldValue), ' ', meta[1], '/giorno'));
         })) : null,
         plan.eligible ? h('details', { className: 'v5-wizard-explanation' }, h('summary', null, 'Come sono stati calcolati?'),
@@ -437,7 +442,7 @@
           h('p', null, 'Orari: ' + (labelFor('schedule', answers.schedule) || 'Non indicati') + '. Nessun orario obbligatorio.'),
           h('p', null, 'I pasti non inclusi verranno rimossi dalla configurazione attiva. Le loro registrazioni restano nel diario come Senza pasto; i preferiti restano salvati. Puoi ripristinare la configurazione precedente insieme agli obiettivi.')) : null,
         h('div', { className: 'v5-wizard-privacy' }, h('strong', null, 'Le risposte restano in questo browser'), h('p', null, 'Il percorso non invia risposte al Coach. Nella chat puoi scegliere separatamente se condividere le preferenze e le informazioni nutrizionali.')),
-        h('div', { className: 'v5-wizard-question-actions' }, h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setStage('questions'); setQuestionId(questions[questions.length - 1].id); setError(''); } }, '← Rivedi le risposte'), h('button', { type: 'button', className: 'v5-wizard-primary', disabled: applying, onClick: apply }, applying ? 'Salvataggio…' : plan.eligible ? 'Applica obiettivi' : 'Salva le preferenze'))
+        h('div', { className: 'v5-wizard-question-actions' }, h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setStage(root.NutriTraceStrategy?.WizardExtras?'extras':'questions'); setQuestionId(questions[questions.length - 1].id); setError(''); } }, '← Rivedi le risposte'), h('button', { type: 'button', className: 'v5-wizard-primary', disabled: applying||!!weeklyError, onClick: apply }, applying ? 'Salvataggio…' : plan.eligible ? 'Applica obiettivi' : 'Salva le preferenze'))
       );
     }
     function renderExit() {
@@ -449,7 +454,7 @@
     const content = h('div', { className: 'v5-wizard-backdrop', ref: backdropRef }, h('section', { className: 'v5-wizard-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Personalizza i miei obiettivi', ref: dialogRef, tabIndex: -1 },
       h('header', { className: 'v5-wizard-header' }, h('div', { className: 'v5-wizard-brand' }, h('span', { 'aria-hidden': true }, '◒'), h('div', null, h('strong', null, 'NutriTrace'), h('small', null, 'Personalizza i miei obiettivi'))), h('button', { type: 'button', className: 'v5-wizard-close', 'aria-label': exitOpen ? 'Torna al percorso' : 'Esci dal percorso', disabled: applying, onClick: () => { setError(''); setExitOpen(!exitOpen); } }, '×')),
       !exitOpen && stage !== 'resume' ? h('div', { className: 'v5-wizard-progress-area' }, h('div', { className: 'v5-wizard-progress-label', 'aria-live': 'polite' }, h('strong', null, stage === 'review' ? 'Riepilogo finale' : 'Domanda ' + (index + 1) + ' di ' + questions.length), h('span', null, answered + ' risposte · ' + (questions.length - answered) + ' da completare')), h('div', { className: 'v5-wizard-progress', role: 'progressbar', 'aria-label': 'Risposte completate', 'aria-valuemin': 0, 'aria-valuemax': questions.length, 'aria-valuenow': answered }, h('span', { style: { width: (100 * answered / questions.length) + '%' } }))) : null,
-      h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
+      h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : stage === 'extras' ? h(root.NutriTraceStrategy.WizardExtras,{value:extra,onChange:setExtra,plan:{...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},onBack:()=>{setStage('questions');setQuestionId(questions[questions.length-1].id);},onNext:()=>setStage('review')}) : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
       !exitOpen && stage === 'questions' ? h('footer', { className: 'v5-wizard-footer v58-wizard-footer' },
         h('div', { className: 'v58-wizard-actions' },
           h('button', { type: 'button', className: 'v5-wizard-secondary v58-back', disabled: index === 0, onClick: () => { setError(''); setQuestionId(questions[index - 1].id); } }, '← Indietro'),

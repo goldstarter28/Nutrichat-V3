@@ -73,6 +73,7 @@
           h('span',{className:'v5-meal-count'},groups.length ? groups.length+' '+(groups.length===1?'voce':'voci') : 'Aggiungi il tuo primo alimento')),
         h('div',{className:'v5-meal-energy'},h('strong',null,metricValue(data,'kcal',0)),h('span',null,'kcal')),
         !isUnassigned && h('button',{type:'button',className:'v5-meal-add',onClick:()=>onAdd(meal.id),'aria-label':'Aggiungi a '+meal.name},'+')),
+      !isUnassigned&&qualityState&&qualityDate&&h(root.NutriTraceStrategy.MealTime,{meal,logs,qualityState,qualityDate,previousMealLogs,onChange:t=>onMealTime(meal.id,t)}),
       h(MacroLine,{data}),
       logs.length>0&&h('details',{className:'v5-meal-details'},
         h('summary',{className:'v5-meal-summary'},h('span',{className:'v5-meal-inline-names'},groups.map(g=>g.name+' '+(g.isRecipe?root.NutriTraceDiaryV5.recipePortionText(g.entries):(g.log.unit && g.log.unit!=='g' && number(g.log.quantity)>0 ? fmt(g.log.quantity)+' '+g.log.unit : number(g.log.grams)!==null ? fmt(g.log.grams)+' g' : 'N/D'))).join(' · ')),h('span',{className:'v5-meal-expand'},'Dettagli ▾')),
@@ -89,7 +90,6 @@
               h('select',{value:meals.some(m=>m.id===log.mealId)?log.mealId:'','aria-label':'Pasto di '+(food?.name||'alimento'),onChange:e=>onAssign(log.id,e.target.value||null)},
                 h('option',{value:''},'Senza pasto'),...meals.map(target=>h('option',{key:target.id,value:target.id},target.name)))),
             food && h('button',{type:'button',className:'v5-meal-action v58-edit-food',title:group.isRecipe?'Modifica porzione ricetta':'Modifica scheda alimento (archivio)','aria-label':'Modifica '+food.name,onClick:()=>group.isRecipe?onEditRecipe(log.id):onEditFood(food.id)},'✎',h('span',null,'Modifica')),
-            qualityState&&qualityDate&&root.NutriTraceIntelligence?.FoodTime&&h(root.NutriTraceIntelligence.FoodTime,{log,group,previousMealLogs,qualityState,qualityDate,onChange:t=>onFoodTime(log.id,t)}),
             group.isRecipe&&!isUnassigned&&h('button',{type:'button',className:'v5-meal-action',title:'Copia la ricetta nel pasto',onClick:()=>onCopyRecipe(log.id)},'↺',h('span',null,'Copia')),
             !isUnassigned && food && h('button',{type:'button',className:'v5-meal-action',title:'Salva porzione nei preferiti','aria-label':'Salva '+food.name+' nei preferiti di '+meal.name,onClick:()=>onAddFavorite(meal.id,log.id)},'☆',h('span',null,'Preferito')),
             h('button',{type:'button',className:'v5-meal-action v5-meal-remove',title:'Rimuovi alimento','aria-label':'Rimuovi '+(food?.name||'alimento')+' da '+meal.name,onClick:()=>onRemove(log.id)},'×',h('span',null,'Rimuovi'))));
