@@ -198,12 +198,13 @@
     if (!plan.eligible || !references || typeof references.referenceForGoal !== 'function') return [];
     const out = [];
     for (const g of goals || []) {
-      if (!g || g.group === 'Energia e macro' || g.group === 'Personalizzati' || g.id !== g.name) continue;
+      if (!g || g.group === 'Energia e macro' || g.group === 'Personalizzati' || g.customized === true || g.id !== g.name) continue;
       const ref = references.referenceForGoal(g.name || g.id, { ...answers, kcal: plan.kcal, clinical: answers.careContext !== 'none' });
       const from = ref && unitFactor(ref.unit), to = unitFactor(g.unit);
       if (!ref || !ref.autoApplicable || number(ref.value) === null || ref.value <= 0 || !from || !to) continue;
       const daily = ref.value * from / to;
-      out.push({ id: g.id, name: g.name, unit: g.unit, daily, target: daily * (g.period === 'week' ? 7 : 1), kind: ref.kind || g.kind, reference: ref });
+      const before = numericGoal(g, answers.weight); const previousDaily=before===null?null:before/(g.period==='week'?7:1);
+      out.push({ id: g.id, name: g.name, unit: g.unit, daily, previousDaily, changed:previousDaily===null||Math.abs(previousDaily-daily)>1e-7, target: daily * (g.period === 'week' ? 7 : 1), kind: ref.kind || g.kind, reference: ref });
     }
     return out;
   }
@@ -242,7 +243,7 @@
         return g;
       });
     }
-    const changes = opts.updateMicros ? referenceChanges(nextGoals, answers, plan, references) : [];
+    const changes = opts.updateMicros ? referenceChanges(nextGoals, answers, {...plan,kcal:opts.referenceKcal??plan.kcal}, references) : [];
     const byId = new Map(changes.map(x => [x.id, x]));
     nextGoals = nextGoals.map(g => {
       const change = byId.get(g.id);
@@ -283,7 +284,8 @@
     const answered = questions.filter(q => validateAnswer(q, answers[q.id])).length;
     const plan = calculatePlan(answers);
     const references = root.NutriTraceNutritionReferences;
-    const microChanges = referenceChanges(props.goals, answers, plan, references);
+    let referencePlan=plan;try{if(plan.eligible&&extra.distribution==='variable'&&root.NutriTraceStrategy)referencePlan={...plan,kcal:root.NutriTraceStrategy.adjustedBase({...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},extra.average).kcal};}catch{}
+    const microChanges = referenceChanges(props.goals, answers, referencePlan, references);
     const currentValue = answers[question.id];
     exitRef.current = exitOpen;
     applyingRef.current = applying;
@@ -360,7 +362,7 @@
       applyingRef.current = true;
       setApplying(true); setError('');
       try {
-        const payload = applyPlan(props.profile, props.goals, answers, { updateMicros, meals: props.meals });
+        const payload = applyPlan(props.profile, props.goals, answers, { updateMicros, referenceKcal:referencePlan.kcal, meals: props.meals });
         if(root.NutriTraceStrategy?.applyExtras)root.NutriTraceStrategy.applyExtras(payload,extra);
         if (typeof props.onApply !== 'function') throw new Error('Applicazione degli obiettivi non disponibile.');
         const result = await props.onApply(payload);
@@ -433,8 +435,8 @@
           h('p', null, 'Fonti: ', h('a', { href: 'https://pubmed.ncbi.nlm.nih.gov/2305711/', target: '_blank', rel: 'noopener noreferrer' }, 'Mifflin 1990'), plan.method.startsWith('Henry') && h('a', { href: 'https://www.healthcouncil.nl/site/binaries/site-content/collections/documents/2022/08/16/dietary-reference-values-for-energy/Background-document_%2BDRVs-for-energy.pdf', target: '_blank', rel: 'noopener noreferrer' }, ' · Henry 2005 (tabella A1)'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/efsajournal/pub/3005', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA energia'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/press/news/nda100326', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA carboidrati, grassi e fibre'), '. I dettagli sono anche in Dati → Fonti scientifiche.')
         ) : null,
         plan.eligible && microChanges.length ? h('section', { className: 'v5-wizard-micros' },
-          h('label', { className: 'v5-wizard-toggle' }, h('input', { type: 'checkbox', checked: updateMicros, onChange: event => setUpdateMicros(event.target.checked) }), h('span', null, h('strong', null, 'Aggiorna anche i riferimenti dei micronutrienti'), h('small', null, 'Facoltativo: sostituisce ', microChanges.length, ' obiettivi standard compatibili con il profilo. Le voci personalizzate e i dati senza riferimento applicabile restano invariati.'))),
-          updateMicros ? h('details', { open: true, className: 'v5-wizard-explanation' }, h('summary', null, 'Valori che verranno applicati'), h('ul', { className: 'v5-wizard-micro-list' }, microChanges.map(change => h('li', { key: change.id }, h('span', null, change.name), h('strong', null, displayNumber(change.daily), ' ', change.unit, '/giorno')))), h('p', { className: 'v5-wizard-footnote' }, 'I riferimenti EFSA descrivono popolazioni sane, non una prescrizione individuale. I target settimanali vengono convertiti in 7 giorni; i limiti superiori non diventano obiettivi.')) : null
+          h('label', { className: 'v5-wizard-toggle' }, h('input', { type: 'checkbox', checked: updateMicros, onChange: event => setUpdateMicros(event.target.checked) }), h('span', null, h('strong', null, 'Aggiorna anche i riferimenti dei micronutrienti'), h('small', null, 'Riferimenti compatibili: ', microChanges.length, ' · diversi dai precedenti: ',microChanges.filter(x=>x.changed).length,' · già uguali: ',microChanges.filter(x=>!x.changed).length,'. Gli obiettivi personalizzati restano invariati.'))),
+          updateMicros ? h('details', { open: true, className: 'v5-wizard-explanation' }, h('summary', null, 'Valori che verranno applicati'), h('ul', { className: 'v5-wizard-micro-list' }, microChanges.map(change => h('li', { key: change.id }, h('span', null, change.name), h('strong', null, displayNumber(change.previousDaily), ' → ',displayNumber(change.daily), ' ', change.unit, '/giorno',change.changed?' · aggiornato':' · invariato')))), h('p', { className: 'v5-wizard-footnote' }, 'I riferimenti EFSA descrivono popolazioni sane, non una prescrizione individuale. I target settimanali vengono convertiti in 7 giorni; i limiti superiori non diventano obiettivi.')) : null
         ) : null,
         plannedMeals ? h('div', { className: 'v5-wizard-notice' },
           h('strong', null, 'Configurazione dei pasti dopo la conferma'),
@@ -454,7 +456,7 @@
     const content = h('div', { className: 'v5-wizard-backdrop', ref: backdropRef }, h('section', { className: 'v5-wizard-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Personalizza i miei obiettivi', ref: dialogRef, tabIndex: -1 },
       h('header', { className: 'v5-wizard-header' }, h('div', { className: 'v5-wizard-brand' }, h('span', { 'aria-hidden': true }, '◒'), h('div', null, h('strong', null, 'NutriTrace'), h('small', null, 'Personalizza i miei obiettivi'))), h('button', { type: 'button', className: 'v5-wizard-close', 'aria-label': exitOpen ? 'Torna al percorso' : 'Esci dal percorso', disabled: applying, onClick: () => { setError(''); setExitOpen(!exitOpen); } }, '×')),
       !exitOpen && stage !== 'resume' ? h('div', { className: 'v5-wizard-progress-area' }, h('div', { className: 'v5-wizard-progress-label', 'aria-live': 'polite' }, h('strong', null, stage === 'review' ? 'Riepilogo finale' : 'Domanda ' + (index + 1) + ' di ' + questions.length), h('span', null, answered + ' risposte · ' + (questions.length - answered) + ' da completare')), h('div', { className: 'v5-wizard-progress', role: 'progressbar', 'aria-label': 'Risposte completate', 'aria-valuemin': 0, 'aria-valuemax': questions.length, 'aria-valuenow': answered }, h('span', { style: { width: (100 * answered / questions.length) + '%' } }))) : null,
-      h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : stage === 'extras' ? h(root.NutriTraceStrategy.WizardExtras,{value:extra,onChange:setExtra,plan:{...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},onBack:()=>{setStage('questions');setQuestionId(questions[questions.length-1].id);},onNext:()=>setStage('review')}) : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
+      h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : stage === 'extras' ? h(root.NutriTraceStrategy.WizardExtras,{value:extra,onChange:setExtra,answers,plan:{...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},onBack:()=>{setStage('questions');setQuestionId(questions[questions.length-1].id);},onNext:()=>setStage('review')}) : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
       !exitOpen && stage === 'questions' ? h('footer', { className: 'v5-wizard-footer v58-wizard-footer' },
         h('div', { className: 'v58-wizard-actions' },
           h('button', { type: 'button', className: 'v5-wizard-secondary v58-back', disabled: index === 0, onClick: () => { setError(''); setQuestionId(questions[index - 1].id); } }, '← Indietro'),

@@ -288,3 +288,6 @@ html[data-theme=dark] .v5-wizard-backdrop input:not([type=radio]):not([type=chec
 @media(max-width:480px){.v641-badge-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.v641-badge-art{width:75px;height:90px}.v641-meal-time{gap:5px}.v641-meal-time label{flex:1 1 100%}}
 
 .v641-toast{background:var(--a-deep,#16352b);color:#fff}.v641-achievement-toast button:first-child{max-width:min(75vw,480px);white-space:normal;text-align:left}.v641-toast{max-width:calc(100vw - 24px)}
+
+/* V7.0 compact strategy controls */
+.v70-mean-label strong{font-size:1.13rem;font-weight:750;display:block;margin-bottom:8px}.v70-day-target{max-width:100%;font-size:.78rem;white-space:normal;min-height:36px;margin-top:6px;align-self:flex-start}.v70-procedure{min-height:220px;resize:vertical;width:100%;line-height:1.5}.v70-day-editor{display:grid;gap:10px}.v70-day-editor p{margin:0}.v70-day-editor [aria-pressed=true]{border:2px solid var(--accent,#18835e)}.v70-metabolism{margin-bottom:16px;overflow-wrap:anywhere}.v70-bodyfat-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.v70-bodyfat-guide button{padding:6px;white-space:normal;min-width:0}.v70-bodyfat-guide svg{width:100%;max-height:100px}.v70-metabolism svg{width:100%;height:auto}.v70-bodyfat-guide [aria-pressed=true]{outline:2px solid var(--accent,#18835e)}
