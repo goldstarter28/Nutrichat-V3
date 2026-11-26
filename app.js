@@ -362,7 +362,7 @@ function parseSheetRows(data, type = 'array') { const wb = XLSX.read(data, { typ
 } return rows; }
 
 const h = React.createElement;
-const V5 = window.NutriTraceV5, DiaryV5 = window.NutriTraceDiaryV5, Q61=window.NutriTraceIntelligence, S64=window.NutriTraceStrategy;
+const V5 = window.NutriTraceV5, DiaryV5 = window.NutriTraceDiaryV5, Q61=window.NutriTraceIntelligence, S64=window.NutriTraceStrategy, M70=window.NutriTraceMetabolism;
 const NutriTraceFastFoodInput = React.memo(
   function NutriTraceFastFoodInput({
     value,
@@ -1126,7 +1126,7 @@ function GoalRow({g,index,goals,setGoals,weight,current}){
     const a=[...goals], refs=window.NutriTraceNutritionReferences;
     const metadata=x.unit && g.group!=='Personalizzati' && refs?.catalogMetadataPatch
       ? refs.catalogMetadataPatch(g.name,x.unit) : {};
-    a[index]={...a[index],...x,...metadata,customized:true};
+    a[index]={...a[index],...x,...metadata,customized:g.customized===true||Object.keys(x).some(k=>['target','perKg','targetMode','unit','kind','period','name'].includes(k))};
     setGoals(a);
   };
   const amount=g.targetMode==='perKg'?g.perKg:g.target, custom=g.group==='Personalizzati';
@@ -1330,7 +1330,7 @@ useEffect(()=>{
     setFoods(JSON.parse(localStorage.getItem('nutritrace_foods')||'[]'));
     setLogs(JSON.parse(localStorage.getItem('nutritrace_logs')||'[]'));
     setGoals(mergeGoalCatalog(JSON.parse(localStorage.getItem('nutritrace_goals_v23')||'null')));
-    setProfile(normalizeProfile(JSON.parse(localStorage.getItem('nutritrace_profile_v23')||'null')));
+    setProfile(M70.initializeProfile(normalizeProfile(JSON.parse(localStorage.getItem('nutritrace_profile_v23')||'null')),dateKey()));
     let meta=JSON.parse(localStorage.getItem('nutritrace_dataset_meta_v4')||'[]');
     (async()=>{
       if(localStorage.getItem('nutritrace_dataset_migration_v4')!=='1'){
@@ -1647,6 +1647,7 @@ const draftNdRows=draftCatalogRows.filter(
     const next=savedRecipes.filter(r=>r.id!==id);try{localStorage.setItem('nutritrace_recipes_v5',JSON.stringify(next));setSavedRecipes(next);}catch{setRecipeMsg('Ricette non salvate: spazio insufficiente.');}
   }
   function applyWizardResult(result){
+    if(typeof M70!=='undefined'&&M70&&result.summary?.eligible!==false)result={...result,profile:M70.captureBeforeChange(profile,goals,result.profile,result.goals,deviceToday)};
     const before={profile,goals,meals};
     const nextMeals=Array.isArray(result.meals)?window.NutriTraceMealConfig.normalize(result.meals):null;
     const writes=[['nutritrace_goals_before_wizard_v5',JSON.stringify(before)],['nutritrace_profile_v23',JSON.stringify(result.profile)],['nutritrace_goals_v23',JSON.stringify(result.goals)]];
@@ -2386,14 +2387,16 @@ function editCatalogNutrient(name, unit, value) {
     return {candidates,selectedKey};
   }
   async function interpretText(text,context='diary'){
-    const parsed=await parseFoodEntry(text,context);
-    const ingredients=(parsed.ingredients||[]).map(x=>{
+    const prepared=context==='recipe'?S64.prepareRecipeText(text):{text,notes:[]};
+    const parsed=await parseFoodEntry(prepared.text,context);
+    const alternatives=context==='recipe'?S64.recipeAlternatives(parsed.ingredients||[]):{items:parsed.ingredients||[],notes:[]};
+    const ingredients=alternatives.items.map(x=>{
       const weighted=applyPortionPolicy(x,appConfig);
       return {...weighted,...ingredientCandidates(weighted,weighted.ambiguity)};
     });
     const unresolvedErrors=(parsed.errors||[]).filter(err=>!ingredients.some(ing=>Number(ing.grams)>0&&String(err).toLowerCase().includes(String(ing.name||'').toLowerCase())));
     const mode=parsed.mode==='recipe'?'recipe':ingredients.length>1?'multi':'single';
-    return {...parsed,mode,ingredients,errors:unresolvedErrors,yieldOverride:parsed.final_recipe_weight_g||''};
+    return {...parsed,mode,ingredients,notes:[parsed.notes,...prepared.notes,...alternatives.notes].filter(Boolean).join('\n'),alternativeNotes:[...prepared.notes,...alternatives.notes],errors:unresolvedErrors,yieldOverride:parsed.final_recipe_weight_g||''};
   }
   async function importRecipe64(result,standalone=false){
     if(mutationLock.current||!result)return;
@@ -2407,22 +2410,22 @@ function editCatalogNutrient(name, unit, value) {
       if(!originalText.trim())return;
       const token=++recipeRequest.current;setRecipeBusy('parse');setRecipeMsg('');
       try{const review=await interpretText(originalText,'recipe');if(token!==recipeRequest.current)return;
-        review.mode='recipe';review.importSource=source;review.notes=S64.procedureNotes(originalText);
+        review.mode='recipe';review.importSource=source;review.notes=[S64.procedureNotes(originalText),...(review.alternativeNotes||[])].filter(Boolean).join('\n');
         const normalized=originalText.toLowerCase().replace(/\s+/g,' ');
         review.ingredients=review.ingredients.map(i=>{const raw=String(i.raw||'').trim(),declared=raw&&normalized.includes(raw.toLowerCase().replace(/\s+/g,' '))?explicitMassFromText(raw):null;return {...i,grams:declared>0?declared:'',selectedKey:'',portion_assumption:declared>0?'Peso dichiarato nel testo di origine':'Quantità da verificare nella fonte'};});
         setRecipeReview(review);if(review.errors?.length)setRecipeMsg(review.errors.join(' · '));
       }catch(e){if(token===recipeRequest.current)setRecipeMsg(e.message);}finally{if(token===recipeRequest.current)setRecipeBusy('');}return;
     }
-    const ingredients=result.ingredients.map(raw=>{const mass=explicitMassFromText(raw);const name=raw.replace(/^\s*\d+(?:[.,]\d+)?\s*(?:kg|g|gr|grammi|chilogrammi)\b\s*(?:di\s+)?/i,'').trim()||raw;const i={raw,name,grams:mass>0?mass:'',gramsUserEdited:mass>0,ambiguity:'none',portion_assumption:mass>0?'Quantità dichiarata nella pagina: '+mass+' g':'Unità o peso da verificare manualmente'};return {...i,...ingredientCandidates(i,'none')};});
+    const alternativeNotes=[];const ingredients=result.ingredients.map(raw=>{const a=S64.splitAlternative(raw);if(a.alternative)alternativeNotes.push('Alternativa a '+a.primary+': '+a.alternative+' (non conteggiata).');raw=a.primary;const mass=explicitMassFromText(raw);const name=raw.replace(/^\s*\d+(?:[.,]\d+)?\s*(?:kg|g|gr|grammi|chilogrammi)\b\s*(?:di\s+)?/i,'').trim()||raw;const i={raw,name,grams:mass>0?mass:'',gramsUserEdited:mass>0,ambiguity:'none',portion_assumption:mass>0?'Quantità dichiarata nella pagina: '+mass+' g':'Unità o peso da verificare manualmente'};return {...i,...ingredientCandidates(i,'none')};});
     const servings=/^\s*(\d{1,3})(?:\s*(?:porzioni|servings|persone|fette))?\s*$/i.exec(result.servings||'');
-    setRecipeReview({mode:'recipe',recipe_name:result.name,source:'url-import-v64',importSource:source,servings:servings?servings[1]:'',consumedUnit:servings?'porzioni':'g',consumedPortions:'1',yieldOverride:'',ingredients});
+    setRecipeReview({mode:'recipe',recipe_name:result.name,source:'url-import-v64',importSource:source,notes:[source.instructions,...alternativeNotes].filter(Boolean).join('\n'),servings:servings?servings[1]:'',consumedUnit:servings?'porzioni':'g',consumedPortions:'1',yieldOverride:'',ingredients});
   }
   async function interpretRecipe(){
     if(!recipeText.trim()||mutationLock.current)return;
     stopEntryDictation();
     const token=++recipeRequest.current;
     setRecipeDestination({date:selectedDate,mealId:activeMealId});setRecipeBusy('parse');setRecipeMsg('');setRecipeReview(null);
-    try{const review=await interpretText(recipeText,'recipe');if(token!==recipeRequest.current)return;if(importSource64){review.mode='recipe';review.importSource=importSource64;review.notes=S64.procedureNotes(importSource64.description||'')||importSource64.instructions||'';review.ingredients=review.ingredients.map(i=>{const raw=String(i.raw||'').trim();const original=String(importSource64.description||'').toLowerCase().replace(/\s+/g,' ');const declared=raw&&original.includes(raw.toLowerCase().replace(/\s+/g,' '))?explicitMassFromText(raw):null;return {...i,grams:declared>0?declared:'',selectedKey:'',portion_assumption:declared>0?'Peso dichiarato nel testo di origine':'Quantità da verificare nella fonte'};});}setRecipeReview(review);if(review.errors?.length)setRecipeMsg(review.errors.join(' · '));}
+    try{const review=await interpretText(recipeText,'recipe');if(token!==recipeRequest.current)return;if(importSource64){review.mode='recipe';review.importSource=importSource64;review.notes=[S64.procedureNotes(importSource64.description||'')||importSource64.instructions||'',...(review.alternativeNotes||[])].filter(Boolean).join('\n');review.ingredients=review.ingredients.map(i=>{const raw=String(i.raw||'').trim();const original=String(importSource64.description||'').toLowerCase().replace(/\s+/g,' ');const declared=raw&&original.includes(raw.toLowerCase().replace(/\s+/g,' '))?explicitMassFromText(raw):null;return {...i,grams:declared>0?declared:'',selectedKey:'',portion_assumption:declared>0?'Peso dichiarato nel testo di origine':'Quantità da verificare nella fonte'};});}setRecipeReview(review);if(review.errors?.length)setRecipeMsg(review.errors.join(' · '));}
     catch(e){if(token===recipeRequest.current)setRecipeMsg(e.message);}finally{if(token===recipeRequest.current)setRecipeBusy('');}
   }
   async function quickSearchWithAI(){
@@ -3157,6 +3160,7 @@ function importBackup(event) {
       kind:g?.kind||'target'
     };
   }),
+        onDayTarget:selectedDate===deviceToday?()=>setDailyEdit(true):undefined,
         hydration:h('div',{className:'v5-hydration-compact'},h(window.NutriTraceHydrationWidget,{key:selectedDate,date:selectedDate})),
         onAdd:()=>openEntry(null),
         onSearch:()=>setTab('ricerca'),
@@ -3359,7 +3363,6 @@ function importBackup(event) {
     }
   }
 }),
-      selectedDate===deviceToday&&h('button',{className:'ghost v641-day-target',onClick:()=>setDailyEdit(true)},'Cambia obiettivi per oggi'),
       h(Q61.DayCheck,{date:selectedDate,logs:dayLogs,allLogs:logs,foods,state:qualityState,onStatus:value=>changeQuality(s=>{const days={...s.days};if(value)days[selectedDate]={status:value,signature:Q61.signature(dayLogs)};else delete days[selectedDate];return {...s,days};})}),
       !entryOpen&&!directCapture&&composer,
       h(V5.WeeklyOverview,{logs:weekLogs,foods,label:shortDate(weekStart)+' – '+shortDate(weekEnd)}),
@@ -3779,6 +3782,7 @@ h('div',{className:'card labelImportCard'},
 
     tab==='obiettivi'&&h('section',{className:'aurora-goals'},
       h('article',{className:'v5-wizard-launch card'},h('div',null,h('span',{className:'a-kicker'},'UN PERCORSO SU MISURA'),h('h2',null,'Personalizza i miei obiettivi'),h('p',null,'Un passo alla volta, fino a 20 domande. Le risposte restano sul dispositivo e decidi tu se condividerle con il Coach. Gli obiettivi rimangono sempre modificabili.')),h('div',{className:'v5-action-row'},h('button',{className:'cta',onClick:()=>setWizardOpen(true)},profile.wizardV5?'Rifai il percorso':'Inizia il percorso'),h('button',{className:'ghost',onClick:()=>setWizardSummaryOpen(true)},'Riepilogo risposte'),wizardUndo&&h('button',{className:'ghost',onClick:undoWizard},'Ripristina obiettivi e pasti precedenti')),profile.wizardV5?.calculation&&h('p',{className:'v5-note v5-wizard-outcome',role:'status'},profile.wizardV5.calculation.eligible?'Ultimo percorso: calcolo applicato · '+fmt(profile.wizardV5.calculation.kcal,0)+' kcal/giorno (modificabile sotto).':'Ultimo percorso: preferenze salvate, obiettivi invariati. '+profile.wizardV5.calculation.reason)),
+      h(M70.Panel,{profile,goals,logs,foods,qualityState,today:deviceToday,onMode:v=>setProfile(p=>({...p,metabolismModeV70:v})),onApply:applyWizardResult}),
       h(window.NutriTraceAurora.GoalsHero,{
         metrics:[
     ['kcal','Calorie','kcal'],
@@ -3956,7 +3960,7 @@ tab==='peso'&&h('section',{className:'aurora-peso'},
       directCapture.review?h(React.Fragment,null,entryTimeControl,recipeReviewView):
       directCapture.mode==='photo'?h(window.NutriTraceFoodCamera,{onLabel:captureLabel,onDish:captureDish,confirmLabel:'Controlla la porzione'}):h(window.NutriTraceBarcodeScanner,{onProduct:product=>setDirectCapture(prev=>prev?{...prev,product}:prev)})),
     mealPicker&&h(V5.MealPicker,{meals,onChoose:finishMealChoice,onClose:()=>finishMealChoice(null)}),
-    dailyEdit&&h(V5.Dialog,{title:'Cambia obiettivi per oggi',onClose:()=>setDailyEdit(false)},h(S64.DayOverride,{profile,goals,date:deviceToday,onSave:v=>{setProfile(p=>({...p,dailyOverrideV641:v}));setDailyEdit(false);}})),
+    dailyEdit&&h(V5.Dialog,{title:'Cambia obiettivi per oggi',onClose:()=>setDailyEdit(false)},h(M70.DayEditor,{profile,goals,date:deviceToday,onSave:v=>{const next=M70.saveDayPlans(profile,goals,v,deviceToday);localStorage.setItem('nutritrace_profile_v23',JSON.stringify(next));setProfile(next);setDailyEdit(false);}})),
     wizardOpen&&h(window.NutriTraceGoalsWizard.View,{profile,goals,meals,onApply:applyWizardResult,onClose:()=>setWizardOpen(false)}),
     wizardSummaryOpen&&h(V5.Dialog,{title:'Riepilogo risposte',kicker:'IL TUO PERCORSO',onClose:()=>setWizardSummaryOpen(false)},
       (()=>{const rows=window.NutriTraceGoalsWizard.completedAnswers(profile);return rows.length?h('dl',{className:'v58-wizard-summary'},rows.map(r=>h('div',{key:r.id},h('dt',null,r.question),h('dd',null,r.answer)))):h('p',{className:'muted'},'Completa il percorso per controllare qui le tue risposte.');})()),
