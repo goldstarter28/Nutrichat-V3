@@ -41,7 +41,7 @@
   function load() {
     try {
       const raw = JSON.parse(
-        localStorage.getItem(STORAGE_KEY) || '{}'
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(STORAGE_KEY) || '{}'
       );
 
       const entries = Array.isArray(raw.entries)
@@ -196,7 +196,7 @@
             const value = yMin + (yMax - yMin) * fraction;
             const y = yPos(value);
 
-            return h('g', { key: fraction },
+            return h('g', { key: 'y-'+fraction },
               h('line', {
                 x1: left, x2: width - right,
                 y1: y, y2: y,
@@ -261,7 +261,7 @@
             );
 
             return h('text', {
-              key: fraction,
+              key: 'x-'+fraction,
               x: xPos(date.getTime()),
               y: height - 17,
               textAnchor: 'middle',
@@ -328,7 +328,7 @@
 
     useEffect(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(STORAGE_KEY, JSON.stringify(data));
       } catch {
         setMessage(
           'Salvataggio non riuscito: spazio locale non disponibile.'

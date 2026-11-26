@@ -11,13 +11,12 @@
     { id: 'oggi', title: 'Oggi', icon: 'home' },
     { id: 'ricerca', title: 'Ricerca', icon: 'search' },
     { id: 'alimenti', title: 'Archivio', icon: 'food' },
-    { id: 'pianifica', title: 'Pianificazione e spesa', icon: 'food' },
-    { id: 'traguardi', title: 'Traguardi', icon: 'sparkles' },
     { id: 'obiettivi', title: 'Obiettivi', icon: 'target' },
     { id: 'peso', title: 'Peso', icon: 'scale' },
     { id: 'micro', title: 'Micronutrienti', icon: 'leaf' },
     { id: 'analisi', title: 'Analisi', icon: 'chart' },
     { id: 'coach', title: 'Coach AI', icon: 'sparkles' },
+    { id: 'traguardi', title: 'Traguardi', icon: 'sparkles' },
     { id: 'dati', title: 'Dati', icon: 'grid' }
   ];
   const PRIMARY = ['oggi','ricerca','obiettivi','coach','analisi'];
@@ -57,8 +56,7 @@
   function Logo() {
     return h('span',{className:'a-logo', 'aria-label':'NutriTrace'},
       h('svg',{className:'a-logo-mark',viewBox:'0 0 46 46',width:38,height:38,'aria-hidden':'true',focusable:'false'},
-        h('path',{d:'M23 39C8 37 5 28 5 9c11-1 19 6 19 20z',fill:'#075A40'}),
-        h('path',{d:'M22 36C20 18 27 9 42 6c3 17-3 28-20 30z',fill:'#8CD632'})
+        h('rect',{x:1,y:1,width:44,height:44,rx:13,fill:'#145641'}),h('circle',{cx:34,cy:12,r:4,fill:'#b7e681'}),h('path',{d:'M12 33V14L32 33V23',fill:'none',stroke:'#f7fff4',strokeWidth:4,strokeLinecap:'round',strokeLinejoin:'round'})
       ), h('span',null,'NutriTrace'));
   }
   function Header({darkMode,onToggleTheme,onQuickAdd}) {
@@ -153,7 +151,7 @@
             style:{'--a-pct':(pct===null?0:Math.min(pct,100))+'%'}},
             h('div',{className:'a-ring-inner'},h(Icon,{name:'flame',size:21}),
               h('strong',null,format(kcal,0)),h('span',null,'kcal'),
-              h('small',null,goal>0?`di ${format(goal,0)}`:'Target da impostare'))),
+              h('small',null,goal>0?`di ${format(goal,0)} kcal`:'Target da impostare'))),
           h('div',{className:'a-energy-status'},
             h('p',null,'Energia giornaliera'),
             h('strong',null,remaining===null?'—':format(remaining,0)),

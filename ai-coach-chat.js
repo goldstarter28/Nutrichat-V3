@@ -1,4 +1,4 @@
-/* NutriTrace Coach V5: existing chat, speech and API with explicit optional context. */
+/* NutriTrace Coach V7.3: scoped on-demand tools, local review cards, preserved speech and consent. */
 (function(root){
 'use strict';
 const h=root.React.createElement;
@@ -13,7 +13,7 @@ const mkid=()=>root.crypto?.randomUUID?.()||('id-'+Date.now()+'-'+Math.random().
 const initial=()=>({id:mkid(),title:'Nuova conversazione',createdAt:Date.now(),updatedAt:Date.now(),messages:[]});
 function read(){
  try{
-  const v=JSON.parse(localStorage.getItem(STORAGE)||'null');
+  const v=JSON.parse((globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(STORAGE)||'null');
   if(v&&Array.isArray(v.threads)&&v.threads.length){
    return {threads:v.threads.slice(0,30).map(t=>({...t,messages:(Array.isArray(t.messages)?t.messages:[]).slice(-100)})),
     active:v.threads.some(t=>t.id===v.active)?v.active:v.threads[0].id};
@@ -56,15 +56,15 @@ function claimProfileInvite(storage){
  profileInviteClaimed=true;return true;
 }
 const SHARING_V61='nutritrace_coach_sharing_v61';
-function readSharing(){try{return JSON.parse(root.localStorage.getItem(SHARING_V61)||'{}')||{};}catch{return {};}}
+function readSharing(){try{return JSON.parse((globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(SHARING_V61)||'{}')||{};}catch{return {};}}
 function View(props){
  const [data,setData]=useState(read);
  const [draft,setDraft]=useState('');
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
- const [consent,setConsent]=useState(()=>{try{return localStorage.getItem(CONSENT)==='yes';}catch{return false;}});
+ const [consent,setConsent]=useState(()=>{try{return (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(CONSENT)==='yes';}catch{return false;}});
  const [share,setShare]=useState(()=>readSharing().nutrition===true);
- const [compact,setCompact]=useState(()=>{try{return localStorage.getItem(SETTINGS_COMPACT)==='yes';}catch{return false;}});
+ const [compact,setCompact]=useState(()=>{try{return (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(SETTINGS_COMPACT)==='yes';}catch{return false;}});
  const [settingsOpen,setSettingsOpen]=useState(false);
  const [profileInvite,setProfileInvite]=useState(false);
  const [shareProfile,setShareProfile]=useState(()=>readSharing().nutrition===true&&readSharing().profile===true);
@@ -82,16 +82,27 @@ function View(props){
  const [localPeriod,setLocalPeriod]=useState('90');
  const [shareRecipes,setShareRecipes]=useState(()=>readSharing().nutrition===true&&readSharing().recipes===true);
  const [sharePantry,setSharePantry]=useState(()=>readSharing().nutrition===true&&readSharing().pantry===true);
+ const [workspace,setWorkspace]=useState(null);
+ const [toolProgress,setToolProgress]=useState('');
+ const live=useRef({});
+ live.current={props,consent,scopes:{nutrition:share,profile:share&&shareProfile,weight:share&&weight,health:share&&shareProfile&&shareHealth,recipes:share&&shareRecipes,pantry:share&&sharePantry}};
+ const Actions=root.NutriTraceCoachActions;
+ const sessionRef=useRef(null);
+ if(Actions&&props.actions&&!sessionRef.current){
+  const adapter={snapshot:()=>live.current.props.actions.snapshot(),searchFoods:(...args)=>live.current.props.actions.searchFoods(...args),resolveFood:(...args)=>live.current.props.actions.resolveFood(...args),commit:(...args)=>live.current.props.actions.commit(...args),undo:(...args)=>live.current.props.actions.undo(...args),...(props.actions.openEntry?{openEntry:(...args)=>live.current.props.actions.openEntry(...args)}:{})};
+  sessionRef.current=Actions.createSession(adapter,()=>live.current.scopes,()=>root.NutriTraceGoalsWizard?.policy?.(live.current.props.profile)||{automaticNutritionAllowed:false});
+ }
+ const actionSession=sessionRef.current;
  const localHistory=useMemo(()=>root.NutriTraceIntelligence?.buildHistory(props),[props.logs,props.foods,props.goals,props.profile]);
  const localWindow=localHistory?.windows[Number(localPeriod)];
  const profileContext=useMemo(()=>wizardContext(props.profile),[props.profile]);
  const thread=data.threads.find(t=>t.id===data.active)||data.threads[0];
  useEffect(()=>{
-  try{localStorage.setItem(STORAGE,JSON.stringify(data));setStorageError('');}
+  try{(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(STORAGE,JSON.stringify(data));setStorageError('');}
   catch{setStorageError('Memoria locale piena o non disponibile: esporta la chat prima di chiudere la pagina.');}
  },[data]);
- useEffect(()=>{try{localStorage.setItem(CONSENT,consent?'yes':'no');}catch{}},[consent]);
- useEffect(()=>{try{localStorage.setItem(SHARING_V61,JSON.stringify({nutrition:share,profile:share&&shareProfile,weight:share&&weight,health:share&&shareProfile&&shareHealth,recipes:share&&shareRecipes,pantry:share&&sharePantry}));}catch{}},[share,shareProfile,weight,shareHealth,shareRecipes,sharePantry]);
+ useEffect(()=>{try{(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(CONSENT,consent?'yes':'no');}catch{}},[consent]);
+ useEffect(()=>{try{(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(SHARING_V61,JSON.stringify({nutrition:share,profile:share&&shareProfile,weight:share&&weight,health:share&&shareProfile&&shareHealth,recipes:share&&shareRecipes,pantry:share&&sharePantry}));}catch{}},[share,shareProfile,weight,shareHealth,shareRecipes,sharePantry]);
  useEffect(()=>{bottom.current?.scrollIntoView?.({block:'nearest',behavior:'smooth'});},[thread?.messages.length,busy]);
  useEffect(()=>()=>{recognition.current?.stop?.();root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};},[]);
  useEffect(()=>{root.speechSynthesis?.cancel?.();speechRef.current={id:null,utter:null};setSpeech({id:null,status:'stopped'});},[data.active]);
@@ -102,38 +113,58 @@ function View(props){
   setData(prev=>{const rest=prev.threads.filter(t=>t.id!==id);const all=rest.length?rest:[initial()];return {threads:all,active:prev.active===id?all[0].id:prev.active};});}
  function exportChat(){const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),threads:data.threads},null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='nutritrace-coach-chat.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- function collapseSettings(){setCompact(true);setSettingsOpen(false);try{localStorage.setItem(SETTINGS_COMPACT,'yes');}catch{}}
+ function collapseSettings(){setCompact(true);setSettingsOpen(false);try{(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(SETTINGS_COMPACT,'yes');}catch{}}
  function offerProfileOnce(){
   if(!profileContext)return;
-  let storage;try{storage=root.localStorage;}catch{}
+  let storage;try{storage=(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage);}catch{}
   if(claimProfileInvite(storage)&&!shareProfile)setProfileInvite(true);
  }
  function context(question){
   if(!share)return{};
   const Q=root.NutriTraceIntelligence;
   if(!Q)throw Error('Modulo contesto non disponibile. Ricarica l’app.');
-  let weightData={};if(weight){try{weightData=JSON.parse(localStorage.getItem('nutritrace_body_weight_v1')||'{}');}catch{}}
+  let weightData={};if(weight){try{weightData=JSON.parse((globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem('nutritrace_body_weight_v1')||'{}');}catch{}}
   return Q.fitContext(Q.coachContext(props,question,{share,shareProfile,shareHealth:shareProfile&&shareHealth,shareWeight:weight,shareRecipes,sharePantry,weights:weightData.entries,weightTarget:weightData.target,state:props.qualityState}),8500);
  }
  async function ask(question,baseMessages,threadId,mode='new'){
-  if(!consent){setError('Autorizza l’invio dei messaggi prima di continuare.');return;}
+  if(!live.current.consent){setError('Autorizza l’invio dei messaggi prima di continuare.');return;}
   setBusy(true);setError('');setSending(true);
+  const cards=[],actions=[];let messageSaved=false;
+  const saveMessage=(answer,json={})=>{messageSaved=true;updateThread(threadId,t=>({...t,messages:[...t.messages,{id:mkid(),role:'assistant',content:answer,cards,actions,truncated:Boolean(json.truncated),finishReason:json.finishReason,createdAt:Date.now()}].slice(-100)}));};
   try{
    const history=baseMessages.filter(m=>['user','assistant'].includes(m.role)).slice(-12).map(m=>({role:m.role,content:m.content}));
-   const response=await fetch('/api/coach-chat',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({question,history,context:context(question)})});
-   const json=await response.json().catch(()=>({}));
-   if(!response.ok)throw Error(json.error||'Impossibile ottenere una risposta');
-   const answer=String(json.answer||'');
-   updateThread(threadId,t=>({...t,messages:[...t.messages,{id:mkid(),role:'assistant',content:answer,
-    truncated:Boolean(json.truncated),finishReason:json.finishReason,createdAt:Date.now()}].slice(-100)}));
+   const toolMessages=[],startScopes=Actions?.scopeStamp(live.current.scopes);
+   for(let round=0;round<(actionSession?Actions.MAX_ROUNDS:1);round++){
+    if(!live.current.consent||actionSession&&startScopes!==Actions.scopeStamp(live.current.scopes))throw Error('I consensi sono cambiati. Nessun nuovo dato viene inviato; reinvia la richiesta con le nuove impostazioni.');
+    setToolProgress('Passaggio '+(round+1)+(actionSession?' di massimo '+Actions.MAX_ROUNDS:''));
+    const p=actionSession?.policy()||{};
+    const request={question,history,context:actionSession?{}:context(question),...(actionSession?{toolsEnabled:true,round,scopes:actionSession.scopes(),policy:{automaticNutritionAllowed:p.automaticNutritionAllowed===true,organizationalOnly:p.organizationalOnly===true},toolMessages}:{})};
+    const response=await fetch('/api/coach-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
+    const json=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(json.error||'Impossibile ottenere una risposta');
+    if(!live.current.consent||actionSession&&startScopes!==Actions.scopeStamp(live.current.scopes))throw Error('La condivisione è cambiata durante la risposta. Nessuna funzione verrà eseguita.');
+    const calls=Array.isArray(json.toolCalls)?json.toolCalls:[];
+    if(!calls.length||!actionSession){saveMessage(String(json.answer||''),json);break;}
+    toolMessages.push({role:'assistant',content:String(json.answer||'')||null,tool_calls:calls});
+    for(const call of calls){
+     let result;
+     try{const output=await actionSession.handleTool(call);result=output.result;if(output.card)cards.push(output.card);if(output.action)actions.push(output.action);}
+     catch(e){result={error:e.code||'TOOL_ERROR',message:e.message,note:'Nessuna modifica eseguita.'};}
+     toolMessages.push({role:'tool',tool_call_id:call.id,content:Actions.toolReply(result,4000)});
+    }
+    // A prepared action is already reviewable: no paid/free-quota request just to paraphrase it.
+    if(actions.length){saveMessage('Ho preparato '+(actions.length===1?'una proposta':'le proposte')+'. Controlla i dettagli, modifica le quantità se serve e premi Conferma e applica. Finché non confermi, i dati restano invariati.');break;}
+    if(round===Actions.MAX_ROUNDS-1){saveMessage('Ho raggiunto il limite di '+Actions.MAX_ROUNDS+' passaggi per questo invio. I risultati disponibili sono nelle schede. Puoi chiedere un approfondimento; nessuna modifica è stata applicata.');}
+   }
    if(mode==='new')offerProfileOnce();
-  }catch(e){setError(e.message||'Servizio AI non disponibile');}
-  finally{setBusy(false);setSending(false);}
+  }catch(e){setError(e.message||'Servizio AI non disponibile');if(!messageSaved&&(cards.length||actions.length))saveMessage('Sono disponibili questi risultati. '+(e.message||'Il servizio non ha completato il passaggio successivo.')+' Nessuna proposta è stata applicata.');}
+  finally{setBusy(false);setSending(false);setToolProgress('');}
  }
+
  function send(e){
   e?.preventDefault?.();
   if(busy)return;
+  if(/^cosa puoi fare(?: per me)?[?.!\s]*$/i.test(draft.trim())&&actionSession){setWorkspace('help');setDraft('');return;}
   if(!consent){setError('Per inviare una domanda devi prima selezionare “Autorizzo l’invio delle domande a GroqCloud”.');return;}
   const question=draft.trim();
   if(!question){setError('Scrivi una domanda prima di inviare.');return;}
@@ -200,16 +231,16 @@ function View(props){
  const sharingPanel=h('section',{className:'v5-coach-sharing','aria-label':'Condivisione facoltativa con il Coach'},
    h('label',{className:'v5-coach-sharing-main'},
     h('input',{type:'checkbox',checked:share,onChange:e=>{setShare(e.target.checked);if(!e.target.checked){setWeight(false);setShareProfile(false);setShareHealth(false);setShareRecipes(false);setSharePantry(false);}}}),
-    h('span',null,h('strong',null,'Condividi informazioni nutrizionali'),h('small',null,'Facoltativo · obiettivi attuali, statistiche fino a 90 giorni e riepiloghi fino a 52 settimane; dettagli selezionati secondo la domanda e le quote. La scelta resta sul dispositivo.')),
+    h('span',null,h('strong',null,'Condividi informazioni nutrizionali'),h('small',null,'Facoltativo · il Coach legge obiettivi e dati del periodo richiesto soltanto quando servono alla tua domanda. Le schede locali funzionano anche senza condividere dati con l’AI.')),
     h('span',{className:'v5-coach-sharing-badge'},share?'Attivo':'Spento')),
    share&&h('div',{className:'v5-coach-sharing-options'},
     h('label',null,h('input',{type:'checkbox',checked:weight,onChange:e=>setWeight(e.target.checked)}),h('span',null,'Includi anche lo storico aggregato delle pesate e l’obiettivo di peso')),
-    h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>{setShareProfile(e.target.checked);if(!e.target.checked)setShareHealth(false);if(e.target.checked){let storage;try{storage=root.localStorage;}catch{}claimProfileInvite(storage);setProfileInvite(false);}}}),h('span',null,'Includi le risposte del percorso, età, altezza, peso del profilo, coefficiente fisiologico e calcolo degli obiettivi',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
-    shareProfile&&h('label',null,h('input',{type:'checkbox',checked:shareHealth,onChange:e=>setShareHealth(e.target.checked)}),h('span',null,'Autorizzo separatamente le risposte fisiologiche e di assistenza del wizard e gli allergeni personali.')),
+    h('label',null,h('input',{type:'checkbox',checked:shareProfile,disabled:!profileContext,onChange:e=>{setShareProfile(e.target.checked);if(!e.target.checked)setShareHealth(false);if(e.target.checked){let storage;try{storage=(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage);}catch{}claimProfileInvite(storage);setProfileInvite(false);}}}),h('span',null,'Includi le preferenze del percorso, abitudini e organizzazione degli allenamenti pertinenti alla domanda',!profileContext&&h('small',null,'Disponibili dopo “Personalizza i miei obiettivi” nella sezione Obiettivi.'))),
+    shareProfile&&h('label',null,h('input',{type:'checkbox',checked:shareHealth,onChange:e=>setShareHealth(e.target.checked)}),h('span',null,'Autorizzo separatamente le risposte fisiologiche e di assistenza del percorso e gli allergeni personali.')),
     h('label',null,h('input',{type:'checkbox',checked:shareRecipes,onChange:e=>setShareRecipes(e.target.checked)}),h('span',null,'Includi ricette salvate pertinenti: ingredienti, nutrienti e procedimento se richiesto.')),
     h('label',null,h('input',{type:'checkbox',checked:sharePantry,onChange:e=>setSharePantry(e.target.checked)}),h('span',null,'Includi ingredienti disponibili in dispensa, quantità e menu pertinenti.')),
     h('small',null,'Le informazioni vengono inviate a GroqCloud. Nessun invio a OpenRouter. Puoi revocare la condivisione in qualsiasi momento.')),
-   h('p',{className:'v5-coach-sharing-note'},share?'Queste informazioni saranno inviate a GroqCloud solo quando invii un messaggio autorizzato.':'Il diario rimane sul dispositivo. Puoi usare la chat anche senza condividere le statistiche.'),
+   h('p',{className:'v5-coach-sharing-note'},share?'Solo i dati richiesti dagli strumenti vengono inviati a GroqCloud durante un messaggio autorizzato. Un invio può usare fino a 3 richieste del budget Coach.':'Il diario rimane sul dispositivo. Puoi usare la chat anche senza condividere le statistiche.'),
    share&&h('button',{type:'button',className:'ghost v5-coach-sharing-done',onClick:collapseSettings},'Fatto'),
    h('details',{className:'v5-coach-privacy-note'},h('summary',null,'Come funziona la privacy della chat'),
     h('p',null,'L’autorizzazione ai messaggi è separata dalla condivisione del diario. Ogni invio comprende gli ultimi messaggi della conversazione. Spegnere la condivisione interrompe i nuovi riepiloghi; informazioni già scritte nella chat possono restare nella sua cronologia. Per un contesto nuovo avvia una nuova chat.')));
@@ -221,8 +252,10 @@ function View(props){
     h('span',null,'Autorizzo l’invio delle mie domande e degli ultimi messaggi della chat a GroqCloud.'));
  return h('section',{className:'nutritrace-ai-coach coach-v3 v5-coach'},
   h('header',{className:'coach-head'},
-   h('div',null,h('span',{className:'v5-coach-kicker'},'UNO SPAZIO PER LE TUE DOMANDE'),h('h2',null,'✦ NutriTrace Coach'),h('p',null,'Rifletti sulle tue abitudini, un messaggio alla volta.')),
-   h('div',{className:'coach-head-actions'},props.onPlanner&&btn('Pianifica pasti',props.onPlanner,busy),btn('Conversazioni',()=>setSidebar(x=>!x)),btn('+ Nuova chat',newThread,busy,'coach-btn coach-primary'))),
+   h('div',null,h('span',{className:'v5-coach-kicker'},'UNO SPAZIO PER LE TUE DOMANDE'),h('h2',null,'✦ NutriTrace Coach'),h('p',null,'Trova alimenti, organizza ricette e spesa, prepara azioni da rivedere insieme.')),
+   h('div',{className:'coach-head-actions'},actionSession&&btn('Strumenti dell’app',()=>setWorkspace(v=>v?null:'help'),busy),btn('Conversazioni',()=>setSidebar(x=>!x)),btn('+ Nuova chat',newThread,busy,'coach-btn coach-primary'))),
+  actionSession&&h('div',{className:'coach-tools-quick'},...[['help','Cosa puoi fare per me?'],['pantry','Dispensa'],['shopping','Spesa'],['recipes','Ricette']].map(([key,label])=>btn(label,()=>setWorkspace(v=>v===key?null:key),busy))),
+  actionSession&&workspace&&h(Actions.Workspace,{key:workspace,session:actionSession,initial:workspace,onClose:()=>setWorkspace(null)}),
   sidebar&&h('nav',{className:'coach-thread-list','aria-label':'Conversazioni salvate'},
    ...data.threads.map(t=>h('div',{className:'coach-thread',key:t.id},
     btn(t.title,()=>selectThread(t.id),busy,'coach-btn coach-thread-title'),
@@ -233,20 +266,22 @@ function View(props){
    h('label',null,'Periodo del riepilogo',h('select',{value:localPeriod,onChange:e=>setLocalPeriod(e.target.value)},...[7,30,60,90,364].map(n=>h('option',{key:n,value:String(n)},n===364?'52 settimane':n+' giorni')))),
    h('p',{className:'muted'},localWindow.entries+' registrazioni · '+(Number(localPeriod)-localWindow.days)+' giorni senza registrazioni. Medie dei soli giorni con dati, non consumi confermati.'),
    h('div',{className:'coach-stats'},...localHistory.metrics.slice(0,5).map(m=>h('div',{className:'coach-stat',key:m.id},h('small',null,m.name),h('strong',null,localWindow.metrics[m.id]?.avg==null?'N/D':Number(localWindow.metrics[m.id].avg).toLocaleString('it-IT',{maximumFractionDigits:1})+' '+m.unit)))),
-   h('small',{className:'muted'},share?'Il periodo qui scelto cambia solo questo riepilogo. Il Coach riceve contesto fino a 90 giorni e riepiloghi settimanali fino a 52 settimane, nei limiti del budget e dei consensi.':'Il riepilogo è locale. Il Coach non riceve statistiche finché non autorizzi la condivisione.')),
+   h('small',{className:'muted'},share?'Il periodo qui scelto cambia solo questo riepilogo locale. Il Coach consulta il periodo richiesto nella domanda usando gli strumenti autorizzati, entro il budget disponibile.':'Il riepilogo è locale. Il Coach non riceve statistiche finché non autorizzi la condivisione.')),
   h('div',{className:'coach-messages',role:'log','aria-label':'Messaggi della conversazione'},
    thread.messages.length===0&&h('div',{className:'coach-empty'},h('span',{className:'v5-coach-empty-symbol','aria-hidden':'true'},'✦'),h('h3',null,'Da dove vuoi iniziare?'),
     h('p',null,'Alimentazione, allenamento o una domanda sulle tue abitudini.'),
-    h('div',{className:'v5-coach-prompts'},...['Come rendere più vari i miei pasti?','Come leggere le stime dei micronutrienti?','Come organizzare i pasti quando ho poco tempo?'].map(question=>btn(question,()=>setDraft(question),busy,'coach-btn v5-coach-prompt')))),
+    h('div',{className:'v5-coach-prompts'},...['Cosa puoi fare per me?','Cerca yogurt nel database','Prepara la spesa dalle mie ricette','Proponi un menu con le mie preferenze'].map(question=>btn(question,()=>setDraft(question),busy,'coach-btn v5-coach-prompt')))),
    ...thread.messages.map(m=>h('article',{key:m.id,className:'coach-message '+m.role},
     h('div',{className:'coach-message-meta'},h('strong',null,m.role==='user'?'Tu':'✦ Coach'),m.sharedScopes?.length>0&&h('small',null,'Condiviso: '+m.sharedScopes.join(', '))),
     m.role==='assistant'?root.NutriTraceCoachMarkdown.render(m.content):h('p',{className:'coach-user-text'},m.content),
+    m.role==='assistant'&&actionSession&&(m.cards||[]).map((card,i)=>h(Actions.ReadCard,{key:'read-'+i,card,session:actionSession,onProposal:action=>updateThread(thread.id,t=>({...t,messages:t.messages.map(x=>x.id===m.id?{...x,actions:[...(x.actions||[]),action]}:x)})),onRefresh:next=>updateThread(thread.id,t=>({...t,messages:t.messages.map(x=>x.id===m.id?{...x,cards:x.cards.map((c,j)=>j===i?next:c)}:x)}))})),
+    m.role==='assistant'&&actionSession&&(m.actions||[]).map((action,i)=>h(Actions.ActionCard,{key:action.id,action,session:actionSession,disabled:busy,onChange:next=>updateThread(thread.id,t=>({...t,messages:t.messages.map(x=>x.id===m.id?{...x,actions:x.actions.map((a,j)=>j===i?next:a)}:x)}))})),
     h('div',{className:'coach-message-actions'},
      m.role==='user'?btn('Modifica',()=>editMessage(m),busy):h(root.React.Fragment,null,
       btn(speech.id===m.id?(speech.status==='paused'?'▶ Riprendi':'⏸ Pausa'):'▶ Ascolta',()=>toggleSpeech(m)),
       speech.id===m.id&&btn('■ Ferma',stopSpeech),
       m.truncated&&btn('Continua risposta',continueAnswer,busy,'coach-btn coach-primary'))))),
-   busy&&h('p',{className:'coach-wait',role:'status'},'Il Coach sta preparando la risposta…'),
+   busy&&h('p',{className:'coach-wait',role:'status'},'Il Coach sta preparando la risposta… '+toolProgress),
    h('div',{ref:bottom})),
   h('form',{className:'coach-composer',onSubmit:send},
    (!compact||!consent)&&consentControl,
@@ -265,5 +300,5 @@ function View(props){
   h('small',{className:'coach-disclaimer'},'Conversazioni salvate su questo dispositivo/browser. Per registrare un alimento da foto usa Foto in Oggi. Dettatura e lettura vocale dipendono dal browser. Le risposte del Coach sono informative e non sostituiscono indicazioni cliniche.')
  );
 }
-root.NutriTraceAICoach={...previous,View,sharedContext,wizardContext,claimProfileInvite,version:'5.0.0'};
+root.NutriTraceAICoach={...previous,View,sharedContext,wizardContext,claimProfileInvite,version:'7.3.0'};
 })(window);

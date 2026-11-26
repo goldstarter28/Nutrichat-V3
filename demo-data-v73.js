@@ -1,0 +1,64 @@
+/* Synthetic test data. Deliberately not a food composition database or a diet. */
+(function(root){'use strict';
+ const KEY='nutritrace_demo_manifest_v73';
+ const SCENARIOS={stable:{name:'Regolare · peso stabile',detail:'2400 kcal registrate al giorno e peso stabile: stima osservazionale attesa circa 2400 kcal.'},loss:{name:'Leggera diminuzione',detail:'Ultime 8 settimane: circa −0,084 kg/settimana; spesa stimata attesa superiore all’introito.'},gain:{name:'Leggero aumento',detail:'Ultime 8 settimane: circa +0,084 kg/settimana; spesa stimata attesa inferiore all’introito.'},gaps:{name:'Giornate e pesate mancanti',detail:'Interruzioni nel diario: l’app deve dichiarare insufficienti i dati per adattare il TDEE.'},noise:{name:'Peso molto variabile',detail:'Oscillazioni sintetiche di diversi kg: nessun adattamento affidabile atteso.'}};
+ const localDate=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
+ const shift=(date,days)=>{const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);};
+ const n=v=>Math.round(v*1e6)/1e6;
+ function foods(){
+  const specs=[
+   ['avena','Fiocchi di avena',370,13,59,1,7,1.2,10,.01,0,'general'],
+   ['yogurt','Yogurt bianco',63,4.5,4.7,4.7,3.2,2.1,0,.12,0,'general'],
+   ['banana','Banana',89,1.1,20,12,.3,.1,2.6,.01,100,'general'],
+   ['riso','Riso integrale cotto',125,2.7,26,.4,1,.2,1.6,.01,0,'general'],
+   ['ceci','Ceci cotti',135,7,19,1.5,2.5,.3,6,.08,100,'general'],
+   ['verdure','Verdure miste',32,2,4,2.5,.4,.08,3,.06,100,'general'],
+   ['olio','Olio di oliva',900,0,0,0,100,14,0,0,0,'fats-nuts-seeds'],
+   ['pane','Pane integrale',250,9,43,3,4,.6,7,.9,0,'general'],
+   ['uova','Uova',143,12.6,.7,.7,9.5,3.1,0,.35,0,'general'],
+   ['salmone','Salmone',205,20,0,0,13,3.1,0,.1,0,'general'],
+   ['mela','Mela',52,.3,12,10,.2,.04,2.4,.01,100,'general'],
+   ['biscotti','Biscotti al cacao',470,6,64,29,20,10,3,.6,0,'general'],
+   ['formaggio','Formaggio stagionato',400,27,1,0,32,20,0,1.8,0,'cheese'],
+   ['bevanda','Bevanda zuccherata',42,0,10.6,10.6,0,0,0,.01,0,'beverage']
+  ];
+  return specs.map((s,i)=>{const [id,name,kcal,protein,carbs,sugar,fat,saturatedFat,fiber,salt,fvlPercent,category]=s;
+   const label={kcal,energyKj:kcal*4.184,protein,carbs,sugar,fat,saturatedFat,fiber,salt};
+   const provenance=Object.fromEntries(Object.keys(label).map(k=>[k,{status:'synthetic',source:'DEMO · valore sintetico',basis:'100g'}]));
+   return {id:'demo-'+id,name,officialName:name,brand:'',servingGrams:100,label,labelProvenance:provenance,ingredients:name,demoSynthetic:true,notes:'Dati inventati per collaudo: non usare come riferimento nutrizionale.',sources:[{id:'demo-source',name:'DEMO · valori sintetici',quality:'sintetica'}],nutrients:[{id:'demo-ca-'+i,name:'Calcio',amount:40+i*4,unit:'mg',source:'DEMO · valore sintetico',bio:{mode:'none'}},{id:'demo-fe-'+i,name:'Ferro',amount:1+i*.07,unit:'mg',source:'DEMO · valore sintetico',bio:{mode:'none'}},...(i%3?[{id:'demo-c-'+i,name:'Vitamina C',amount:i*2,unit:'mg',source:'DEMO · valore sintetico',bio:{mode:'none'}}]:[])],qualityV73:{taxonomy:{category,fvlPercent,confirmed:true,source:'DEMO · composizione sintetica',...(category==='beverage'?{basis:'100ml',servingMl:100,nonNutritiveSweeteners:false}:{})}}};
+  }).concat([{id:'demo-unknown',name:'Piatto con dati incompleti',demoSynthetic:true,servingGrams:100,label:{kcal:170,protein:8,carbs:22,fat:5,sugar:null,saturatedFat:null,salt:null,fiber:null},nutrients:[],sources:[{name:'DEMO · dati incompleti'}],notes:'Dati mancanti intenzionali: nessuna lettera va inventata.'}]);
+ }
+ function generate({scenario='stable',days=1096,today=localDate()}={}){
+  if(!SCENARIOS[scenario])throw Error('Scenario demo non valido.');if(![91,365,1096].includes(Number(days)))throw Error('Scegli 3 mesi, 1 anno o 3 anni.');if(!/^\d{4}-\d{2}-\d{2}$/.test(today)||shift(today,0)!==today)throw Error('Data non valida.');
+  const Q=root.NutriTraceIntelligence;if(!Q?.signature)throw Error('Modulo qualità non disponibile.');
+  const fs=foods(),by=Object.fromEntries(fs.map(f=>[f.id,f]));const logs=[],weights=[],quality={version:1,days:{},times:{},allergens:[]},hydration={goal:2000,days:{},dayGoals:{}};
+  const meals=[{id:'breakfast',name:'Colazione'},{id:'lunch',name:'Pranzo'},{id:'afternoon-snack',name:'Spuntino'},{id:'dinner',name:'Cena'}];
+  const recipes=[{id:'demo-ricetta',name:'Bowl di riso e ceci · demo',yieldGrams:500,servings:2,createdAt:today+'T12:00:00Z',pinned:true,notes:'Ricetta sintetica per provare porzioni, menu e lista della spesa.',ingredients:[{foodId:'demo-riso',grams:200,name:'Riso integrale cotto'},{foodId:'demo-ceci',grams:160,name:'Ceci cotti'},{foodId:'demo-verdure',grams:130,name:'Verdure miste'},{foodId:'demo-olio',grams:10,name:'Olio di oliva'}]}];
+  for(let i=Number(days)-1;i>=0;i--){
+   const date=shift(today,-i),missing=scenario==='gaps'&&i%9===3;
+   if(!missing){
+    const pattern=Math.floor(i/21)%4;
+    const items=[['avena',70,'breakfast'],['yogurt',170,'breakfast'],['banana',120,'breakfast'],['riso',200,'lunch'],['ceci',160,'lunch'],['verdure',130,'lunch'],['olio',10,'lunch'],[pattern===3?'biscotti':'mela',pattern===3?55:180,'afternoon-snack'],['pane',100,'dinner'],[pattern===1?'formaggio':pattern===2?'salmone':'uova',pattern===1?75:150,'dinner'],['verdure',160,'dinner'],['olio',12,'dinner']];
+    if(i>56&&i%17===0)items.push(['unknown',80,'dinner']);
+    const energy=items.reduce((sum,[id,g])=>sum+by['demo-'+id].label.kcal*g/100,0),factor=2400/energy;
+    const day=items.map(([id,g,mealId],j)=>({id:'demo-'+(Number(days)-1-i).toString(36)+'-'+j.toString(36),date,foodId:'demo-'+id,mealId,grams:n(g*factor),...(i<91?{demoSynthetic:true,createdAt:date+'T12:00:00Z',consumedTime:{breakfast:'08:00',lunch:'13:00','afternoon-snack':'16:30',dinner:'20:00'}[mealId],entryOrigin:'demo-synthetic-v73'}:{}),...(mealId==='lunch'&&i%6===0?{recipeGroupId:'demo-bowl-'+date,recipeName:recipes[0].name,recipeYieldGrams:500,recipeConsumedGrams:n(500*factor),recipePortionCount:n(2*factor),recipePortionUnit:'porzioni',recipeEntryUnit:'porzioni'}:{})}));
+    logs.push(...day);quality.days[date]={status:i===0?'partial':'complete',signature:Q.signature(day)};quality.times[date]={breakfast:'08:00',lunch:'13:00','afternoon-snack':'16:30',dinner:'20:00'};
+    hydration.days[date]=[{id:'demo-water-'+date,ml:1750+(i%5)*150,time:'20:30'}];
+   }
+   if(scenario!=='gaps'||i%11<5){const slope=scenario==='loss'?-.012:scenario==='gain'?.012:0;const trend=slope*-Math.min(i,90);const noise=scenario==='noise'?Math.sin(i*2.11)*2.7:(scenario==='stable'?0:Math.sin(i*.8)*.035);weights.push({id:'demo-weight-'+date,date,time:'07:30',kg:n(75+trend+noise),note:'DEMO · dato sintetico'});}
+  }
+  const a={goal:'maintain',age:35,sex:'male',height:178,weight:75,physiologicalState:'none',careContext:'none',activity:'light',trainingDays:'3-4',trainingType:'mixed',dietaryPattern:'omnivore',mealsPerDay:'4',schedule:'regular',cookingTime:'quick',foodPriorities:['variety','budget'],hydrationHabits:'regular',sleep:'regular',focus:'awareness',confidence:'explore'};
+  const plan=root.NutriTraceGoalsWizard?.calculatePlan(a)||{eligible:true,kcal:2400};
+  const goals=[{id:'kcal',name:'Energia',group:'Energia e macro',target:2400,unit:'kcal',period:'day',kind:'target',targetMode:'absolute',enabled:true},{id:'protein',name:'Proteine',target:120,unit:'g',period:'day',targetMode:'absolute',enabled:true},{id:'carbs',name:'Carboidrati',target:300,unit:'g',period:'day',targetMode:'absolute',enabled:true},{id:'fat',name:'Grassi',target:80,unit:'g',period:'day',targetMode:'absolute',enabled:true},{id:'fiber',name:'Fibre',target:30,unit:'g',period:'day',targetMode:'absolute',enabled:true}];
+  const profile={weight:75,macroPlan:{calorieMode:'fixed',kcal:2400,autoMacro:'carbs',perKg:{protein:1.6,carbs:4,fat:80/75,sugar:.8,fiber:.4}},wizardV5:{version:1,completedAt:shift(today,-Number(days)+1)+'T12:00:00Z',answers:a,calculation:plan},advancedV64:{recentWeightTrend:scenario==='loss'?'slight_down':scenario==='gain'?'slight_up':scenario==='stable'?'stable':'unknown',trainingSessionsPerDay:2,trainingSessions:[{minutes:45,time:'07:00',intensity:'Moderata',mealRelation:'Prima di colazione'},{minutes:35,time:'18:00',intensity:'Leggera',mealRelation:'Prima di cena'}],trainingDays:'Lunedì, mercoledì e venerdì',favorite:'Riso, ceci, verdure',avoid:'',cookingTime:'15–30 minuti',knowledgeLevel:'Intermedio'},targetEpochV70:shift(today,-Number(days)+1),plannerV72:{version:1,pantry:[{foodId:'demo-riso',name:'Riso integrale cotto',grams:500,expiry:''},{foodId:'demo-ceci',name:'Ceci cotti',grams:300,expiry:''}],plans:[{id:'demo-plan-1',date:today,mealId:'dinner',kind:'recipe',ref:'demo-ricetta',name:recipes[0].name,amount:1,unit:'porzioni'}],checked:{},deducted:[]},shoppingV73:{id:'demo-shopping',createdAt:today+'T12:00:00Z',from:today,to:shift(today,6),items:[{foodId:'demo-mela',name:'Mela',grams:600,department:'Ortofrutta',checked:false},{foodId:'demo-yogurt',name:'Yogurt bianco',grams:500,department:'Frigo',checked:false}],issues:['DEMO · lista sintetica']}};
+  if(root.NutriTraceStrategy?.preferences)profile.advancedV64=root.NutriTraceStrategy.preferences(profile.advancedV64);
+  const manifest={version:1,scenario,days:Number(days),today,createdAt:new Date().toISOString(),synthetic:true,recordCount:logs.length,weightCount:weights.length};
+  return {foods:fs,logs,recipes,goals,profile,quality,meals,hydration,bodyWeight:{entries:weights,target:null},manifest};
+ }
+ function seed(options={}){const env=root.NutriTraceEnvironment;if(!env?.isDemo)throw Error('I dati sintetici possono essere creati solo nell’ambiente demo.');const data=generate(options);const records={'nutritrace_foods':data.foods,'nutritrace_logs':data.logs,'nutritrace_recipes_v5':data.recipes,'nutritrace_goals_v23':data.goals,'nutritrace_profile_v23':data.profile,'nutritrace_quality_v61':data.quality,'nutritrace_meals_v3':data.meals,'nutritrace_body_weight_v1':data.bodyWeight,'nutritrace_hydration_v1':data.hydration,[KEY]:data.manifest};const entries=[];for(let i=0;i<env.storage.length;i++){const key=env.storage.key(i);if(!(key in records))entries.push([key,null]);}entries.push(...Object.entries(records).map(([k,v])=>[k,JSON.stringify(v)]));env.transaction(entries);return data.manifest;}
+ function Panel(){const h=root.React.createElement,env=root.NutriTraceEnvironment;const [scenario,setScenario]=root.React.useState('stable'),[days,setDays]=root.React.useState('1096'),[error,setError]=root.React.useState('');let manifest=null;try{manifest=JSON.parse(env.storage.getItem(KEY)||'null');}catch{}
+  return h('article',{className:'card v73-demo-options'},h('h2',null,'Ambiente demo e collaudo'),h('p',null,'Passa tra il tuo diario e un archivio sintetico separato. Nella demo puoi modificare quantità, provare il percorso, ricette, grafici, dispensa e spesa.'),env.isDemo?h(root.React.Fragment,null,h('p',{className:'v73-demo-result'},manifest?SCENARIOS[manifest.scenario]?.name+' · '+manifest.days+' giorni · '+manifest.recordCount+' registrazioni':'Nessun dato demo disponibile.'),h('label',null,'Scenario',h('select',{value:scenario,onChange:e=>setScenario(e.target.value)},...Object.entries(SCENARIOS).map(([id,s])=>h('option',{key:id,value:id},s.name)))),h('p',null,SCENARIOS[scenario].detail),h('label',null,'Durata dello storico',h('select',{value:days,onChange:e=>setDays(e.target.value)},h('option',{value:'91'},'3 mesi'),h('option',{value:'365'},'1 anno'),h('option',{value:'1096'},'3 anni'))),h('button',{type:'button',className:'cta',onClick:()=>{if(!root.confirm('Rigenerare soltanto i dati demo? Le modifiche fatte nella demo saranno sostituite. Il tuo ambiente personale rimane intatto.'))return;try{seed({scenario,days:Number(days)});root.location.reload();}catch(e){setError('Demo non rigenerata. '+e.message+' Se lo spazio è insufficiente prova 3 mesi.');}}},'Rigenera questi dati demo')):h('button',{type:'button',className:'cta',onClick:()=>env.switchTo('demo')},'Apri la demo'),h('p',{className:'muted'},'I dati sintetici verificano il funzionamento del software; non validano clinicamente il TDEE. Le richieste AI, anche in demo, usano le API configurate e richiedono il relativo consenso. Lo spazio del browser è condiviso: se è insufficiente, la generazione si interrompe senza cancellare i tuoi dati.'),error&&h('p',{role:'alert'},error));
+ }
+ const api={generate,seed,Panel,SCENARIOS,KEY};root.NutriTraceDemoV73=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ if(root.NutriTraceEnvironment?.isDemo){try{if(!root.NutriTraceEnvironment.storage.getItem(KEY))seed();}catch(error){root.NutriTraceDemoError=error.message;}}
+})(typeof globalThis!=='undefined'?globalThis:this);

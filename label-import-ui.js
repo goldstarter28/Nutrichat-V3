@@ -71,7 +71,7 @@
     html += '</div><div class="labelImportActions"><button type="button" class="ghost" id="label-import-v3-cancel">Annulla</button><button type="button" class="cta" id="label-import-v3-confirm">Conferma e salva i campi selezionati</button></div><p class="labelImportMeta">La revisione non salva dati. Ogni sovrascrittura richiede conferma individuale; i campi rifiutati restano invariati.</p>';
     review.innerHTML = html;
     review.querySelector('#label-import-v3-target').value = targetId;
-    review.querySelector('#label-import-v3-target').addEventListener('change', event => renderReview(card, parsed, stateApi().readFoods(localStorage), event.target.value));
+    review.querySelector('#label-import-v3-target').addEventListener('change', event => renderReview(card, parsed, stateApi().readFoods((globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage)), event.target.value));
     review.querySelector('#label-import-v3-cancel').addEventListener('click', () => review.replaceChildren());
     review.querySelector('#label-import-v3-confirm').addEventListener('click', () => {
       const selected = [...review.querySelectorAll('input[name="labelImportField"]:checked')].map(input => input.value);
@@ -80,7 +80,7 @@
         const item = proposals.find(proposal => proposal.path === path);
         if (item?.action === 'conflict' && confirm(`Confermi la sostituzione esplicita di “${labelForProposal(item)}”?`)) overwritePaths.push(path);
       }
-      const result = stateApi().commitImport({ storage: localStorage, parsed, target: targetId, proposals, selectedPaths: selected, overwritePaths, snapshot, confirmed: true });
+      const result = stateApi().commitImport({ storage: (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage), parsed, target: targetId, proposals, selectedPaths: selected, overwritePaths, snapshot, confirmed: true });
       if (!result.ok) { renderError(review, result.reason); return; }
       review.innerHTML = '<p class="labelImportWarning">Importazione confermata e salvata nell’archivio.</p>';
       location.reload();
@@ -94,7 +94,7 @@
     let parsed;
     try { parsed = window.NutriTraceLabelImportV3.parseLabel(text); }
     catch (error) { review.innerHTML = `<p class="labelImportWarning">${escape(error.message || 'Testo non analizzabile.')}</p>`; return; }
-    const archive = stateApi().readFoods(localStorage);
+    const archive = stateApi().readFoods((globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage));
     if (!archive.ok) { review.innerHTML = `<p class="labelImportWarning">${escape(archive.reason)}</p>`; return; }
     const options = targetOptions(parsed, archive.foods);
     review.innerHTML = `${options.html}<p class="labelImportMeta">Scegli una destinazione per vedere le proposte confrontate con i dati effettivi della scheda.</p>`;

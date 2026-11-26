@@ -26,6 +26,7 @@ function worker(options = {}) {
       calls.open.push(name);
       const entries = storage(name);
       return {
+        async match(request){const key=keyOf(request);calls.match.push(key);return entries.has(key)?entries.get(key).clone():undefined;},
         async addAll(requests) {
           calls.addAll.push({ name, requests: Array.from(requests) });
           if (options.coreFailure) throw new Error('Core download failed');
@@ -110,11 +111,12 @@ test('activation removes obsolete app caches but preserves complete offline food
   sw.seed(sw.currentCache, './app.js', 'current app');
   sw.seed('nutritrace-v3-aurora-v4-20261122', './app.js', 'previous app');
   sw.seed('nutritrace-v5-20261120', './index.html', 'earlier V5');
+  sw.seed('nutritrace-v7-20261126-v72', './app.js', 'earlier V72');
   sw.seed('nutrichat-v23-runtime', './data/master/chunks/00.json', 'complete offline master');
   sw.seed('personal-foods-offline', './custom-foods.json', 'personal dataset');
   sw.seed('another-application-cache', '/another-application', 'unrelated');
   await sw.lifecycle('activate');
-  assert.deepEqual(sw.calls.deleted.sort(), ['nutritrace-v3-aurora-v4-20261122', 'nutritrace-v5-20261120']);
+  assert.deepEqual(sw.calls.deleted.sort(), ['nutritrace-v3-aurora-v4-20261122', 'nutritrace-v5-20261120', 'nutritrace-v7-20261126-v72']);
   assert.equal(await sw.stored('nutrichat-v23-runtime', './data/master/chunks/00.json'), 'complete offline master');
   assert.equal(await sw.stored('personal-foods-offline', './custom-foods.json'), 'personal dataset');
   assert.equal(await sw.stored('another-application-cache', '/another-application'), 'unrelated');
@@ -183,3 +185,6 @@ test('HTTP failures do not replace a usable cached app file', async () => {
   assert.equal(sw.calls.put.length, 0);
   assert.equal(await sw.stored(sw.currentCache, './app.js'), 'known working app');
 });
+
+
+test('V7.3 stale app cache cannot override current code offline, demo navigation gets shell',async()=>{const sw=worker({network:async()=>{throw Error('offline');}});sw.seed('nutritrace-v7-old','./app.js','obsolete');sw.seed(sw.currentCache,'./app.js','current');sw.seed(sw.currentCache,'./index.html','demo-capable shell');assert.equal(await(await sw.request('./app.js')).response.text(),'current');assert.equal(await(await sw.request('/?env=demo',{mode:'navigate'})).response.text(),'demo-capable shell');});

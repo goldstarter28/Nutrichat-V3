@@ -27,8 +27,8 @@ test('V5.7.3 meal plans match selected count and preserve IDs and custom names; 
 });
 function env(){
  const data=new Map(), initial={profile:plain(profile),goals:plain(goals),meals:plain(meals),logs:[{id:'log',mealId:'extras',grams:100}],mealFavorites:[{id:'fav',mealId:'extras'}]};
- const c={...initial,console,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},window:{NutriTraceMealConfig:{normalize:plain}},data};
- for(const name of ['Profile','Goals','Meals','WizardOpen','WizardUndo','V5Notice'])c['set'+name]=v=>{c[name[0].toLowerCase()+name.slice(1)]=v;};
+ const c={...initial,qualityState:{version:1,days:{},times:{},allergens:[]},Q61:require('../nutrition-intelligence-v61.js'),console,localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},window:{NutriTraceMealConfig:{normalize:plain}},data};
+ for(const name of ['Profile','Goals','Meals','WizardOpen','WizardUndo','V5Notice','QualityState'])c['set'+name]=v=>{c[name[0].toLowerCase()+name.slice(1)]=v;};
  data.set('nutritrace_profile_v23',JSON.stringify(profile));data.set('nutritrace_goals_v23',JSON.stringify(goals));data.set('nutritrace_meals_v3',JSON.stringify(meals));
  vm.createContext(c);const a=source.indexOf('  function applyWizardResult('),b=source.indexOf('  function valueForGoal(',a);assert.ok(a>=0&&b>a);vm.runInContext(source.slice(a,b),c);return c;
 }
@@ -42,7 +42,7 @@ test('V5.7.3 storage failure restores previous values including undo snapshot; n
  assert.throws(()=>c.applyWizardResult(wizard.applyPlan(profile,goals,adult,{meals})),/Impossibile/);assert.deepEqual(c.data,before);assert.deepEqual(c.meals,meals);assert.deepEqual(c.goals,goals);
 });
 test('V5.7.3 review previews meal count before Apply, then delivers it to actual app callback',async()=>{
- const state=[null,adult,'goal','review',false,'',false,false];let pos=0,applied=null;
+ const state=[null,{...adult,physiologicalState:'none'},'goal','review',false,'',false,false];let pos=0,applied=null;
  const c={console,Date,Intl,React:{createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)}),useState:v=>{const i=pos++;if(i>=state.length)state[i]=typeof v==='function'?v():v;return [state[i],x=>{state[i]=typeof x==='function'?x(state[i]):x;}];},useRef:()=>({current:null}),useEffect:noop}};c.window=c;vm.createContext(c);vm.runInContext(read('goals-wizard-v5.js'),c);
  function nodes(x){return x&&typeof x==='object'?[x,...(x.children||[]).flatMap(nodes)]:[];}function txt(x){return x==null||x===false?'':typeof x!=='object'?String(x):(x.children||[]).map(txt).join('');}
  const tree=c.NutriTraceGoalsWizard.View({profile,goals,meals,onApply:r=>{applied=plain(r);}});assert.match(txt(tree),/Colazione mia · Pranzo · Cena/);assert.equal(applied,null);

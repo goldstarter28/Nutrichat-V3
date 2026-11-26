@@ -31,7 +31,7 @@
   function readWeights() {
     try {
       const data = JSON.parse(
-        localStorage.getItem('nutritrace_body_weight_v1') || '{}'
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem('nutritrace_body_weight_v1') || '{}'
       );
 
       return (Array.isArray(data.entries) ? data.entries : [])

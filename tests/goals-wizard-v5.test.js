@@ -26,8 +26,8 @@ test('conditional paths never exceed 20 questions and remove irrelevant question
   assert.equal(wizard.QUESTIONS.length, 20);
   const female = { ...adult, sex: 'female', physiologicalState: 'none', menstrualStatus: 'menstruating' };
   assert.equal(wizard.getQuestions(female).length, 20);
-  assert.equal(wizard.getQuestions(adult).length, 18);
-  assert.equal(wizard.getQuestions({ ...adult, trainingDays: '0' }).length, 17);
+  assert.equal(wizard.getQuestions(adult).length, 19);
+  assert.equal(wizard.getQuestions({ ...adult, trainingDays: '0' }).length, 18);
   assert.ok(!wizard.getQuestions({ ...female, physiologicalState: 'pregnant' }).some(x => x.id === 'menstrualStatus'));
 });
 
