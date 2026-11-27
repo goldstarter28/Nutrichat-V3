@@ -292,9 +292,11 @@
         className: 'muted',
         style: { fontSize: '13px' }
       },
-        '● Peso registrato',
-        showTrend ? ' · ● Trend ultime 7 misurazioni' : '',
-        target !== null ? ' · - - Obiettivo' : ''
+        h('span', null, h('span', { 'aria-hidden': true, style: { color: '#178e7b' } }, '● '), 'Peso registrato'),
+        showTrend && h('span', null, ' · ', h('span', { 'aria-hidden': true, style: { color: '#d38c2c' } }, '● '), 'Trend ultime 7 misurazioni'),
+        (target !== null || visibleTargets.length > 0) && h('span', null, ' · ', h('span', {
+          'aria-hidden': true, style: { display: 'inline-block', width: '20px', borderTop: '2px dashed #c34a4a', verticalAlign: 'middle', marginRight: '4px' }
+        }), 'Peso da raggiungere')
       ),
 
       h('div', {
@@ -314,16 +316,56 @@
     );
   }
 
-  function BodyWeight() {
+  function WeightTarget({ target: controlledTarget, onSave } = {}) {
+    const [targetText, setTargetText] = useState(() => {
+      const target = controlledTarget === undefined ? load().target : controlledTarget;
+      return target === null ? '' : String(target);
+    });
+    const [message, setMessage] = useState('');
+    useEffect(() => {
+      if (controlledTarget !== undefined) setTargetText(controlledTarget === null ? '' : String(controlledTarget));
+    }, [controlledTarget]);
+
+    function saveTarget() {
+      const empty = targetText.trim() === '';
+      const target = empty ? null : numeric(targetText);
+      if (!empty && (target === null || target < 20 || target > 500)) {
+        setMessage('Peso da raggiungere non valido: inserisci 20–500 kg.');
+        return;
+      }
+      try {
+        const storage = root.NutriTraceEnvironment?.storage || root.localStorage;
+        const previous = JSON.parse(storage.getItem(STORAGE_KEY) || '{}');
+        if (!previous || typeof previous !== 'object' || Array.isArray(previous)) throw new Error('Peso non leggibile');
+        storage.setItem(STORAGE_KEY, JSON.stringify({ ...previous, target }));
+        if (onSave) onSave(target);
+        setMessage(target === null ? 'Peso da raggiungere rimosso.' : 'Peso da raggiungere salvato.');
+      } catch {
+        setMessage('Salvataggio non riuscito: i dati del peso non sono stati modificati.');
+      }
+    }
+
+    return h('article', { className: 'card', 'data-v732-weight-target': true },
+      h('h2', null, 'Peso da raggiungere'),
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '12px' } },
+        h('label', null, 'Peso da raggiungere (kg)',
+          h('input', { type: 'number', min: 20, max: 500, step: .1, inputMode: 'decimal', value: targetText,
+            placeholder: 'Es. 72', onChange: event => setTargetText(event.target.value) })
+        ),
+        h('button', { type: 'button', className: 'cta', onClick: saveTarget }, 'Salva obiettivo')
+      ),
+      h('p', { className: 'muted tiny' }, 'Lascia vuoto e salva per rimuovere l’obiettivo.'),
+      message && h('p', { className: 'muted', role: 'status' }, message)
+    );
+  }
+
+  function BodyWeight({ children } = {}) {
     const [data, setData] = useState(load);
     const formRef=root.React.useRef(null);
     const [date, setDate] = useState(today);
     const [time, setTime] = useState('');
     const [weight, setWeight] = useState('');
     const [note, setNote] = useState('');
-    const [targetText, setTargetText] = useState(
-      data.target === null ? '' : String(data.target)
-    );
     const [editing, setEditing] = useState(null);
     const [range, setRange] = useState('90');
     const [showTrend, setShowTrend] = useState(true);
@@ -347,26 +389,25 @@
     );
 
     const visible = useMemo(() => {
-      if (range === 'all') return entries;
-
-      const days = Number(range);
-      const last = new Date(today() + 'T12:00:00Z');
-      last.setUTCDate(last.getUTCDate() - days + 1);
-      const from = last.toISOString().slice(0, 10);
-
-      return entries.filter(x => x.date >= from);
+      const end = today();
+      if (range === 'all') return entries.filter(x => x.date <= end);
+      const start = new Date(end + 'T12:00:00Z');
+      start.setUTCDate(start.getUTCDate() - Number(range) + 1);
+      const from = start.toISOString().slice(0, 10);
+      return entries.filter(x => x.date >= from && x.date <= end);
     }, [entries, range]);
 
-    const first = entries[0] || null;
     const last = entries[entries.length - 1] || null;
-
-    const delta = first && last
-      ? last.kg - first.kg
-      : null;
-
-    const percentage = delta !== null && first.kg > 0
-      ? delta / first.kg * 100
-      : null;
+    const firstInRange = visible[0] || null;
+    const lastInRange = visible[visible.length - 1] || null;
+    const delta = visible.length >= 2 ? lastInRange.kg - firstInRange.kg : null;
+    const percentage = delta !== null && firstInRange.kg > 0
+      ? delta / firstInRange.kg * 100 : null;
+    const periodDates = visible.length >= 2
+      ? `${firstInRange.date} → ${lastInRange.date}`
+      : visible.length === 1
+        ? `${firstInRange.date} · serve una seconda misurazione`
+        : 'Nessuna misurazione nel periodo';
 
     const trend = entries.length >= 7
       ? movingAverage(entries, entries.length - 1, 7)
@@ -445,24 +486,6 @@
       setMessage('Misurazione eliminata.');
     }
 
-    function saveTarget() {
-      const target = targetText.trim() === ''
-        ? null
-        : numeric(targetText);
-
-      if (target !== null && (target < 20 || target > 500)) {
-        setMessage('Obiettivo non valido: inserisci 20–500 kg.');
-        return;
-      }
-
-      setData(previous => ({ ...previous, target }));
-      setMessage(
-        target === null
-          ? 'Obiettivo rimosso.'
-          : 'Obiettivo salvato.'
-      );
-    }
-
     const metric = (label, value) =>
       h('div', {
         className: 'metric',
@@ -481,6 +504,23 @@
             'Misurazioni, obiettivo personale e andamento nel tempo.'
           )
         )
+      ),
+
+      h('div', {
+        className: 'v732-weight-period',
+        style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '8px 0' }
+      },
+        h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px', margin: 0 } },
+          'Variazioni e grafico',
+          h('select', {
+            'aria-label': 'Periodo delle variazioni di peso', value: range,
+            style: { width: 'auto', minHeight: '36px', padding: '4px 8px', fontSize: '13px' },
+            onChange: event => setRange(event.target.value)
+          }, ...[['7', '7 giorni'], ['30', '30 giorni'], ['90', '90 giorni'], ['365', '1 anno'], ['all', 'Tutto']].map(([value, label]) =>
+            h('option', { key: value, value }, label)
+          ))
+        ),
+        h('small', { className: 'muted', 'data-v732-period-dates': true }, periodDates)
       ),
 
       h('div', {
@@ -582,42 +622,7 @@
         }, message)
       ),
 
-      h('article', { className: 'card' },
-
-        h('h2', null, 'Obiettivo peso'),
-
-        h('div', {
-          style: {
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'end',
-            gap: '12px'
-          }
-        },
-          h('label', null,
-            'Obiettivo in kg',
-            h('input', {
-              type: 'number',
-              min: 20,
-              max: 500,
-              step: .1,
-              value: targetText,
-              placeholder: 'Es. 72',
-              onChange: e => setTargetText(e.target.value)
-            })
-          ),
-
-          h('button', {
-            type: 'button',
-            className: 'cta',
-            onClick: saveTarget
-          }, 'Salva obiettivo')
-        ),
-
-        h('p', { className: 'muted tiny' },
-          'Lascia vuoto e salva per rimuovere l’obiettivo.'
-        )
-      ),
+      h(WeightTarget, { target: data.target, onSave: target => setData(previous => ({ ...previous, target })) }),
 
       h('article', { className: 'card' },
 
@@ -632,19 +637,7 @@
           }
         },
 
-          ...[
-            ['30', '30 giorni'],
-            ['90', '90 giorni'],
-            ['365', '1 anno'],
-            ['all', 'Tutto']
-          ].map(([id, label]) =>
-            h('button', {
-              key: id,
-              type: 'button',
-              className: range === id ? 'cta' : 'ghost',
-              onClick: () => setRange(id)
-            }, label)
-          ),
+          h('small', { className: 'muted', style: { alignSelf: 'center' } }, periodDates),
 
           h('label', {
             style: {
@@ -663,7 +656,7 @@
         ),
 
         h(WeightChart, {
-          entries: visible,
+          key: range, entries: visible,
           target: data.target,
           showTrend,targetHistory:data.targetHistory||[]
         }),
@@ -676,7 +669,9 @@
         )
       ),
 
-      h('article', { className: 'card' },
+      children,
+
+      h('article', { className: 'card', 'data-v732-weight-history': true },
 
         h('h2', null, `Storico (${entries.length})`),
 
@@ -766,6 +761,7 @@
   }
 
   root.NutriTraceBodyWeight = BodyWeight;
+  root.NutriTraceWeightTarget = WeightTarget;
 
 })(
   typeof globalThis !== 'undefined'

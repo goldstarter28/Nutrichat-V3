@@ -55,9 +55,7 @@
   }
   function Logo() {
     return h('span',{className:'a-logo', 'aria-label':'NutriTrace'},
-      h('svg',{className:'a-logo-mark',viewBox:'0 0 46 46',width:38,height:38,'aria-hidden':'true',focusable:'false'},
-        h('rect',{x:1,y:1,width:44,height:44,rx:13,fill:'#145641'}),h('circle',{cx:34,cy:12,r:4,fill:'#b7e681'}),h('path',{d:'M12 33V14L32 33V23',fill:'none',stroke:'#f7fff4',strokeWidth:4,strokeLinecap:'round',strokeLinejoin:'round'})
-      ), h('span',null,'NutriTrace'));
+      h('img',{className:'a-logo-mark',src:'./icon-user-192.png',width:38,height:38,alt:'','aria-hidden':'true'}), h('span',null,'NutriTrace'));
   }
   function Header({darkMode,onToggleTheme,onQuickAdd}) {
     return h('header',{className:'a-header'},

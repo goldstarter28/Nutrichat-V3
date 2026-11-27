@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v7-20261127-v731';
+const CACHE = 'nutritrace-v7-20261127-v732';
 // Replaces nutritrace-v7-20261126-v72; immutable source DB caches are preserved.
 
 const CORE = [
@@ -61,8 +61,9 @@ const CORE = [
   './label-import-ui.js',
   './label-import-ui.css',
   './manifest.webmanifest',
-  './icon-v73-192.png',
-  './icon-v73-512.png',
+  './icon-user-180.png',
+  './icon-user-192.png',
+  './icon-user-512.png',
   './config/ui.it.json',
   './config/search-policy.json',
   './config/standard-portions.json',

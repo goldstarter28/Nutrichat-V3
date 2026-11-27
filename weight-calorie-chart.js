@@ -340,9 +340,13 @@
 
             h('p', {
               className: 'muted tiny'
-            }, '● Verde: peso (kg, asse sinistro) · ' +
-               '■ Arancione: calorie (kcal, asse destro). ' +
-               'Arancione chiaro: copertura nutrizionale incompleta.'),
+            },
+              h('span', null, h('span', { 'aria-hidden': true, style: { color: '#168b78' } }, '● '), 'Peso (kg, asse sinistro)'),
+              ' · ',
+              h('span', null, h('span', { 'aria-hidden': true, style: { color: '#b67a2a' } }, '■ '), 'Calorie (kcal, asse destro)'),
+              ' · ',
+              h('span', null, h('span', { 'aria-hidden': true, style: { color: '#e2ac6a' } }, '■ '), 'Copertura nutrizionale incompleta')
+            ),
 
             h('div', {
               role: 'status',
