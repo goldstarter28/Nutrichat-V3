@@ -38,13 +38,13 @@ test('meal amounts preserve explicit quantity/unit without contaminating food de
  assert.equal(env.NutriTraceMealDiary.amountText({grams:155,quantity:150,unit:'ml'}),'150 ml · 155 g');
  assert.equal(env.NutriTraceMealDiary.amountText({grams:80}),'80 g');
 });
-test('meal shows food rows directly, Info and quantity edit callbacks, and copy actions',()=>{
+test('meal keeps details collapsed, Info and quantity edit callbacks, and copy actions',()=>{
  const env=load(environment(),'meal-diary.js');
  const calls=[];
  const tree=env.NutriTraceMealDiary({meals:[{id:'breakfast',name:'Colazione'}],logs:[{id:'l1',foodId:'a',grams:100,mealId:'breakfast'}],
   foods:[{id:'a',name:'Yogurt',servingGrams:100,label:{kcal:70,protein:9,carbs:4,fat:2,fiber:0}}],
   onInfo:id=>calls.push(['info',id]),onEditQuantity:id=>calls.push(['quantity',id]),onCopyYesterday:id=>calls.push(['copy',id]),onRemove:id=>calls.push(['remove',id]),onAdd:id=>calls.push(['add',id]),onAssign:(id,meal)=>calls.push(['move',id,meal])});
- assert.equal(nodes(tree,'details').length,0);
+ assert.equal(nodes(tree,'details').length,1);assert.equal(nodes(tree,'details')[0].props.open,undefined);
  assert.match(text(cls(tree,'v5-meal-food-name')[0]),/Yogurt/);
  cls(tree,'v73-food-info')[0].props.onClick();
  cls(tree,'v58-edit-food')[0].props.onClick();

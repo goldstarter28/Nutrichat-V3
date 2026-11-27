@@ -66,6 +66,7 @@
 
       return {
         entries,
+        ...(root.NutriTraceEnvironment?.isDemo&&Array.isArray(raw.targetHistory)?{targetHistory:raw.targetHistory.filter(x=>validDate(x.date)&&numeric(x.kg)!==null&&x.kg>=20&&x.kg<=500).map(x=>({date:x.date,kg:Number(x.kg),phase:String(x.phase||'').slice(0,100)}))}:{}),
         target: target !== null &&
           target >= 20 && target <= 500
           ? target
@@ -86,7 +87,7 @@
       slice.length;
   }
 
-  function WeightChart({ entries, target, showTrend }) {
+  function WeightChart({ entries, target, showTrend, targetHistory=[] }) {
     const [selected, setSelected] = useState(null);
 
     if (!entries.length) {
@@ -116,10 +117,11 @@
       movingAverage(entries, index, 7)
     );
 
+    const history=targetHistory.filter(x=>validDate(x.date)).sort((a,b)=>a.date.localeCompare(b.date));const startDay=entries[0].date,endDay=entries.at(-1).date,prior=history.filter(x=>x.date<=startDay).at(-1);const visibleTargets=[...(prior?[{...prior,date:startDay}]:[]),...history.filter(x=>x.date>startDay&&x.date<=endDay)];
     const allWeights = [
       ...entries.map(x => x.kg),
       ...(showTrend ? trends.filter(x => x !== null) : []),
-      ...(target !== null ? [target] : [])
+      ...(visibleTargets.length?visibleTargets.map(x=>x.kg):target !== null ? [target] : [])
     ];
 
     const minValue = Math.min(...allWeights);
@@ -150,9 +152,8 @@
           `${xPos(dates[index])} ${yPos(value)}`
     ).join(' ');
 
-    const selectedEntry = selected === null
-      ? null
-      : entries[selected];
+    const selectedEntry=Number.isInteger(selected)&&selected>=0&&selected<entries.length?entries[selected]:null;
+    const targetPath=visibleTargets.map((v,i)=>{const end=visibleTargets[i+1]?.date||endDay;return (i?'L':'M')+xPos(Date.parse(v.date+'T12:00:00Z'))+' '+yPos(v.kg)+' H'+xPos(Date.parse(end+'T12:00:00Z'));}).join(' ');
 
     return h('div', null,
       h('div', {
@@ -213,7 +214,8 @@
             );
           }),
 
-          target !== null &&
+          visibleTargets.length>0&&h('path',{d:targetPath,fill:'none',stroke:'#c34a4a',strokeWidth:2,strokeDasharray:'7 5'}),
+          !visibleTargets.length&&target !== null &&
           h('line', {
             x1: left,
             x2: width - right,
@@ -273,7 +275,7 @@
             }));
           }),
 
-          selected !== null &&
+          selectedEntry &&
           h('line', {
             x1: points[selected].x,
             x2: points[selected].x,
@@ -314,6 +316,7 @@
 
   function BodyWeight() {
     const [data, setData] = useState(load);
+    const formRef=root.React.useRef(null);
     const [date, setDate] = useState(today);
     const [time, setTime] = useState('');
     const [weight, setWeight] = useState('');
@@ -408,14 +411,10 @@
         note: note.trim().slice(0, 500)
       };
 
-      setData(previous => ({
-        ...previous,
-        entries: editing
-          ? previous.entries.map(x =>
-              x.id === editing ? entry : x
-            )
-          : [...previous.entries, entry]
-      }));
+      const next={...data,entries:editing?data.entries.map(x=>x.id===editing?entry:x):[...data.entries,entry]};
+      if(editing&&!data.entries.some(x=>x.id===editing)){setMessage('Misurazione non più disponibile.');return;}
+      try{(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(STORAGE_KEY,JSON.stringify(next));}catch(e){setMessage('Salvataggio non riuscito: spazio locale non disponibile.');return;}
+      setData(next);
 
       setMessage(
         editing ? 'Misurazione aggiornata.' : 'Peso registrato.'
@@ -431,6 +430,7 @@
       setWeight(String(entry.kg));
       setNote(entry.note);
       setMessage('Modifica la misurazione selezionata.');
+      root.requestAnimationFrame?.(()=>{formRef.current?.scrollIntoView?.({block:'center',behavior:'smooth'});formRef.current?.querySelector('[data-v731-weight]')?.focus();});
     }
 
     function deleteEntry(id) {
@@ -509,7 +509,7 @@
         ),
 
         h('form', {
-          onSubmit: saveEntry,
+          ref:formRef,onSubmit: saveEntry,
           style: {
             display: 'flex',
             gap: '12px',
@@ -541,9 +541,10 @@
             'Peso (kg)',
             h('input', {
               type: 'number',
+              'data-v731-weight':true,
               min: 20,
               max: 500,
-              step: .1,
+              step: 'any',
               inputMode: 'decimal',
               placeholder: 'Es. 74,5',
               value: weight,
@@ -664,7 +665,7 @@
         h(WeightChart, {
           entries: visible,
           target: data.target,
-          showTrend
+          showTrend,targetHistory:data.targetHistory||[]
         }),
 
         h('p', { className: 'muted tiny' },

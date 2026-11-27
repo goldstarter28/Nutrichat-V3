@@ -286,7 +286,7 @@ function View(props){
   h('form',{className:'coach-composer',onSubmit:send},
    (!compact||!consent)&&consentControl,
    editing&&h('p',{className:'coach-editing'},'Modifica messaggio · ',btn('Annulla',()=>{setEditing(null);setDraft('');setError('');})),
-   h('textarea',{value:draft,maxLength:3000,rows:3,onChange:e=>setDraft(e.target.value),placeholder:'Scrivi un messaggio…','aria-label':'Messaggio al Coach'}),
+   h('textarea',{value:draft,maxLength:3000,rows:3,onChange:e=>setDraft(e.target.value),onKeyDown:e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent?.isComposing&&!e.isComposing&&e.keyCode!==229){e.preventDefault();if(!busy&&draft.trim())send(e);}},placeholder:'Scrivi un messaggio…','aria-label':'Messaggio al Coach'}),
    !consent&&h('p',{className:'coach-notice coach-inline-notice',role:'status'},
     'Per inviare un messaggio, seleziona la casella di autorizzazione qui sopra.'),
    error&&h('p',{className:'coach-error coach-inline-notice',role:'alert'},error),

@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v7-20261126-v73';
+const CACHE = 'nutritrace-v7-20261127-v731';
 // Replaces nutritrace-v7-20261126-v72; immutable source DB caches are preserved.
 
 const CORE = [
@@ -19,6 +19,7 @@ const CORE = [
   './app-actions-v73.js',
   './v73-data-notes.js',
   './demo-data-v73.js',
+  './portion-learning-v731.js',
 
   './aurora-components.js',
   './aurora-v4.css',
@@ -78,7 +79,7 @@ const VENDOR = [
 ];
 
 
-const APP_ASSET = /\/(?:environment-v73\.(?:js|css)|percorso-v73\.css|food-quality-v73\.(?:js|css)|coach-actions-v73\.(?:js|css)|diary-actions-v73\.js|app-actions-v73\.js|demo-data-v73\.js|v73-data-notes\.js|app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|nutrition-intelligence-v61\.js|strategy-v64\.js|metabolism-v70\.js|planner-v72\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
+const APP_ASSET = /\/(?:portion-learning-v731\.js|environment-v73\.(?:js|css)|percorso-v73\.css|food-quality-v73\.(?:js|css)|coach-actions-v73\.(?:js|css)|diary-actions-v73\.js|app-actions-v73\.js|demo-data-v73\.js|v73-data-notes\.js|app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|nutrition-intelligence-v61\.js|strategy-v64\.js|metabolism-v70\.js|planner-v72\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);

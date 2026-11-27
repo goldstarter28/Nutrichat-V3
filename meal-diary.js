@@ -75,7 +75,8 @@
         !isUnassigned && h('button',{type:'button',className:'v5-meal-add',onClick:()=>onAdd(meal.id),'aria-label':'Aggiungi a '+meal.name},'+')),
       !isUnassigned&&qualityState&&qualityDate&&h(root.NutriTraceStrategy.MealTime,{meal,logs,qualityState,qualityDate,previousMealLogs,onChange:t=>onMealTime(meal.id,t)}),
       h(MacroLine,{data}),
-      logs.length>0&&h('div',{className:'v5-meal-details'},
+      logs.length>0&&h('details',{className:'v5-meal-details'},
+        h('summary',{className:'v5-meal-summary'},h('span',{className:'v5-meal-inline-names'},groups.map(g=>g.name+' '+(g.isRecipe&&root.NutriTraceDiaryV5?root.NutriTraceDiaryV5.recipePortionText(g.entries):amountText(g.log))).join(' · ')),h('span',{className:'v5-meal-expand'},'Dettagli ▾')),
         h('div',{className:'v5-meal-foods'},...groups.map(group=>{
         const log=group.log, food=group.isRecipe?{name:group.name}:foods.find(f=>f.id===log.foodId), single=totals(group.entries,foods);
         return h('div',{className:'v5-meal-food',key:log.id},
