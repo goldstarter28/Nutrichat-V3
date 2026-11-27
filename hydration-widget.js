@@ -16,7 +16,7 @@
 
   function readStore() {
     try {
-      const raw = JSON.parse(localStorage.getItem(KEY) || '{}');
+      const raw = JSON.parse((globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(KEY) || '{}');
 
       return {
         goal:validGoal(raw.goal) ? Number(raw.goal) : DEFAULT_GOAL,
@@ -40,7 +40,7 @@
 
     useEffect(() => {
       try {
-        localStorage.setItem(KEY,JSON.stringify(data));
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(KEY,JSON.stringify(data));
       } catch {
         setMessage('Salvataggio non riuscito.');
       }

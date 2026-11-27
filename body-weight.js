@@ -41,7 +41,7 @@
   function load() {
     try {
       const raw = JSON.parse(
-        localStorage.getItem(STORAGE_KEY) || '{}'
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem(STORAGE_KEY) || '{}'
       );
 
       const entries = Array.isArray(raw.entries)
@@ -66,6 +66,7 @@
 
       return {
         entries,
+        ...(root.NutriTraceEnvironment?.isDemo&&Array.isArray(raw.targetHistory)?{targetHistory:raw.targetHistory.filter(x=>validDate(x.date)&&numeric(x.kg)!==null&&x.kg>=20&&x.kg<=500).map(x=>({date:x.date,kg:Number(x.kg),phase:String(x.phase||'').slice(0,100)}))}:{}),
         target: target !== null &&
           target >= 20 && target <= 500
           ? target
@@ -86,8 +87,53 @@
       slice.length;
   }
 
-  function WeightChart({ entries, target, showTrend }) {
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
+  function WeightChart({ entries, target, showTrend, targetHistory=[] }) {
+    const expansion=v734Expansion(root.React,h,'Grafico andamento peso'),gesture=v734Ref(root.React);
     const [selected, setSelected] = useState(null);
+    const [windowState,setWindowState]=useState({start:0,count:null});
+    const full=entries, count=Math.min(full.length,Math.max(2,windowState.count??full.length)), start=Math.min(Math.max(0,windowState.start),Math.max(0,full.length-count));
+    const change=(s,c)=>{setWindowState({start:Math.max(0,Math.min(full.length-c,s)),count:c});setSelected(null);};
+    const zoom=factor=>{const n=Math.min(full.length,Math.max(2,Math.round(count*factor)));change(Math.round(start+(count-n)/2),n);};
+    entries=full.slice(start,start+count);
 
     if (!entries.length) {
       return h('p', { className: 'muted' },
@@ -108,22 +154,23 @@
       new Date(x.date + 'T12:00:00Z').getTime()
     );
 
-    const minDate = Math.min(...dates);
-    const maxDate = Math.max(...dates);
+    const minDate = dates.reduce((a,b)=>Math.min(a,b),Infinity);
+    const maxDate = dates.reduce((a,b)=>Math.max(a,b),-Infinity);
     const span = Math.max(maxDate - minDate, 86400000);
 
     const trends = entries.map((_, index) =>
-      movingAverage(entries, index, 7)
+      movingAverage(full, start+index, 7)
     );
 
+    const history=targetHistory.filter(x=>validDate(x.date)).sort((a,b)=>a.date.localeCompare(b.date));const startDay=entries[0].date,endDay=entries.at(-1).date,prior=history.filter(x=>x.date<=startDay).at(-1);const visibleTargets=[...(prior?[{...prior,date:startDay}]:[]),...history.filter(x=>x.date>startDay&&x.date<=endDay)];
     const allWeights = [
       ...entries.map(x => x.kg),
       ...(showTrend ? trends.filter(x => x !== null) : []),
-      ...(target !== null ? [target] : [])
+      ...(visibleTargets.length?visibleTargets.map(x=>x.kg):target !== null ? [target] : [])
     ];
 
-    const minValue = Math.min(...allWeights);
-    const maxValue = Math.max(...allWeights);
+    const minValue = allWeights.reduce((a,b)=>Math.min(a,b),Infinity);
+    const maxValue = allWeights.reduce((a,b)=>Math.max(a,b),-Infinity);
     const padding = Math.max(0.8, (maxValue - minValue) * .15);
     const yMin = Math.max(0, minValue - padding);
     const yMax = maxValue + padding;
@@ -146,15 +193,15 @@
     const trendPath = trends.map((value, index) =>
       value === null
         ? ''
-        : `${index === 6 ? 'M' : 'L'}` +
+        : `${index === 0 || trends[index-1] === null ? 'M' : 'L'}` +
           `${xPos(dates[index])} ${yPos(value)}`
     ).join(' ');
 
-    const selectedEntry = selected === null
-      ? null
-      : entries[selected];
+    const selectedEntry=Number.isInteger(selected)&&selected>=0&&selected<entries.length?entries[selected]:null;
+    const targetPath=visibleTargets.map((v,i)=>{const end=visibleTargets[i+1]?.date||endDay;return (i?'L':'M')+xPos(Date.parse(v.date+'T12:00:00Z'))+' '+yPos(v.kg)+' H'+xPos(Date.parse(end+'T12:00:00Z'));}).join(' ');
 
-    return h('div', null,
+    return h('div', expansion.props, expansion.button, expansion.hint,
+      h('div',{className:'v733-chart-tools'},h('button',{type:'button',className:'ghost',disabled:count<=2,onClick:()=>zoom(.5)},'+ Zoom'),h('button',{type:'button',className:'ghost',disabled:count>=full.length,onClick:()=>zoom(2)},'− Zoom'),h('button',{type:'button',className:'ghost',disabled:start<=0,onClick:()=>change(start-Math.max(1,Math.floor(count*.7)),count)},'←'),h('button',{type:'button',className:'ghost',disabled:start+count>=full.length,onClick:()=>change(start+Math.max(1,Math.floor(count*.7)),count)},'→'),h('button',{type:'button',className:'ghost',onClick:()=>change(0,full.length)},'Tutto'),h('small',{className:'muted'},entries[0].date+' → '+entries.at(-1).date)),
       h('div', {
         style: { overflowX: 'auto' }
       },
@@ -166,9 +213,9 @@
             display: 'block',
             width: '100%',
             minWidth: '340px',
-            touchAction: 'pan-y'
+            touchAction: 'pan-y pinch-zoom'
           },
-          onPointerDown: event => {
+          ...v734Gesture(gesture,event => {
             const rect = event.currentTarget
               .getBoundingClientRect();
 
@@ -189,14 +236,14 @@
             });
 
             setSelected(best);
-          }
+          })
         },
 
           ...[0, .25, .5, .75, 1].map(fraction => {
             const value = yMin + (yMax - yMin) * fraction;
             const y = yPos(value);
 
-            return h('g', { key: fraction },
+            return h('g', { key: 'y-'+fraction },
               h('line', {
                 x1: left, x2: width - right,
                 y1: y, y2: y,
@@ -213,7 +260,8 @@
             );
           }),
 
-          target !== null &&
+          visibleTargets.length>0&&h('path',{d:targetPath,fill:'none',stroke:'#c34a4a',strokeWidth:2,strokeDasharray:'7 5'}),
+          !visibleTargets.length&&target !== null &&
           h('line', {
             x1: left,
             x2: width - right,
@@ -233,7 +281,7 @@
             strokeLinejoin: 'round'
           }),
 
-          showTrend && trends.length >= 7 &&
+          showTrend && trends.some(v=>v!==null) &&
           h('path', {
             d: trendPath,
             fill: 'none',
@@ -243,7 +291,7 @@
             strokeLinejoin: 'round'
           }),
 
-          ...points.map((point, index) =>
+          ...points.map((point,index)=>({point,index})).filter(({index})=>points.length<=180||index===0||index===points.length-1||index===selected||index%Math.ceil(points.length/180)===0).map(({point,index})=>
             h('circle', {
               key: entries[index].id,
               cx: point.x,
@@ -261,7 +309,7 @@
             );
 
             return h('text', {
-              key: fraction,
+              key: 'x-'+fraction,
               x: xPos(date.getTime()),
               y: height - 17,
               textAnchor: 'middle',
@@ -273,7 +321,7 @@
             }));
           }),
 
-          selected !== null &&
+          selectedEntry &&
           h('line', {
             x1: points[selected].x,
             x2: points[selected].x,
@@ -290,9 +338,11 @@
         className: 'muted',
         style: { fontSize: '13px' }
       },
-        '● Peso registrato',
-        showTrend ? ' · ● Trend ultime 7 misurazioni' : '',
-        target !== null ? ' · - - Obiettivo' : ''
+        h('span', null, h('span', { 'aria-hidden': true, style: { color: '#178e7b' } }, '● '), 'Peso registrato'),
+        showTrend && h('span', null, ' · ', h('span', { 'aria-hidden': true, style: { color: '#d38c2c' } }, '● '), 'Trend ultime 7 misurazioni'),
+        (target !== null || visibleTargets.length > 0) && h('span', null, ' · ', h('span', {
+          'aria-hidden': true, style: { display: 'inline-block', width: '20px', borderTop: '2px dashed #c34a4a', verticalAlign: 'middle', marginRight: '4px' }
+        }), 'Peso da raggiungere')
       ),
 
       h('div', {
@@ -312,23 +362,65 @@
     );
   }
 
-  function BodyWeight() {
+  function WeightTarget({ target: controlledTarget, onSave } = {}) {
+    const [targetText, setTargetText] = useState(() => {
+      const target = controlledTarget === undefined ? load().target : controlledTarget;
+      return target === null ? '' : String(target);
+    });
+    const [message, setMessage] = useState('');
+    useEffect(() => {
+      if (controlledTarget !== undefined) setTargetText(controlledTarget === null ? '' : String(controlledTarget));
+    }, [controlledTarget]);
+
+    function saveTarget() {
+      const empty = targetText.trim() === '';
+      const target = empty ? null : numeric(targetText);
+      if (!empty && (target === null || target < 20 || target > 500)) {
+        setMessage('Peso da raggiungere non valido: inserisci 20–500 kg.');
+        return;
+      }
+      try {
+        const storage = root.NutriTraceEnvironment?.storage || root.localStorage;
+        const previous = JSON.parse(storage.getItem(STORAGE_KEY) || '{}');
+        if (!previous || typeof previous !== 'object' || Array.isArray(previous)) throw new Error('Peso non leggibile');
+        storage.setItem(STORAGE_KEY, JSON.stringify({ ...previous, target }));
+        if (onSave) onSave(target);
+        setMessage(target === null ? 'Peso da raggiungere rimosso.' : 'Peso da raggiungere salvato.');
+      } catch {
+        setMessage('Salvataggio non riuscito: i dati del peso non sono stati modificati.');
+      }
+    }
+
+    return h('article', { className: 'card', 'data-v732-weight-target': true },
+      h('h2', null, 'Peso da raggiungere'),
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '12px' } },
+        h('label', null, 'Peso da raggiungere (kg)',
+          h('input', { type: 'number', min: 20, max: 500, step: .1, inputMode: 'decimal', value: targetText,
+            placeholder: 'Es. 72', onChange: event => setTargetText(event.target.value) })
+        ),
+        h('button', { type: 'button', className: 'cta', onClick: saveTarget }, 'Salva obiettivo')
+      ),
+      h('p', { className: 'muted tiny' }, 'Lascia vuoto e salva per rimuovere l’obiettivo.'),
+      message && h('p', { className: 'muted', role: 'status' }, message)
+    );
+  }
+
+  function BodyWeight({ children } = {}) {
     const [data, setData] = useState(load);
+    const formRef=root.React.useRef(null);
     const [date, setDate] = useState(today);
     const [time, setTime] = useState('');
     const [weight, setWeight] = useState('');
     const [note, setNote] = useState('');
-    const [targetText, setTargetText] = useState(
-      data.target === null ? '' : String(data.target)
-    );
     const [editing, setEditing] = useState(null);
     const [range, setRange] = useState('90');
     const [showTrend, setShowTrend] = useState(true);
     const [message, setMessage] = useState('');
+    const [historyPage,setHistoryPage]=useState(0);
 
     useEffect(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(STORAGE_KEY, JSON.stringify(data));
       } catch {
         setMessage(
           'Salvataggio non riuscito: spazio locale non disponibile.'
@@ -344,26 +436,27 @@
     );
 
     const visible = useMemo(() => {
-      if (range === 'all') return entries;
-
-      const days = Number(range);
-      const last = new Date(today() + 'T12:00:00Z');
-      last.setUTCDate(last.getUTCDate() - days + 1);
-      const from = last.toISOString().slice(0, 10);
-
-      return entries.filter(x => x.date >= from);
+      const end = today();
+      if (range === 'all') return entries.filter(x => x.date <= end);
+      const start = new Date(end + 'T12:00:00Z');
+      start.setUTCDate(start.getUTCDate() - Number(range) + 1);
+      const from = start.toISOString().slice(0, 10);
+      return entries.filter(x => x.date >= from && x.date <= end);
     }, [entries, range]);
 
-    const first = entries[0] || null;
+    const historyPages=Math.max(1,Math.ceil(entries.length/50)),page=Math.min(historyPage,historyPages-1);
+    const historyRows=entries.slice().reverse().slice(page*50,(page+1)*50);
     const last = entries[entries.length - 1] || null;
-
-    const delta = first && last
-      ? last.kg - first.kg
-      : null;
-
-    const percentage = delta !== null && first.kg > 0
-      ? delta / first.kg * 100
-      : null;
+    const firstInRange = visible[0] || null;
+    const lastInRange = visible[visible.length - 1] || null;
+    const delta = visible.length >= 2 ? lastInRange.kg - firstInRange.kg : null;
+    const percentage = delta !== null && firstInRange.kg > 0
+      ? delta / firstInRange.kg * 100 : null;
+    const periodDates = visible.length >= 2
+      ? `${firstInRange.date} → ${lastInRange.date}`
+      : visible.length === 1
+        ? `${firstInRange.date} · serve una seconda misurazione`
+        : 'Nessuna misurazione nel periodo';
 
     const trend = entries.length >= 7
       ? movingAverage(entries, entries.length - 1, 7)
@@ -408,14 +501,10 @@
         note: note.trim().slice(0, 500)
       };
 
-      setData(previous => ({
-        ...previous,
-        entries: editing
-          ? previous.entries.map(x =>
-              x.id === editing ? entry : x
-            )
-          : [...previous.entries, entry]
-      }));
+      const next={...data,entries:editing?data.entries.map(x=>x.id===editing?entry:x):[...data.entries,entry]};
+      if(editing&&!data.entries.some(x=>x.id===editing)){setMessage('Misurazione non più disponibile.');return;}
+      try{(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).setItem(STORAGE_KEY,JSON.stringify(next));}catch(e){setMessage('Salvataggio non riuscito: spazio locale non disponibile.');return;}
+      setData(next);
 
       setMessage(
         editing ? 'Misurazione aggiornata.' : 'Peso registrato.'
@@ -431,6 +520,7 @@
       setWeight(String(entry.kg));
       setNote(entry.note);
       setMessage('Modifica la misurazione selezionata.');
+      root.requestAnimationFrame?.(()=>{formRef.current?.scrollIntoView?.({block:'center',behavior:'smooth'});formRef.current?.querySelector('[data-v731-weight]')?.focus();});
     }
 
     function deleteEntry(id) {
@@ -443,24 +533,6 @@
 
       if (editing === id) resetForm();
       setMessage('Misurazione eliminata.');
-    }
-
-    function saveTarget() {
-      const target = targetText.trim() === ''
-        ? null
-        : numeric(targetText);
-
-      if (target !== null && (target < 20 || target > 500)) {
-        setMessage('Obiettivo non valido: inserisci 20–500 kg.');
-        return;
-      }
-
-      setData(previous => ({ ...previous, target }));
-      setMessage(
-        target === null
-          ? 'Obiettivo rimosso.'
-          : 'Obiettivo salvato.'
-      );
     }
 
     const metric = (label, value) =>
@@ -481,6 +553,23 @@
             'Misurazioni, obiettivo personale e andamento nel tempo.'
           )
         )
+      ),
+
+      h('div', {
+        className: 'v732-weight-period',
+        style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', margin: '8px 0' }
+      },
+        h('label', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px', margin: 0 } },
+          'Variazioni e grafico',
+          h('select', {
+            'aria-label': 'Periodo delle variazioni di peso', value: range,
+            style: { width: 'auto', minHeight: '36px', padding: '4px 8px', fontSize: '13px' },
+            onChange: event => setRange(event.target.value)
+          }, ...[['7', '7 giorni'], ['30', '30 giorni'], ['90', '90 giorni'], ['365', '1 anno'], ['all', 'Tutto']].map(([value, label]) =>
+            h('option', { key: value, value }, label)
+          ))
+        ),
+        h('small', { className: 'muted', 'data-v732-period-dates': true }, periodDates)
       ),
 
       h('div', {
@@ -509,7 +598,7 @@
         ),
 
         h('form', {
-          onSubmit: saveEntry,
+          ref:formRef,onSubmit: saveEntry,
           style: {
             display: 'flex',
             gap: '12px',
@@ -541,9 +630,10 @@
             'Peso (kg)',
             h('input', {
               type: 'number',
+              'data-v731-weight':true,
               min: 20,
               max: 500,
-              step: .1,
+              step: 'any',
               inputMode: 'decimal',
               placeholder: 'Es. 74,5',
               value: weight,
@@ -581,42 +671,7 @@
         }, message)
       ),
 
-      h('article', { className: 'card' },
-
-        h('h2', null, 'Obiettivo peso'),
-
-        h('div', {
-          style: {
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'end',
-            gap: '12px'
-          }
-        },
-          h('label', null,
-            'Obiettivo in kg',
-            h('input', {
-              type: 'number',
-              min: 20,
-              max: 500,
-              step: .1,
-              value: targetText,
-              placeholder: 'Es. 72',
-              onChange: e => setTargetText(e.target.value)
-            })
-          ),
-
-          h('button', {
-            type: 'button',
-            className: 'cta',
-            onClick: saveTarget
-          }, 'Salva obiettivo')
-        ),
-
-        h('p', { className: 'muted tiny' },
-          'Lascia vuoto e salva per rimuovere l’obiettivo.'
-        )
-      ),
+      h(WeightTarget, { target: data.target, onSave: target => setData(previous => ({ ...previous, target })) }),
 
       h('article', { className: 'card' },
 
@@ -631,19 +686,7 @@
           }
         },
 
-          ...[
-            ['30', '30 giorni'],
-            ['90', '90 giorni'],
-            ['365', '1 anno'],
-            ['all', 'Tutto']
-          ].map(([id, label]) =>
-            h('button', {
-              key: id,
-              type: 'button',
-              className: range === id ? 'cta' : 'ghost',
-              onClick: () => setRange(id)
-            }, label)
-          ),
+          h('small', { className: 'muted', style: { alignSelf: 'center' } }, periodDates),
 
           h('label', {
             style: {
@@ -662,9 +705,9 @@
         ),
 
         h(WeightChart, {
-          entries: visible,
+          key: range, entries: visible,
           target: data.target,
-          showTrend
+          showTrend,targetHistory:data.targetHistory||[]
         }),
 
         h('p', { className: 'muted tiny' },
@@ -675,9 +718,12 @@
         )
       ),
 
-      h('article', { className: 'card' },
+      children,
+
+      h('article', { className: 'card', 'data-v732-weight-history': true },
 
         h('h2', null, `Storico (${entries.length})`),
+        entries.length>50&&h('div',{className:'v733-chart-tools'},h('button',{className:'ghost',type:'button',disabled:page===0,onClick:()=>setHistoryPage(page-1)},'← Precedenti'),h('small',null,(page*50+1)+'–'+Math.min(entries.length,(page+1)*50)+' / '+entries.length),h('button',{className:'ghost',type:'button',disabled:page>=historyPages-1,onClick:()=>setHistoryPage(page+1)},'Successive →')),
 
         !entries.length
           ? h('p', { className: 'muted' },
@@ -713,7 +759,7 @@
                 ),
 
                 h('tbody', null,
-                  ...[...entries].reverse().map(entry =>
+                  ...historyRows.map(entry =>
                     h('tr', { key: entry.id },
 
                       h('td', {
@@ -765,6 +811,7 @@
   }
 
   root.NutriTraceBodyWeight = BodyWeight;
+  root.NutriTraceWeightTarget = WeightTarget;
 
 })(
   typeof globalThis !== 'undefined'

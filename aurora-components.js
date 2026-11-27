@@ -11,12 +11,12 @@
     { id: 'oggi', title: 'Oggi', icon: 'home' },
     { id: 'ricerca', title: 'Ricerca', icon: 'search' },
     { id: 'alimenti', title: 'Archivio', icon: 'food' },
-    { id: 'traguardi', title: 'Traguardi', icon: 'sparkles' },
     { id: 'obiettivi', title: 'Obiettivi', icon: 'target' },
     { id: 'peso', title: 'Peso', icon: 'scale' },
     { id: 'micro', title: 'Micronutrienti', icon: 'leaf' },
     { id: 'analisi', title: 'Analisi', icon: 'chart' },
     { id: 'coach', title: 'Coach AI', icon: 'sparkles' },
+    { id: 'traguardi', title: 'Traguardi', icon: 'trophy' },
     { id: 'dati', title: 'Dati', icon: 'grid' }
   ];
   const PRIMARY = ['oggi','ricerca','obiettivi','coach','analisi'];
@@ -27,6 +27,7 @@
     target: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z','M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z','m12 12 7-7'],
     scale: ['M5 4h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z','M8 10a4 4 0 0 1 8 0','M12 10l2-2'],
     chart: ['M3 20h18','M6 17v-6','M11 17V6','M16 17v-9','M21 17V3'],
+    trophy: ['M8 3h8v6a4 4 0 0 1-8 0z','M8 5H4v2a4 4 0 0 0 4 4','M16 5h4v2a4 4 0 0 1-4 4','M12 13v5','M8 21h8','M9 18h6v3'],
     sparkles: ['m12 2 1.7 5.3L19 9l-5.3 1.7L12 16l-1.7-5.3L5 9l5.3-1.7z','m19 16 .75 2.25L22 19l-2.25.75L19 22l-.75-2.25L16 19l2.25-.75z','m4 2 .65 1.35L6 4l-1.35.65L4 6l-.65-1.35L2 4l1.35-.65z'],
     grid: ['M3 3h7v7H3z','M14 3h7v7h-7z','M3 14h7v7H3z','M14 14h7v7h-7z'],
     more: ['M4 7h16','M4 12h16','M4 17h16'],
@@ -55,10 +56,7 @@
   }
   function Logo() {
     return h('span',{className:'a-logo', 'aria-label':'NutriTrace'},
-      h('svg',{className:'a-logo-mark',viewBox:'0 0 46 46',width:38,height:38,'aria-hidden':'true',focusable:'false'},
-        h('path',{d:'M23 39C8 37 5 28 5 9c11-1 19 6 19 20z',fill:'#075A40'}),
-        h('path',{d:'M22 36C20 18 27 9 42 6c3 17-3 28-20 30z',fill:'#8CD632'})
-      ), h('span',null,'NutriTrace'));
+      h('img',{className:'a-logo-mark',src:'./icon-user-192.png',width:38,height:38,alt:'','aria-hidden':'true'}), h('span',null,'NutriTrace'));
   }
   function Header({darkMode,onToggleTheme,onQuickAdd}) {
     return h('header',{className:'a-header'},
@@ -152,7 +150,7 @@
             style:{'--a-pct':(pct===null?0:Math.min(pct,100))+'%'}},
             h('div',{className:'a-ring-inner'},h(Icon,{name:'flame',size:21}),
               h('strong',null,format(kcal,0)),h('span',null,'kcal'),
-              h('small',null,goal>0?`di ${format(goal,0)}`:'Target da impostare'))),
+              h('small',null,goal>0?`di ${format(goal,0)} kcal`:'Target da impostare'))),
           h('div',{className:'a-energy-status'},
             h('p',null,'Energia giornaliera'),
             h('strong',null,remaining===null?'—':format(remaining,0)),

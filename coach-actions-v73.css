@@ -1,0 +1,29 @@
+/* V7.3 operational Coach cards, scoped to the existing Coach surface. */
+.coach-tools-quick,.coach-action-buttons,.coach-workspace nav{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.coach-workspace,.coach-action-card,.coach-read-card{padding:16px;margin:12px 0;border:1px solid var(--border,#d7e5de);border-radius:18px;background:var(--card,#fff);color:var(--text,#183229);min-width:0;overflow-wrap:anywhere}
+.coach-workspace{background:var(--surface,#f4f9f6)}
+.coach-workspace>header,.coach-action-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.coach-action-heading>strong{font-size:1.05rem;line-height:1.35}
+.coach-action-status{font-size:.78rem;white-space:nowrap;padding:5px 9px;background:#e4f1e9;color:#23543c;border-radius:20px}
+.coach-action-lines{padding-left:20px;margin:12px 0;max-height:300px;overflow-y:auto;line-height:1.55}
+.coach-action-nutrients{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;font-size:.87rem;font-variant-numeric:tabular-nums}
+.coach-action-nutrients span{padding:7px 10px;border-radius:8px;background:var(--surface,#edf5f0)}
+.coach-action-note,.coach-capabilities small,.coach-food-results small,.coach-shopping-list small{display:block;font-size:.83rem;line-height:1.5;color:var(--muted,#53685f);margin:4px 0}
+.coach-food-results,.coach-shopping-list,.coach-capabilities{list-style:none;padding:0;margin:10px 0;display:grid;gap:10px}
+.coach-food-results>li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--border,#d7e5de)}
+.coach-food-results>li>div:first-child{flex:1;min-width:140px}
+.coach-capabilities>li{padding:8px 0;border-bottom:1px solid var(--border,#d7e5de)}
+.coach-shopping-list label{display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer}
+.coach-shopping-list input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:#287b55}
+.coach-food-entry,.coach-action-editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0;padding:14px;background:var(--surface,#eef6f1);border-radius:12px}
+.coach-food-entry>strong{grid-column:1/-1}
+.coach-food-entry label,.coach-action-field,.coach-action-menu-row label{display:grid;gap:6px;font-size:.88rem;min-width:0}
+.coach-workspace input,.coach-food-entry input,.coach-action-editor input,.coach-food-entry select{font:inherit;min-height:44px;width:100%;min-width:0;padding:9px 11px;border:1px solid var(--border,#c4d7cc);border-radius:10px;box-sizing:border-box;background:var(--card,#fff);color:inherit}
+.coach-workspace-search{display:flex;gap:8px;margin:12px 0}
+.coach-action-menu-row{border:1px solid var(--border,#c4d7cc);border-radius:10px;padding:10px;min-width:0;display:grid;gap:8px}
+.coach-action-card .coach-btn,.coach-workspace .coach-btn,.coach-read-card .coach-btn,.coach-tools-quick .coach-btn{min-height:44px}
+.coach-action-card button:focus-visible,.coach-workspace button:focus-visible,.coach-read-card button:focus-visible{outline:3px solid #4b9574;outline-offset:3px}
+.coach-action-card details{margin:12px 0}
+.coach-action-card summary{min-height:40px;cursor:pointer}
+@media(max-width:480px){.coach-workspace,.coach-action-card,.coach-read-card{padding:12px;border-radius:14px}.coach-action-heading{align-items:flex-start}.coach-action-buttons .coach-btn{flex:1 1 140px}.coach-food-entry,.coach-action-editor{grid-template-columns:1fr}.coach-workspace nav .coach-btn{flex:1 1 90px}.coach-action-lines{max-height:240px}.coach-message .coach-read-card{margin-left:-3px;margin-right:-3px}}
+@media(prefers-reduced-motion:reduce){.coach-workspace *,.coach-action-card *{scroll-behavior:auto!important}}

@@ -20,7 +20,7 @@ test('V5.8 single-choice click advances, Back stays present, and repeated click 
 });
 test('V5.8 conditional single choices skip irrelevant questions, discard stale dependent answers',()=>{
  const input={...adult,sex:'female',physiologicalState:'none',menstrualStatus:'menstruating'};
- const male=wizard.answerWith(input,'sex','male');assert.equal(male.physiologicalState,undefined);assert.equal(male.menstrualStatus,undefined);assert.equal(input.sex,'female');
+ const male=wizard.answerWith(input,'sex','male');assert.equal(male.physiologicalState,'none');assert.equal(male.menstrualStatus,undefined);assert.equal(input.sex,'female');
  const nonTraining=wizard.answerWith(input,'trainingDays','0');assert.equal(nonTraining.trainingType,undefined);assert.equal(wizard.nextStep(nonTraining,'trainingDays').questionId,'dietaryPattern');
  const u=wizardUI(input,'trainingDays');const tree=u.render();nodes(tree).find(n=>n.type==='button'&&txt(n)==='Per ora non mi alleno').props.onClick();assert.equal(u.state[2],'dietaryPattern');assert.equal(u.state[1].trainingType,undefined);
 });
@@ -31,7 +31,7 @@ test('V5.8 multiple answers need Continue and numeric answers need confirmation'
 });
 test('V5.8 completed questionnaire summary reads saved answers only, is immutable, respects conditional questions',()=>{
  const profile={weight:90,wizardV5:{completedAt:'2026-11-24',answers:{...adult,physiologicalState:'pregnant',mealsPerDay:'4'}}};const before=plain(profile);const rows=wizard.completedAnswers(profile);
- assert.equal(rows.find(r=>r.id==='weight').answer,'72 kg');assert.match(rows.find(r=>r.id==='mealsPerDay').answer,/pomeriggio/);assert.equal(rows.some(r=>r.id==='physiologicalState'),false);assert.deepEqual(profile,before);assert.deepEqual(wizard.completedAnswers({}),[]);assert.deepEqual(wizard.completedAnswers({wizardV5:{answers:adult}}),[]);
+ assert.equal(rows.find(r=>r.id==='weight').answer,'72 kg');assert.match(rows.find(r=>r.id==='mealsPerDay').answer,/pomeriggio/);assert.equal(rows.some(r=>r.id==='physiologicalState'),true);assert.deepEqual(profile,before);assert.deepEqual(wizard.completedAnswers({}),[]);assert.deepEqual(wizard.completedAnswers({wizardV5:{answers:adult}}),[]);
 });
 test('V5.8 six recent foods are meal-specific, distinct, chronological and preserve last portion',()=>{
  const foods=Array.from({length:9},(_,i)=>({id:String(i),name:'Alimento '+i}));const day='2026-11-24';const logs=foods.map((f,i)=>({id:'a'+i,foodId:f.id,grams:50+i,mealId:i===8?'lunch':'breakfast',date:day}));logs.push({id:'b',foodId:'2',grams:123,date:day,mealId:'breakfast'},{id:'c',foodId:'2',grams:234,date:day,mealId:'lunch'});
@@ -59,9 +59,9 @@ test('V5.8 meal summary includes quantities, no partial-total wording; unknown r
  const c={console,React:{createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)})}};c.window=c;vm.createContext(c);vm.runInContext(read('meal-diary.js'),c);
  const calls=[],food={id:'a',name:'Latte',label:{kcal:40,protein:4,carbs:5,fat:null,fiber:0}};const favorite={id:'f',mealId:'b',foodId:'a',grams:200,quantity:200,unit:'g'};
  function resolve(x){return x&&typeof x==='object'?(typeof x.type==='function'?resolve(x.type(x.props)):{...x,children:x.children.map(resolve)}):x;}
- const t=resolve(c.NutriTraceMealDiary({meals:[{id:'b',name:'Colazione'}],logs:[{id:'l',foodId:'a',mealId:'b',grams:200}],foods:[food],favorites:[favorite],onEditFood:id=>calls.push(['food',id]),onEditFavorite:id=>calls.push(['edit',id]),onQuickFavorite:f=>calls.push(['add',f.id])}));
- assert.match(txt(byClass(t,'v5-meal-inline-names')),/Latte 200 g/);assert.doesNotMatch(txt(t),/Totali incompleti/);assert.match(txt(byClass(t,'v5-meal-macros')),/N\/D/);assert.doesNotMatch(txt(t),/Totale parziale\. N\/D/);byClass(t,'v58-edit-food').props.onClick();byClass(t,'v58-favorite-weight').props.onClick();byClass(t,'v5-meal-favorite-add').props.onClick();assert.deepEqual(calls,[['food','a'],['edit','f'],['add','f']]);
+ const t=resolve(c.NutriTraceMealDiary({meals:[{id:'b',name:'Colazione'}],logs:[{id:'l',foodId:'a',mealId:'b',grams:200}],foods:[food],favorites:[favorite],onEditQuantity:id=>calls.push(['quantity',id]),onEditFavorite:id=>calls.push(['edit',id]),onQuickFavorite:f=>calls.push(['add',f.id])}));
+ assert.match(txt(byClass(t,'v5-meal-food-name')),/Latte200 g/);assert.ok(byClass(t,'v5-meal-summary'));assert.match(txt(byClass(t,'v5-meal-inline-names')),/Latte 200 g/);assert.doesNotMatch(txt(t),/Totali incompleti/);assert.match(txt(byClass(t,'v5-meal-macros')),/N\/D/);assert.doesNotMatch(txt(t),/Totale parziale\. N\/D/);byClass(t,'v58-edit-food').props.onClick();byClass(t,'v58-favorite-weight').props.onClick();byClass(t,'v5-meal-favorite-add').props.onClick();assert.deepEqual(calls,[['quantity','l'],['edit','f'],['add','f']]);
 });
 test('V5.8 uses one existing add flow, scopes recent list and keeps scientific and strategy code unchanged',()=>{
- const a=read('app.js');assert.match(a,/recentFoods\(logs,foods,6,deviceToday,entryOpen\?entryRecentMeal:null\)/);assert.match(a,/onQuickAdd:tab==='oggi'\?\(\)=>openEntry\(null\):undefined/);assert.match(a,/Rifai il percorso/);assert.match(a,/Riepilogo risposte/);assert.match(a,/Ricette salvate/);assert.equal(wizard.calculatePlan(adult).kcal,2579);assert.equal(wizard.calculatePlan({...adult,age:17}).eligible,false);
+ const a=read('app.js');assert.match(a,/recentFoods\(logs,foods,3,deviceToday,entryOpen\?entryRecentMeal:null\)/);assert.match(a,/onQuickAdd:tab==='oggi'\?\(\)=>openEntry\(null\):undefined/);assert.match(a,/Rifai il percorso/);assert.match(a,/Riepilogo risposte/);assert.match(a,/Ricette salvate/);assert.equal(wizard.calculatePlan(adult).kcal,2579);assert.equal(wizard.calculatePlan({...adult,age:17}).eligible,false);
 });

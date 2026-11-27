@@ -1,12 +1,26 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v7-20261126-v70';
+const CACHE = 'nutritrace-v7-20261127-v734';
+// Replaces nutritrace-v7-20261126-v72; immutable source DB caches are preserved.
 
 const CORE = [
   './',
   './index.html',
   './app.js',
+  './environment-v73.js',
+  './environment-v73.css',
+  './percorso-v73.css',
+  './food-quality-v73.js',
+  './food-quality-v73.css',
+  './coach-actions-v73.js',
+  './coach-actions-v73.css',
+  './diary-actions-v73.js',
+  './app-actions-v73.js',
+  './v73-data-notes.js',
+  './demo-data-v73.js',
+  './portion-learning-v731.js',
+
   './aurora-components.js',
   './aurora-v4.css',
   './aurora-v5.css',
@@ -21,6 +35,7 @@ const CORE = [
   './nutrition-intelligence-v61.js',
   './strategy-v64.js',
   './metabolism-v70.js',
+  './planner-v72.js',
   './coach-markdown.js',
   './coach-markdown.css',
   './coach-chat-v3.css',
@@ -46,13 +61,15 @@ const CORE = [
   './label-import-ui.js',
   './label-import-ui.css',
   './manifest.webmanifest',
-  './icon-192.png',
-  './icon-512.png',
+  './icon-user-180.png',
+  './icon-user-192.png',
+  './icon-user-512.png',
   './config/ui.it.json',
   './config/search-policy.json',
   './config/standard-portions.json',
   './data/master/manifest.json',
-  './data/master/index.json'
+  './data/master/index.json',
+  './data/master/quality-v73.json'
 ];
 
 const VENDOR = [
@@ -63,7 +80,7 @@ const VENDOR = [
 ];
 
 
-const APP_ASSET = /\/(?:app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|nutrition-intelligence-v61\.js|strategy-v64\.js|metabolism-v70\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
+const APP_ASSET = /\/(?:portion-learning-v731\.js|environment-v73\.(?:js|css)|percorso-v73\.css|food-quality-v73\.(?:js|css)|coach-actions-v73\.(?:js|css)|diary-actions-v73\.js|app-actions-v73\.js|demo-data-v73\.js|v73-data-notes\.js|app\.js|food-camera\.js|barcode-scanner\.js|hydration-widget\.js|ingredient-reconstruction\.js|ingredient-auto-audit\.js|meal-(?:config|shortcuts|analytics|analytics-dashboard|diary)\.js|body-weight\.js|weight-calorie-chart\.js|style\.css|aurora-v[45]\.css|aurora-v5-surfaces\.css|goals-wizard-v5\.(?:js|css)|diary-v5\.js|aurora-v5\.js|nutrition-reference-v5\.js|ai-coach-chat\.js|nutrition-intelligence-v61\.js|strategy-v64\.js|metabolism-v70\.js|planner-v72\.js|aurora-components\.js|index\.html|sw\.js|label-import(?:-v3|-ui-state|-ui)?\.js|label-import-ui\.css)$/;
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
@@ -86,7 +103,7 @@ self.addEventListener('activate', event => {
 
     await Promise.all(
       keys
-        .filter(key => key !== CACHE && /^nutritrace-(?:v3-aurora-v4-|v5-|v6-)/.test(key))
+        .filter(key => key !== CACHE && /^nutritrace-(?:v3-aurora-v4-|v5-|v6-|v7-)/.test(key))
         .map(key => caches.delete(key))
     );
 
@@ -108,7 +125,7 @@ self.addEventListener('fetch', event => {
 
     const isAppAsset = sameOrigin &&
       (APP_ASSET.test(url.pathname) ||
-       url.pathname.endsWith('/'));
+       url.pathname.endsWith('/') || event.request.mode==='navigate');
 
     if (isMaster || isAppAsset) {
       try {
@@ -128,11 +145,12 @@ self.addEventListener('fetch', event => {
 
         return response;
       } catch {
-        const cached = await caches.match(event.request);
+        const currentCache=await caches.open(CACHE);
+        const cached = await currentCache.match(event.request) || (isMaster ? await caches.match(event.request) : undefined);
         if (cached) return cached;
 
         if (event.request.mode === 'navigate') {
-          const fallback = await caches.match('./index.html');
+          const fallback = await (await caches.open(CACHE)).match('./index.html');
           if (fallback) return fallback;
         }
 
@@ -140,7 +158,8 @@ self.addEventListener('fetch', event => {
       }
     }
 
-    const cached = await caches.match(event.request);
+    const currentCache=await caches.open(CACHE);
+        const cached = await currentCache.match(event.request) || (isMaster ? await caches.match(event.request) : undefined);
     if (cached) return cached;
 
     try {
@@ -159,7 +178,7 @@ self.addEventListener('fetch', event => {
       return response;
     } catch {
       if (event.request.mode === 'navigate') {
-        const fallback = await caches.match('./index.html');
+        const fallback = await (await caches.open(CACHE)).match('./index.html');
         if (fallback) return fallback;
       }
 

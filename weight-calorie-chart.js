@@ -31,7 +31,7 @@
   function readWeights() {
     try {
       const data = JSON.parse(
-        localStorage.getItem('nutritrace_body_weight_v1') || '{}'
+        (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage).getItem('nutritrace_body_weight_v1') || '{}'
       );
 
       return (Array.isArray(data.entries) ? data.entries : [])
@@ -54,10 +54,51 @@
     }
   }
 
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
   function WeightCalorieChart({ logs = [], foods = [] }) {
+    const expansion=v734Expansion(root.React,h,'Grafico confronto peso e alimentazione'),gesture=v734Ref(root.React);
     const [period, setPeriod] = useState('90');
     const [revision, refresh] = useState(0);
     const [selected, setSelected] = useState(null);
+    const [view,setView]=useState(null);
 
     const weights = useMemo(
       () => readWeights(),
@@ -69,16 +110,17 @@
       today.getTime() - today.getTimezoneOffset() * 60000
     ).toISOString().slice(0, 10);
 
-    const end = timestamp(localToday);
+    const endAll = timestamp(localToday);
 
-    const start = period === 'all'
+    const startAll = period === 'all'
       ? Math.min(
-          end,
-          ...weights.map(e => timestamp(e.date)),
-          ...logs.map(e => timestamp(e.date))
-            .filter(t => t !== null)
+          weights.reduce((v,e)=>Math.min(v,timestamp(e.date)),endAll),
+          logs.reduce((v,e)=>{const t=timestamp(e.date);return t===null?v:Math.min(v,t);},endAll)
         )
-      : end - (Number(period) - 1) * DAY;
+      : endAll - (Number(period) - 1) * DAY;
+    const spanAll=Math.max(DAY,endAll-startAll),size=Math.min(spanAll,Math.max(DAY,view?.size??spanAll)),start=Math.max(startAll,Math.min(endAll-size,view?.start??startAll)),end=Math.min(endAll,start+size);
+    const move=(s,n)=>{setView({start:Math.max(startAll,Math.min(endAll-n,s)),size:n});setSelected(null);};
+    const zoom=f=>{const n=Math.min(spanAll,Math.max(DAY,Math.round(size*f/DAY)*DAY));move(Math.round((start+(size-n)/2-startAll)/DAY)*DAY+startAll,n);};
 
     const visibleWeights = weights.filter(e => {
       const t = timestamp(e.date);
@@ -121,7 +163,7 @@
       (a, b) => a.date.localeCompare(b.date)
     );
 
-    const W = 900, H = 340;
+    const W = 900, H = 500;
     const L = 55, R = 64, T = 22, B = 52;
     const plotW = W - L - R, plotH = H - T - B;
     const span = Math.max(DAY, end - start);
@@ -131,16 +173,13 @@
 
     const kgValues = visibleWeights.map(e => e.kg);
     const kgMin = kgValues.length
-      ? Math.max(0, Math.min(...kgValues) - 1)
+      ? Math.max(0, kgValues.reduce((a,b)=>Math.min(a,b),Infinity) - 1)
       : 0;
     const kgMax = kgValues.length
-      ? Math.max(...kgValues) + 1
+      ? kgValues.reduce((a,b)=>Math.max(a,b),-Infinity) + 1
       : 100;
 
-    const kcalMax = Math.max(
-      100,
-      ...days.map(d => d.kcal)
-    ) * 1.1;
+    const kcalMax = days.reduce((a,d)=>Math.max(a,d.kcal),100) * 1.1;
 
     const weightY = kg => T + plotH -
       (kg - kgMin) / Math.max(1, kgMax - kgMin) * plotH;
@@ -179,11 +218,11 @@
     }
 
     return h('article', {
-      className: 'card',
-      style: { marginTop: '16px' }
+      ...expansion.props, className: 'card'+(expansion.expanded?' v734-chart-fullscreen':''),
+      style: { marginTop: expansion.expanded?'0':'16px' }
     },
 
-      h('h2', null, 'Confronto peso ed alimentazione'),
+      h('h2', null, 'Confronto peso ed alimentazione'), expansion.button, expansion.hint,
 
       h('p', { className: 'muted tiny' },
         'Confronto delle misurazioni corporee con le calorie ' +
@@ -210,6 +249,7 @@
             className: period === id ? 'cta' : 'ghost',
             onClick: () => {
               setPeriod(id);
+              setView(null);
               setSelected(null);
             }
           }, label)
@@ -224,6 +264,7 @@
           }
         }, 'Aggiorna dati')
       ),
+      h('div',{className:'v733-chart-tools'},h('button',{className:'ghost',type:'button',disabled:size<=DAY,onClick:()=>zoom(.5)},'+ Zoom'),h('button',{className:'ghost',type:'button',disabled:size>=spanAll,onClick:()=>zoom(2)},'− Zoom'),h('button',{className:'ghost',type:'button',disabled:start<=startAll,onClick:()=>move(start-Math.max(DAY,Math.round(size*.7/DAY)*DAY),size)},'←'),h('button',{className:'ghost',type:'button',disabled:end>=endAll,onClick:()=>move(start+Math.max(DAY,Math.round(size*.7/DAY)*DAY),size)},'→'),h('button',{className:'ghost',type:'button',onClick:()=>{setView(null);setSelected(null);}},'Tutto'),h('small',{className:'muted'},new Date(start).toISOString().slice(0,10)+' → '+new Date(end).toISOString().slice(0,10))),
 
       !visibleWeights.length && !days.length
         ? h('p', { className: 'empty' },
@@ -240,9 +281,9 @@
                   display: 'block',
                   width: '100%',
                   minWidth: '350px',
-                  touchAction: 'pan-y'
+                  touchAction: 'pan-y pinch-zoom'
                 },
-                onPointerDown: selectNearest
+                ...v734Gesture(gesture,selectNearest)
               },
 
                 ...[0, .25, .5, .75, 1].map(f => {
@@ -271,7 +312,7 @@
                   );
                 }),
 
-                ...days.map(row => {
+                ...(days.length>180?[true,false].map(complete=>{const width=Math.max(.15,Math.min(13,plotW/Math.max(1,span/DAY)*.7)),d=days.filter(row=>(row.knownGrams===row.totalGrams)===complete).map(row=>{const a=x(row.date)-width/2,b=calorieY(row.kcal),bottom=T+plotH;return `M${a} ${bottom}V${b}h${width}V${bottom}Z`;}).join(' ');return h('path',{key:String(complete),d,fill:complete?'#b67a2a':'#e2ac6a',opacity:.8});}):days.map(row => {
                   const barW = Math.max(
                     1.5,
                     Math.min(13, plotW / Math.max(1, span / DAY) * .7)
@@ -289,7 +330,7 @@
                       : '#e2ac6a',
                     opacity: .8
                   });
-                }),
+                })),
 
                 h('path', {
                   d: weightPath,
@@ -300,7 +341,7 @@
                   strokeLinecap: 'round'
                 }),
 
-                ...visibleWeights.map((e, i) =>
+                ...visibleWeights.map((e,i)=>({e,i})).filter(({e,i})=>visibleWeights.length<=180||i===0||i===visibleWeights.length-1||e.date===selected||i%Math.ceil(visibleWeights.length/180)===0).map(({e,i})=>
                   h('circle', {
                     key: e.id || i,
                     cx: x(e.date),
@@ -340,9 +381,13 @@
 
             h('p', {
               className: 'muted tiny'
-            }, '● Verde: peso (kg, asse sinistro) · ' +
-               '■ Arancione: calorie (kcal, asse destro). ' +
-               'Arancione chiaro: copertura nutrizionale incompleta.'),
+            },
+              h('span', null, h('span', { 'aria-hidden': true, style: { color: '#168b78' } }, '● '), 'Peso (kg, asse sinistro)'),
+              ' · ',
+              h('span', null, h('span', { 'aria-hidden': true, style: { color: '#b67a2a' } }, '■ '), 'Calorie (kcal, asse destro)'),
+              ' · ',
+              h('span', null, h('span', { 'aria-hidden': true, style: { color: '#e2ac6a' } }, '■ '), 'Copertura nutrizionale incompleta')
+            ),
 
             h('div', {
               role: 'status',

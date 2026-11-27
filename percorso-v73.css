@@ -1,0 +1,44 @@
+/* NutriTrace V7.3: local original parcours and manual daily target UI. */
+.v73-percorso-extra>button.v5-wizard-option{width:100%;margin:10px 0;text-align:left}
+.v73-percorso-extra .v5-wizard-option[aria-pressed=true],.v73-bodyfat-method button[aria-pressed=true]{background:var(--vw-soft,#edf4e7);border-color:var(--vw-green,#1e5840)}
+.v73-training-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:22px 0}
+.v73-training-fields label,.v73-optional-input{display:flex;flex-direction:column;gap:9px;color:var(--vw-ink,#163b2e);font-size:14px;font-weight:600}
+.v73-training-fields input,.v73-training-fields select,.v73-optional-input input,.v73-percorso-extra>label input{width:100%;min-width:0;min-height:48px;padding:11px 13px;background:var(--vw-card,#fff);color:var(--vw-ink,#163b2e);border:1px solid var(--vw-border,#dce6dc);border-radius:12px;font:inherit;font-weight:400}
+.v73-allergen-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:18px 0}
+.v73-allergen-list label{display:flex;align-items:center;gap:10px;min-height:48px;padding:9px 12px;border:1px solid var(--vw-border,#dce6dc);border-radius:12px;background:var(--vw-card,#fff);font-size:14px;color:var(--vw-ink,#163b2e)}
+.v73-allergen-list input{flex:none;width:20px;height:20px;min-height:20px;margin:0;accent-color:var(--vw-green,#1e5840)}
+.v73-bodyfat-method{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:18px 0}
+.v73-bodyfat-method button.v5-wizard-option{padding:12px 9px;justify-content:center;font-size:13px;text-align:center}
+.v73-bodyfat-views{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+.v73-bodyfat-views button[aria-pressed=true]{background:#e2eee3;color:#173e2b;border-color:#1e5840}
+.v73-bodyfat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0 18px}
+.v73-bodyfat-card{display:flex;flex-direction:column;gap:8px;align-items:center;padding:8px 8px 12px!important;border:2px solid var(--vw-border,#dce6dc);border-radius:17px;background:var(--vw-card,#fff);color:var(--vw-ink,#163b2e)}
+.v73-bodyfat-card svg{display:block;width:100%;max-width:160px;height:auto}
+.v73-bodyfat-card strong{font-size:15px;line-height:1.2}
+.v73-bodyfat-card[aria-pressed=true]{border-color:#1e5840;background:#e9f4e8;box-shadow:0 0 0 2px rgba(30,88,64,.1)}
+.v73-answer-review>summary{font-size:17px;min-height:44px}
+.v73-answer-review dl{margin:0}
+.v73-answer-review dl>div,.v73-answer-row{padding:12px 0;border-bottom:1px solid var(--vw-border,#dce6dc)}
+.v73-answer-review dt,.v73-answer-row>strong{font-size:13px;color:var(--vw-muted,#64756a);font-weight:500}
+.v73-answer-review dd{margin:5px 0 0;font-size:15px;font-weight:650;color:var(--vw-ink,#163b2e)}
+.v73-answer-review .v5-wizard-text-button{font-size:12px!important;padding:7px 0;min-height:44px}
+.v73-day-editor h3{font-size:20px;line-height:1.25;margin:0 0 16px}
+.v73-day-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0}
+.v73-day-modes .v5-wizard-option{display:flex;flex-direction:column;gap:7px;align-items:flex-start;padding:14px;text-align:left;min-width:0;font:inherit;font-size:13px;color:#163b2e;background:#fff;border:1.5px solid #dce6dc;border-radius:16px}
+.v73-day-modes strong{font-size:15px;line-height:1.3}
+.v73-day-modes span{font-size:12px;line-height:1.5;color:#52685b}
+.v73-day-modes button[aria-pressed=true]{border-color:#1e5840;background:#edf4e7}
+.v73-day-modes button:disabled{opacity:.5;cursor:not-allowed}
+.v73-day-editor>label{display:flex;align-items:center;gap:10px;margin:14px 0;flex-wrap:wrap}
+.v73-day-editor>label>input[type=number]{flex:1;min-width:140px;min-height:48px;font-size:18px}
+.v73-day-editor>label>input[type=checkbox]{width:21px;height:21px;min-height:21px;flex:none}
+.v73-day-preview{border:1px solid #dce6dc;border-radius:16px;padding:16px;margin:18px 0;background:#f6faf3}
+.v73-day-preview>strong{font-size:16px;color:#163b2e}
+.v73-day-preview ul{list-style:none;margin:14px 0 0;padding:0}
+.v73-day-preview li{display:grid;grid-template-columns:1fr auto;gap:5px 12px;padding:11px 0;border-top:1px solid #dce6dc;font-size:14px}
+.v73-day-preview li small{grid-column:1/-1;color:#52685b;font-size:12px}
+.v73-policy-notice{padding:14px 16px;border-radius:14px;background:#f2f5f1;color:#334c3d;font-size:14px;line-height:1.6}
+.v73-day-editor button:focus-visible,.v73-bodyfat-guide button:focus-visible{outline:3px solid #75a34e;outline-offset:3px}
+.v72-revision-history>summary{font-size:17px!important;font-weight:700!important;min-height:48px;padding:12px 4px;cursor:pointer}
+@media(max-width:650px){.v73-day-modes{grid-template-columns:1fr}.v73-day-modes .v5-wizard-option{gap:4px;min-height:75px}.v73-bodyfat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.v73-bodyfat-card svg{max-width:140px}.v73-training-fields{grid-template-columns:1fr}.v73-bodyfat-method{grid-template-columns:1fr}.v73-bodyfat-method button.v5-wizard-option{justify-content:flex-start;text-align:left}.v5-wizard-progress-label{align-items:flex-start;flex-direction:column;gap:4px}.v73-allergen-list{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.v73-percorso-extra *{animation:none!important;transition:none!important}}

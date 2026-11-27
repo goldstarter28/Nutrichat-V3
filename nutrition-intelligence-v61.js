@@ -23,7 +23,7 @@ function foodTime(log,legacy){if(own(log,'consumedTime'))return validTime(log.co
 function previousFoodTime(group,previous,legacyTimes){const log=group.log;const match=(previous||[]).slice().reverse().find(l=>l.mealId===log.mealId&&(group.isRecipe?l.recipeName===log.recipeName:!l.recipeGroupId&&l.foodId===log.foodId));return match?foodTime(match,legacyTimes?.[match.mealId]):{value:null,declared:false};}
 function estimateIdentity(food){return JSON.stringify([clean(food?.name,180),clean(food?.brand,120),clean(food?.ingredients,4000)]);}
 function scoreFacts(food){const label=food?.label||{},base=num(food?.servingGrams);const values={};for(const k of ['kcal','sugar','saturatedFat','salt','protein','fiber']){const n=num(label[k]);if(base>0&&n!==null&&n>=0)values[k]=Number((n*100/base).toFixed(5));}return values;}
-function scoreEstimate(food,guess){if(!guess||!['general','cheese','red-meat'].includes(guess.category)||!clean(guess.reason,240))return null;const name=String(food?.name||'').toLowerCase();if(/\b(bevanda|bibita|succo|cola|acqua minerale|olio|burro|integratore|formula infantile)\b/.test(name)&&!/(?:pasta|biscott|torta|pane|cracker)/.test(name))return null;const facts=scoreFacts(food);if(facts.kcal===undefined||facts.kcal>1000||Object.keys(facts).length<3)return null;const fvl=num(guess.fvlPercent);if(fvl===null||fvl<0||fvl>100)return null;const label={...facts};const missing=[];for(const k of ['sugar','saturatedFat','salt','protein','fiber']){if(label[k]!==undefined)continue;const n=num(guess.missing?.[k]);if(n===null||n<0||n>100)return null;label[k]=n;missing.push(k);}const calc=calculateNutriScore({servingGrams:100,label},{category:guess.category,energyKj100:facts.kcal*4.184,fvlPercent:fvl,confirmed:true});return calc?{grade:calc.grade,version:'2023',reason:clean(guess.reason,240),category:guess.category,fvlPercent:fvl,missing:Object.fromEntries(missing.map(k=>[k,label[k]])),facts:JSON.stringify(facts)}:null;}
+function scoreEstimate(food,guess){if(!guess||!['general','cheese','red-meat'].includes(guess.category)||!clean(guess.reason,240))return null;if(root.NutriTraceFoodQualityV73?.categoryCompatible(food,guess.category)===false)return null;const name=String(food?.name||'').toLowerCase();if(/\b(bevanda|bibita|succo|cola|acqua minerale|olio|burro|mandorle|almonds|noci|walnuts|nocciole|hazelnuts|pistacchi|arachidi|peanuts|anacardi|semi di|integratore|formula infantile)\b/.test(name)&&!/(?:pasta|biscott|torta|pane|cracker)/.test(name))return null;const facts=scoreFacts(food);if(facts.kcal===undefined||facts.kcal>1000||Object.keys(facts).length<3)return null;const fvl=num(guess.fvlPercent);if(fvl===null||fvl<0||fvl>100)return null;const label={...facts};const missing=[];for(const k of ['sugar','saturatedFat','salt','protein','fiber']){if(label[k]!==undefined)continue;const n=num(guess.missing?.[k]);if(n===null||n<0||n>100)return null;label[k]=n;missing.push(k);}const calc=calculateNutriScore({servingGrams:100,label},{category:guess.category,energyKj100:facts.kcal*4.184,fvlPercent:fvl,confirmed:true});return calc?{grade:calc.grade,version:'2023',reason:clean(guess.reason,240),category:guess.category,fvlPercent:fvl,missing:Object.fromEntries(missing.map(k=>[k,label[k]])),facts:JSON.stringify(facts)}:null;}
 function validEstimate(food,estimate=food?.qualityV61?.estimateV611){if(!estimate||estimate.version!==1||estimate.identity!==estimateIdentity(food))return null;const name=clean(food?.name,180),ingredients=clean(food?.ingredients,4000),text=(name+' '+ingredients).toLowerCase();const evidence=(e,source)=>{const v=clean(e?.evidence,120);return v.length>=2&&source.includes(v.toLowerCase())?v:null;};const allergens=(Array.isArray(estimate.allergens)?estimate.allergens:[]).slice(0,14).filter(x=>own(ALLERGENS,x?.id)&&evidence(x,text)&&!/(?:senza|free from|gluten.free|egg.free|dairy.free|no added|non contiene)/i.test(evidence(x,text))).map(x=>({id:x.id,evidence:evidence(x,text)}));const additives=(Array.isArray(estimate.additives)?estimate.additives:[]).slice(0,30).filter(x=>own(ADDITIVES,x?.code)&&evidence(x,ingredients.toLowerCase())).map(x=>({code:x.code,evidence:evidence(x,ingredients.toLowerCase())}));const reason=clean(estimate.novaReason,240);return {version:1,identity:estimate.identity,nova:[1,2,3,4].includes(estimate.nova)&&reason?estimate.nova:null,novaReason:reason,allergens,additives,...(estimate.scoreEstimate?.facts===JSON.stringify(scoreFacts(food))&&scoreEstimate(food,estimate.scoreEstimate)?{scoreEstimate:scoreEstimate(food,estimate.scoreEstimate)}:{}),source:'OpenRouter · stima AI da nome e ingredienti'};}
 const safeKey=s=>typeof s==='string'&&s.length>0&&s.length<=120&&!['__proto__','constructor','prototype'].includes(s);
 const stateEmpty=()=>({version:VERSION,days:{},times:{},allergens:[]});
@@ -32,28 +32,64 @@ function normalizeState(x){const out=stateEmpty();if(!x||typeof x!=='object')ret
  for(const [d,meals] of Object.entries(x.times||{}))if(validDate(d)&&meals&&typeof meals==='object'){const a={};for(const [id,t] of Object.entries(meals))if(safeKey(id)&&(validTime(t)||t===null))a[id]=t;out.times[d]=a;}
  out.allergens=[...new Set((Array.isArray(x.allergens)?x.allergens:[]).filter(k=>own(ALLERGENS,k)))];return out;
 }
-function read(storage=root.localStorage){const raw=storage.getItem(KEY);if(raw===null)return stateEmpty();return normalizeState(JSON.parse(raw));}
-function update(fn,storage=root.localStorage){const next=normalizeState(fn(read(storage)));storage.setItem(KEY,JSON.stringify(next));return next;}
+function read(storage=(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage)){const raw=storage.getItem(KEY);if(raw===null)return stateEmpty();return normalizeState(JSON.parse(raw));}
+function update(fn,storage=(globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage)){const next=normalizeState(fn(read(storage)));storage.setItem(KEY,JSON.stringify(next));return next;}
 // Stable fingerprint for confirmation invalidation; not a cryptographic identity.
 function signature(logs){let a=2166136261,b=0;for(const s of logs.map(l=>JSON.stringify([l.id,l.foodId,l.grams,l.mealId])).sort()){for(let i=0;i<s.length;i++)a=Math.imul(a^s.charCodeAt(i),16777619);b+=s.length;}return logs.length+':'+(a>>>0).toString(16)+':'+b;}
 function status(state,date,logs){const s=state.days[date];if(s&&s.signature===signature(logs))return s.status;return logs.length?'unknown':'missing';}
 function ecode(s){const m=clean(s).match(/^(?:en:)?e\s*(\d{3,4})([a-z]?)$/i);return m?'E'+m[1]+m[2].toLowerCase():null;}
 function tags(x,max=150){return [...new Set((Array.isArray(x)?x:[]).filter(s=>typeof s==='string').map(s=>clean(s,90)).filter(Boolean))].slice(0,max);}
 function allergenTags(x){const aliases={soy:'soybeans',soya:'soybeans',sesame:'sesame-seeds',sulphites:'sulphur-dioxide-and-sulphites',sulfites:'sulphur-dioxide-and-sulphites',wheat:'gluten',rye:'gluten',barley:'gluten',oats:'gluten',spelt:'gluten',almonds:'nuts',hazelnuts:'nuts',walnuts:'nuts',cashews:'nuts',pistachios:'nuts',pecans:'nuts','brazil-nuts':'nuts','macadamia-nuts':'nuts'};return [...new Set(tags(x).map(s=>s.replace(/^en:/,'')).map(s=>aliases[s]||s).filter(s=>own(ALLERGENS,s)))];}
-// Updated algorithm, Exhibit 1-B Tables 5/6. Only general foods, cheese and red meat;
-// never auto-classify special categories or excluded products. User supplies verified kJ and FVL %.
+// Updated 2023 algorithm. SPF FAQ v11 (17-03-2025), tables 5-10.
+// The caller must establish the category, FVL %, units and sweetener information.
+// Missing inputs are not zero. NutriTraceFoodQualityV73 supplies conservative automation.
 function calculateNutriScore(food,input){
- if(!input||!['general','cheese','red-meat'].includes(input.category)||input.confirmed!==true)return null;
+ const category=input?.category;
+ if(!input||!['general','cheese','red-meat','fats-nuts-seeds','beverage'].includes(category)||input.confirmed!==true)return null;
+ if(root.NutriTraceFoodQualityV73?.categoryCompatible(food,category)===false)return null;
+ // Only plain mineral/table/spring water has the beverage A exception, never flavoured water.
+ if(category==='beverage'&&input.water===true&&input.waterConfirmed===true)return {grade:'A',score:null,version:'2023',category,water:true};
  const base=num(food?.servingGrams),kj=num(input.energyKj100),fvl=num(input.fvlPercent);
- if(!(base>0)||kj===null||kj<0||fvl===null||fvl<0||fvl>100)return null;
- const label=food.label||{},v=k=>{const n=num(label[k]);return n!==null&&n>=0?n*100/base:null;};
+ if(!(base>0)||fvl===null||fvl<0||fvl>100)return null;
+ if(category!=='fats-nuts-seeds'&&(kj===null||kj<0))return null;
+ const label=food.label||{};
+ let scale=100/base;
+ if(category==='beverage'){
+  // App labels are mass-based. A volume declaration or a documented density is necessary.
+  const ml=num(input.servingMl??food.servingMl),density=num(input.densityGPerMl??food.densityGPerMl);
+  if(input.basis==='100ml'&&ml>0)scale=100/ml;
+  else if(density>0)scale*=density;
+  else return null;
+  if(typeof input.nonNutritiveSweeteners!=='boolean')return null;
+ }
+ const v=k=>{const n=num(label[k]);return n!==null&&n>=0?n*scale:null;};
  const sat=v('saturatedFat'),sugar=v('sugar'),salt=v('salt'),protein=v('protein'),fiber=v('fiber');
  if([sat,sugar,salt,protein,fiber].some(x=>x===null||x>100))return null;
- const points=(v,limits)=>limits.filter(x=>v>x).length;
- const N=points(kj,Array.from({length:10},(_,i)=>335*(i+1)))+points(sat,[1,2,3,4,5,6,7,8,9,10])+points(sugar,[3.4,6.8,10,14,17,20,24,27,31,34,37,41,44,48,51])+points(salt,Array.from({length:20},(_,i)=>Number(((i+1)*.2).toFixed(1))));
- const pp=points(protein,[2.4,4.8,7.2,9.6,12,14,17]),fp=points(fiber,[3,4.1,5.2,6.3,7.4]),fv=fvl>80?5:fvl>60?2:fvl>40?1:0;
- const score=N-fp-fv-(N<11||input.category==='cheese'?(input.category==='red-meat'?Math.min(pp,2):pp):0);
- return {grade:score<=0?'A':score<=2?'B':score<=10?'C':score<=18?'D':'E',score,version:'2023'};
+ // Numerical epsilon only compensates IEEE-754 arithmetic at exact table boundaries.
+ const same=(a,b)=>Math.abs(a-b)<=Number.EPSILON*16*Math.max(1,Math.abs(a),Math.abs(b));
+ const points=(value,limits)=>limits.filter(x=>value>x&&!same(value,x)).length;
+ const sugarLimits=[3.4,6.8,10,14,17,20,24,27,31,34,37,41,44,48,51],saltLimits=Array.from({length:20},(_,i)=>(i+1)/5);
+ let ep,sp,pp,fp=points(fiber,[3,4.1,5.2,6.3,7.4]),fv=fvl>80?5:fvl>60?2:fvl>40?1:0;
+ const sugarPoints=points(sugar,category==='beverage'?[.5,2,3.5,5,6,7,8,9,10,11]:sugarLimits),saltPoints=points(salt,saltLimits);
+ if(category==='fats-nuts-seeds'){
+  const fat=v('fat');if(fat===null||fat>100||sat>fat)return null;
+  const ratio=fat>0?sat/fat*100:0;
+  ep=points(sat*37,Array.from({length:10},(_,i)=>120*(i+1)));
+  // SPF ratio intervals are lower-bound inclusive: <10, <16, ... >=64.
+  sp=[10,16,22,28,34,40,46,52,58,64].filter(x=>ratio>=x||same(ratio,x)).length;
+ }else{
+  ep=points(kj,category==='beverage'?[30,90,150,210,240,270,300,330,360,390]:Array.from({length:10},(_,i)=>335*(i+1)));
+  sp=points(sat,[1,2,3,4,5,6,7,8,9,10]);
+ }
+ pp=points(protein,category==='beverage'?[1.2,1.5,1.8,2.1,2.4,2.7,3]:[2.4,4.8,7.2,9.6,12,14,17]);
+ if(category==='red-meat')pp=Math.min(pp,2);
+ if(category==='beverage')fv=fvl>80?6:fvl>60?4:fvl>40?2:0;
+ const sweetenerPoints=category==='beverage'&&input.nonNutritiveSweeteners?4:0;
+ const N=ep+sp+sugarPoints+saltPoints+sweetenerPoints;
+ const proteinCounted=category==='beverage'||category==='cheese'||N<(category==='fats-nuts-seeds'?7:11);
+ const score=N-fp-fv-(proteinCounted?pp:0);
+ const grade=category==='beverage'?(score<=2?'B':score<=6?'C':score<=9?'D':'E'):(score<=(category==='fats-nuts-seeds'?-6:0)?'A':score<=2?'B':score<=10?'C':score<=18?'D':'E');
+ return {grade,score,version:'2023',category,points:{negative:N,energy:ep,saturated:sp,sugars:sugarPoints,salt:saltPoints,sweeteners:sweetenerPoints,fiber:fp,fruitVegetablesLegumes:fv,protein:proteinCounted?pp:0,proteinCounted}};
 }
 function inferredAllergens(food){
  const normalize=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -66,12 +102,12 @@ function inferredAllergens(food){
  if(id==='gluten'){source=source.replace(/\bgrano saraceno\b/g,' ');named=named.replace(/\bgrano saraceno\b/g,' ');}
  const explicitIngredient=source.match(explicit);if(negative?.test(text)&&!explicitIngredient)continue;const match=explicitIngredient||named.match(explicit);const hint=!match&&generic?named.match(generic):null;if(match||hint)result.push({id,evidence:(match||hint)[0],method:'rule',generic:!!hint});}return result;
 }
-function quality(food){const q=food?.qualityV61||{},validGrade=s=>typeof s==='string'&&/^[a-e]$/i.test(s);let score=validGrade(q.nutriScore)?q.nutriScore.toUpperCase():null;const calc=!score?calculateNutriScore(food,q.scoreInput):null;if(calc)score=calc.grade;
+function quality(food){const q=food?.qualityV61||{},validGrade=s=>typeof s==='string'&&/^[a-e]$/i.test(s),resolved=root.NutriTraceFoodQualityV73?.resolve(food);let score=resolved?(resolved.method==='estimated'?null:resolved.grade):validGrade(q.nutriScore)?q.nutriScore.toUpperCase():null;const calc=resolved?(['calculated','calculated-partial'].includes(resolved.method)?resolved:null):!score?calculateNutriScore(food,q.scoreInput):null;if(calc)score=calc.grade;
  const explicit=(String(food?.ingredients||'').match(/\bE\s*\d{3,4}[a-z]?\b/gi)||[]).map(ecode);
  const codes=[...new Set([...tags(q.additives).map(ecode),...explicit].filter(Boolean))];
  // Explicit names only; no classification from ambiguous ingredient names.
  const names=String(food?.ingredients||'').toLowerCase();for(const c of Object.keys(ADDITIVES))if(names.includes(ADDITIVES[c][0].toLowerCase())&&!codes.includes(c))codes.push(c);
- return {score,scoreMethod:calc?'calculated':score?'reported':null,scoreVersion:calc?'2023':clean(q.nutriScoreVersion,24)||null,nova:[1,2,3,4].includes(q.nova)?q.nova:null,codes,allergens:allergenTags(q.allergens),traces:allergenTags(q.traces),categories:tags(q.categories,60),source:clean(q.source,60)||null,allergenInfo:q.allergenInfo===true};
+ return {score,scoreMethod:calc?'calculated':score?'reported':null,scorePartial:resolved?.method==='calculated-partial',scoreVersion:calc?'2023':resolved?.version||clean(q.nutriScoreVersion,24)||null,nova:[1,2,3,4].includes(q.nova)?q.nova:null,codes,allergens:allergenTags(q.allergens),traces:allergenTags(q.traces),categories:tags(q.categories,60),source:clean(q.source,60)||null,allergenInfo:q.allergenInfo===true};
 }
 const num=v=>{if(typeof v==='number')return Number.isFinite(v)?v:null;if(typeof v!=='string'||!v.trim()||!/^[-+]?\d+(?:[.,]\d+)?$/.test(v.trim()))return null;const n=Number(v.trim().replace(',','.'));return Number.isFinite(n)?n:null;};
 const r=(n,d=1)=>n===null||!Number.isFinite(n)?null:Number(n.toFixed(d));
@@ -118,7 +154,7 @@ function coachContext(props,question,opts={},D=root.NutriTraceDiaryV5){if(!opts.
  // Specific queries preserve requested nutrients; generic queries prioritize known data and coverage.
  const ranked=matches.specific?microRows:microRows.sort((a,b)=>Number(b.days>0)-Number(a.days>0)||b.coverage-a.coverage||b.days-a.days);
  data.micros=ranked.slice(0,matches.specific?18:10);data.microSelection={period,available:microRows.length,known:microRows.filter(x=>x.days>0).length,provided:data.micros.length,specific:matches.specific};
- data.daily60=hist.daily60;data.weekly52=hist.weekly52;return data;
+ data.daily60=hist.daily60;data.weekly52=hist.weekly52;if(root.NutriTracePlanner){const planner=root.NutriTracePlanner.recipeContext(props,question,{...opts,today});if(planner)data.planner=planner;}return data;
 }
 // Budget by UTF-8 bytes, conservative transport bound, not exact tokenizer. Drop only complete optional rows/sections; always describe omissions.
 function fitContext(value,max=8500){const bytes=x=>new TextEncoder().encode(JSON.stringify(x)).length;const out=JSON.parse(JSON.stringify(value||{}));if(bytes(out)<=max)return out;out.omissions=[];const lengths={};const series=out.requestedDays>=364?['mealTimes','daily60','weekly52']:['mealTimes','weekly52','daily60'];for(const k of series){if(!Array.isArray(out[k]))continue;lengths[k]=out[k].length;}while(bytes(out)>max){const key=series.find(k=>Array.isArray(out[k])&&out[k].length>(k==='mealTimes'?5:8));if(!key)break;out[key].shift();}for(const k of Object.keys(lengths))if(lengths[k]>out[k].length)out.omissions.push(k+': '+(lengths[k]-out[k].length)+' righe meno recenti omesse');
@@ -126,6 +162,7 @@ function fitContext(value,max=8500){const bytes=x=>new TextEncoder().encode(JSON
  if(out.micros&&bytes(out)>max){let total=out.micros.length;while(out.micros.length>1&&bytes(out)>max)out.micros.pop();out.omissions.push('micros: '+(total-out.micros.length)+' nutrienti omessi');if(out.microSelection)out.microSelection.provided=out.micros.length;}
  if(bytes(out)>max&&out.periods){for(const k of ['60','30','7','364']){if(bytes(out)<=max)break;if(Number(k)===out.requestedDays)continue;delete out.periods[k];out.omissions.push('periodo '+k+' giorni omesso');}}
  if(bytes(out)>max&&out.quality){delete out.quality.additives;delete out.quality.additiveTypes;delete out.quality.topEnergyFoods;out.omissions.push('dettaglio additivi e alimenti omesso');}
+ if(bytes(out)>max&&out.planner){const p=out.planner;for(const key of ['menu','dispensa','opzioniCalcolate','ricette']){if(!Array.isArray(p[key]))continue;const count=p[key].length;while(bytes(out)>max&&p[key].length>(key==='ricette'?1:0))p[key].pop();if(count!==p[key].length)out.omissions.push('planner.'+key+': '+(count-p[key].length)+' elementi omessi');}if(bytes(out)>max&&p.ricette?.length){for(const r of p.ricette){if(r.procedimento){delete r.procedimento;out.omissions.push('procedimento ricetta omesso per budget');}while(bytes(out)>max&&r.ingredienti?.length>1){r.ingredienti.pop();r.ingredientiOmissi=(r.ingredientiOmissi||0)+1;}}}if(bytes(out)>max){delete p.ricette;delete p.dispensa;delete p.menu;delete p.opzioniCalcolate;out.omissions.push('dettagli archivio e dispensa omessi per budget');}if(bytes(out)>max){delete out.planner;out.omissions.push('contesto pianificazione omesso per budget');}}
  if(bytes(out)>max&&out.percorso?.preferenzeAvanzate){delete out.percorso.preferenzeAvanzate;out.omissions.push('preferenze avanzate omesse per budget');}
  if(bytes(out)>max)throw Error('Contesto troppo esteso: riduci le informazioni condivise o chiedi un approfondimento specifico.');return out;
 }

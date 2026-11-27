@@ -42,7 +42,7 @@ test('V5.7.2 deficit guard gives exact reason; maintenance is independently chec
 function nodes(x){return x&&typeof x==='object'?[x,...(x.children||[]).flatMap(nodes)]:[];}
 function text(x){return x==null||x===false?'':typeof x!=='object'?String(x):(x.children||[]).map(text).join('');}
 test('V5.7.2 real wizard view requires explicit switch and Apply; preserves other answers and saves calculated goals',async()=>{
- const state=[null,adult,'goal','review',false,'',false,false];let pos=0,applied=null;
+ const state=[null,{...adult,physiologicalState:'none'},'goal','review',false,'',false,false];let pos=0,applied=null;
  const c={console,Date,Intl,React:{createElement:(type,props,...children)=>({type,props:props||{},children:children.flat(Infinity)}),useState:v=>{const i=pos++;if(i>=state.length)state[i]=typeof v==='function'?v():v;return [state[i],x=>{state[i]=typeof x==='function'?x(state[i]):x;}];},useRef:()=>({current:null}),useEffect:noop}};c.window=c;vm.createContext(c);vm.runInContext(read('goals-wizard-v5.js'),c);
  const profile={weight:72,macroPlan:{calorieMode:'fixed',kcal:2350,perKg:{}}},goals=[{id:'kcal',target:2350,targetMode:'absolute',period:'day'}];
  const render=()=>{pos=0;return c.NutriTraceGoalsWizard.View({profile,goals,onApply:r=>{applied=plain(r);}});};

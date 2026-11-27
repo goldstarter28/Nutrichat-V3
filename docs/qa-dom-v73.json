@@ -1,0 +1,118 @@
+{
+  "version": "7.3",
+  "generatedAt": "2026-11-26T23:16:50.867Z",
+  "runtime": {
+    "engine": "jsdom",
+    "version": "26.1.0",
+    "react": "18.3.1"
+  },
+  "scope": "Actual application scripts, real React state/events, real bundled master JSON, synthetic 91-day demo. Filesystem fetch and mocked AI only.",
+  "limitations": [
+    "No visual layout or device camera/barcode verification",
+    "No real AI response quality or Vercel configuration verification",
+    "No actual service-worker update lifecycle or cross-tab browser navigation"
+  ],
+  "seed": {
+    "version": 1,
+    "scenario": "stable",
+    "days": 91,
+    "today": "2026-11-26",
+    "createdAt": "2026-11-26T23:16:49.836Z",
+    "synthetic": true,
+    "recordCount": 1094,
+    "weightCount": 91
+  },
+  "checks": [
+    {
+      "name": "Entire app mounts with 91-day demo and isolated personal records",
+      "status": "PASS"
+    },
+    {
+      "name": "Day confirmation precedes overview and meal rows show Info and quantity actions",
+      "status": "PASS"
+    },
+    {
+      "name": "Info opens real nutrient details; quantity edit changes diary without changing archive",
+      "status": "PASS"
+    },
+    {
+      "name": "Recent foods are exactly three; last recorded quantity is reused and undo works",
+      "status": "PASS"
+    },
+    {
+      "name": "Global food query shows 20 results and pagination; ordinary amounts stay blank",
+      "status": "PASS"
+    },
+    {
+      "name": "Navigation mounts every section; Altro excludes duplicate primary pages and planner route",
+      "status": "PASS"
+    },
+    {
+      "name": "Quality analytics render week/month/year with real computed series and coverage",
+      "status": "PASS"
+    },
+    {
+      "name": "Objectives preserve manual controls and show a standalone journey entry",
+      "status": "PASS"
+    },
+    {
+      "name": "Coach local capabilities, pantry and shopping work while cloud consent is off",
+      "status": "PASS"
+    },
+    {
+      "name": "Coach pantry quantity review performs a real save and undo",
+      "status": "PASS"
+    },
+    {
+      "name": "Coach search resolves an actual master food and confirmed double click writes once",
+      "status": "PASS"
+    },
+    {
+      "name": "Coach creates shopping from real recipe and exposes computed missing grams",
+      "status": "PASS"
+    },
+    {
+      "name": "Actual chat executes bounded two-step tool flow, creates review, then applies menu once",
+      "status": "PASS"
+    },
+    {
+      "name": "Coach speech pause and resume retain the existing TTS behavior",
+      "status": "PASS"
+    },
+    {
+      "name": "Pregnancy policy blocks local automatic menu even without health sharing",
+      "status": "PASS"
+    },
+    {
+      "name": "All demo edits leave personal diary, profile and consent byte-identical",
+      "status": "PASS"
+    }
+  ],
+  "measurements": {
+    "initialDiaryRecords": 1094,
+    "weightRecords": 91,
+    "expandedSearchResults": 40,
+    "qualityRowsSettimana": 7,
+    "qualityRowsMese": 30,
+    "qualityRowsAnno": 12,
+    "mockedToolLoopCalls": 2,
+    "finalDiaryRecords": 1094
+  },
+  "status": "PASS",
+  "errors": [],
+  "warnings": [],
+  "alerts": [],
+  "requests": {
+    "filesystem": 8,
+    "api": [
+      {
+        "path": "/api/coach-chat",
+        "method": "POST"
+      },
+      {
+        "path": "/api/coach-chat",
+        "method": "POST"
+      }
+    ]
+  }
+}

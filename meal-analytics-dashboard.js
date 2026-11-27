@@ -237,10 +237,10 @@ if (base !== null && base > 0 && value !== null) {
       from, to, validMealIds
     );
 
+    const grouped=new Map();
+    for(const row of days.values()){const key=bucketKey(row.date,grouping);if(!grouped.has(key))grouped.set(key,[]);grouped.get(key).push(row);}
     return buckets(from, to, grouping).map(key => {
-      const rows = [...days.values()].filter(
-        row => bucketKey(row.date, grouping) === key
-      );
+      const rows=grouped.get(key)||[];
 
       const knownDays = rows.filter(
         row => row.knownWeight > 0
@@ -269,10 +269,51 @@ if (base !== null && base > 0 && value !== null) {
     });
   }
 
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
 function InteractiveChart({
   labels, series, chartType, comparisonMode, limit
 }) {
   const [active, setActive] = React.useState(null);
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect(()=>{if(!expanded||typeof document==='undefined')return;const old=document.body.style.overflow;document.body.style.overflow='hidden';const close=e=>{if(e.key==='Escape')setExpanded(false);};document.addEventListener('keydown',close);return()=>{document.body.style.overflow=old;document.removeEventListener('keydown',close);};},[expanded]);
   const [viewport, setViewport] = React.useState({
     start: 0,
     count: null
@@ -613,8 +654,8 @@ function handleTouchEnd(event) {
     );
   }
 
-  return h('div', null,
-
+  return h('div', {className:expanded?'v733-meal-fullscreen v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?'Grafico analisi pasti esteso':undefined},
+    h('button',{type:'button',className:'ghost',onClick:()=>setExpanded(v=>!v)},expanded?'Chiudi grafico':'Espandi grafico'),expanded&&h('p',{className:'muted'},'Sul telefono ruota il dispositivo in orizzontale per più spazio.'),
     h('div', {
       style: {
         display: 'flex',
@@ -693,32 +734,9 @@ function handleTouchEnd(event) {
   width: '100%',
   minWidth: 0,
   display: 'block',
-  touchAction: 'none'
+  touchAction: 'pan-y pinch-zoom'
 },
-onTouchStart: handleTouchStart,
-onTouchMove: handleTouchMove,
-onTouchEnd: handleTouchEnd,
-onTouchCancel: () => {
-  gestureRef.current = null;
-},
-onPointerDown: event => {
-  if (event.pointerType === 'mouse') {
-    pickPoint(event);
-  }
-},
-onPointerMove: event => {
-  if (
-    event.pointerType === 'mouse' &&
-    event.buttons === 1
-  ) {
-    pickPoint(event);
-  }
-},
-onPointerLeave: () => {
-  if (!gestureRef.current) {
-    setActive(null);
-  }
-}
+...v734Gesture(gestureRef,pickPoint)
 },
           ...[0, .25, .5, .75, 1].map(fraction =>
             h('g', { key: fraction },
@@ -948,13 +966,13 @@ onPointerLeave: () => {
     meals = [],
     goals = [],
     from: defaultFrom,
-    to: defaultTo
+    to: defaultTo, today
   }) {
     const [chartType, setChartType] = React.useState('line');
     const [mode, setMode] = React.useState('meals');
     const [metricId, setMetricId] = React.useState('kcal');
     const [secondId, setSecondId] = React.useState('protein');
-    const [grouping, setGrouping] = React.useState('day');
+    const [groupingChoice, setGrouping] = React.useState('auto');
     const [chosen, setChosen] = React.useState([]);
     const [limitText, setLimitText] = React.useState('');
     const [showTable, setShowTable] = React.useState(false);
@@ -962,8 +980,14 @@ onPointerLeave: () => {
     const [firstTo,setFirstTo]=React.useState('');
     const [secondFrom,setSecondFrom]=React.useState('');
     const [secondTo,setSecondTo]=React.useState('');
-    const from=mode==='periods'?(firstFrom||defaultFrom):defaultFrom;
-    const to=mode==='periods'?(firstTo||defaultTo):defaultTo;
+    const [range,setRange]=React.useState('custom');
+    const [rangeFrom,setRangeFrom]=React.useState('');
+    const [rangeTo,setRangeTo]=React.useState('');
+    const anchor=validDate(today)?today:defaultTo;
+    const end=range==='custom'?(rangeTo||defaultTo):anchor;
+    const begin=range==='custom'?(rangeFrom||defaultFrom):addDays(anchor,1-Number(range));
+    const from=mode==='periods'?(firstFrom||begin):begin;
+    const to=mode==='periods'?(firstTo||end):end;
 
     const catalog = React.useMemo(
       () => metricCatalog(foods, goals),
@@ -1009,6 +1033,9 @@ onPointerLeave: () => {
     const previousStart=secondFrom||(validRange?addDays(defaultPreviousEnd,-countDays(from,to)+1):'');
     const validComparison=validDate(previousStart)&&validDate(previousEnd)&&previousStart<=previousEnd&&countDays(previousStart,previousEnd)<=3660;
 
+    const daysCount=validRange?Math.max(countDays(from,to),mode==='periods'&&validComparison?countDays(previousStart,previousEnd):0):0;
+    const allowed=daysCount<=62?['day','week','month']:daysCount<=366?['week','month']:['month'];
+    const grouping=allowed.includes(groupingChoice)?groupingChoice:allowed[0];
     const limit = limitText.trim() === ''
       ? null
       : number(limitText);
@@ -1140,6 +1167,7 @@ onPointerLeave: () => {
     },
 
       h('h2', null, 'Grafico analisi pasti'),
+      h('div',{className:'v733-chart-tools'},h('label',null,'Intervallo ',h('select',{value:range,onChange:e=>{setRange(e.target.value);setFirstFrom('');setFirstTo('');}},...[["7","Ultimi 7 giorni"],["30","Ultimi 30 giorni"],["365","Ultimo anno"],["custom","Personalizzato"]].map(([value,label])=>h('option',{key:value,value},label)))),mode!=='periods'&&range==='custom'&&h('label',null,'Dal ',h('input',{type:'date',value:from,onChange:e=>setRangeFrom(e.target.value)})),mode!=='periods'&&range==='custom'&&h('label',null,'Al ',h('input',{type:'date',value:to,onChange:e=>setRangeTo(e.target.value)})),h('small',null,`${from||'—'} → ${to||'—'} · ${grouping==='day'?'giornaliero':grouping==='week'?'settimanale':'mensile'}`)),
 
       h('p', { className: 'muted tiny' },
         'Seleziona dati, pasti, grafico e intervallo. ' +
@@ -1212,13 +1240,9 @@ onPointerLeave: () => {
 
         selectControl(
           'Raggruppamento',
-          grouping,
+          allowed.includes(groupingChoice)?groupingChoice:'auto',
           setGrouping,
-          [
-            option('day', 'Giornaliero'),
-            option('week', 'Settimanale'),
-            option('month', 'Mensile')
-          ]
+          [option('auto','Automatico'),...allowed.map(id=>option(id,({day:'Giornaliero',week:'Settimanale',month:'Mensile'})[id]))]
         )
       ),
 

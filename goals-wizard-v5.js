@@ -16,8 +16,8 @@
     { id: 'sex', title: 'Quale coefficiente usare nella stima?', description: 'L’equazione energetica utilizza un coefficiente femminile o maschile. Questa scelta non descrive la tua identità; se non è adatta a te, puoi mantenere gli obiettivi manuali.', type: 'choice', options: [choice('female', 'Coefficiente femminile'), choice('male', 'Coefficiente maschile'), choice('manual', 'Preferisco gli obiettivi manuali')] },
     { id: 'height', title: 'Quanto sei alto/a?', description: 'Serve insieme a età e peso per la stima di energia a riposo.', type: 'number', min: 70, max: 250, step: 0.1, unit: 'cm', placeholder: 'La tua altezza' },
     { id: 'weight', title: 'Qual è il tuo peso attuale?', description: 'Puoi modificare il valore proposto. Nessuna misurazione viene aggiunta al diario Peso.', type: 'number', min: 15, max: 500, step: 0.1, unit: 'kg', placeholder: 'Il tuo peso' },
-    { id: 'physiologicalState', title: 'C’è una fase particolare da considerare?', description: 'Gravidanza e allattamento richiedono riferimenti specifici: il percorso manterrà i tuoi obiettivi attuali.', type: 'choice', when: a => a.sex === 'female', options: [choice('none', 'Nessuna di queste'), choice('pregnant', 'Gravidanza'), choice('lactating', 'Allattamento'), choice('unknown', 'Preferisco non indicarlo')] },
-    { id: 'menstrualStatus', title: 'Quale riferimento usare per il ferro?', description: 'Serve solo se, nel riepilogo, sceglierai di aggiornare i riferimenti dei micronutrienti. Non viene dedotto dalla tua età.', type: 'choice', when: a => a.sex === 'female' && a.physiologicalState === 'none', options: [choice('menstruating', 'Ho le mestruazioni'), choice('postmenopause', 'Sono in postmenopausa'), choice('unknown', 'Altro / preferisco non indicarlo', 'Il riferimento per il ferro resterà invariato')] },
+    { id: 'physiologicalState', title: 'C’è una fase particolare da considerare?', description: 'Gravidanza e allattamento richiedono riferimenti specifici: il percorso manterrà i tuoi obiettivi attuali.', type: 'choice', options: [choice('none', 'Nessuna di queste'), choice('pregnant', 'Gravidanza'), choice('lactating', 'Allattamento'), choice('unknown', 'Preferisco non indicarlo')] },
+    { id: 'menstrualStatus', title: 'Quale riferimento usare per il ferro?', description: 'Serve solo se, nel riepilogo, sceglierai di aggiornare i riferimenti dei micronutrienti. Non viene dedotto dalla tua età.', type: 'choice', when: a => a.sex === 'female' && a.physiologicalState === 'none', options: [choice('menstruating', 'Ho le mestruazioni'), choice('postmenopause', 'Sono in menopausa'), choice('unknown', 'Altro / preferisco non indicarlo', 'Il riferimento per il ferro resterà invariato')] },
     { id: 'careContext', title: 'Devi seguire indicazioni personalizzate?', description: 'Per esempio un piano prescritto, condizioni che influenzano la nutrizione o un rapporto difficile con il cibo. Non ti chiediamo diagnosi o dettagli.', type: 'choice', options: [choice('none', 'No, non ho indicazioni di questo tipo'), choice('professional', 'Sì, voglio mantenere il mio piano', 'Salviamo le preferenze senza calcolare nuovi obiettivi'), choice('unknown', 'Preferisco non indicarlo', 'Gli obiettivi restano manuali')] },
     { id: 'activity', title: 'Quanto movimento c’è nella tua giornata?', description: 'Considera tutta la giornata, incluso l’allenamento: non lo aggiungeremo una seconda volta alle calorie.', type: 'choice', options: [choice('low', 'Prevalentemente sedentaria', 'Molte ore seduto/a, poco movimento complessivo · PAL 1,4'), choice('deskTraining', 'Giornata soprattutto seduta, con allenamenti regolari', 'Lavoro o studio seduto/a, pochi passi e allenamenti moderati 3–4 volte a settimana · PAL iniziale 1,5'), choice('light', 'Un po’ di movimento', 'Cammino o mi muovo regolarmente anche fuori dagli allenamenti · PAL 1,6'), choice('active', 'Attiva', 'Molto movimento anche fuori dalla palestra: lavoro fisico o molti passi ogni giorno · PAL 1,8'), choice('veryActive', 'Molto attiva', 'Attività fisica intensa nel complesso della giornata · PAL 2,0')] },
     { id: 'trainingDays', title: 'Quante volte ti alleni in una settimana tipica?', description: 'Aiuta a descrivere le tue abitudini. Non raddoppia l’energia già considerata nel movimento quotidiano.', type: 'choice', options: [choice('0', 'Per ora non mi alleno'), choice('1-2', '1–2 volte'), choice('3-4', '3–4 volte'), choice('5+', '5 o più volte')] },
@@ -80,7 +80,7 @@
   }
   function answerWith(answers, questionId, value) {
     const next = { ...answers, [questionId]: value };
-    if (questionId === 'sex' && value !== 'female') { delete next.physiologicalState; delete next.menstrualStatus; }
+    if (questionId === 'sex' && value !== 'female') delete next.menstrualStatus; // A physiological declaration never depends on the equation coefficient.
     if (questionId === 'physiologicalState' && value !== 'none') delete next.menstrualStatus;
     if (questionId === 'trainingDays' && value === '0') delete next.trainingType;
     return next;
@@ -93,29 +93,27 @@
     return missing ? { questionId: missing.id, review: false, missing: true } : { review: true };
   }
   function safeStorage() {
-    try { return root.localStorage || null; } catch (_) { return null; }
+    try { return (globalThis.NutriTraceEnvironment?.storage || globalThis.localStorage) || null; } catch (_) { return null; }
+  }
+  function normalizeDraftExtras(value, answers) {
+    return root.NutriTraceStrategy?.normalizeExtrasV73 ? root.NutriTraceStrategy.normalizeExtrasV73(value,answers) : null;
   }
   function readDraft(storage) {
     try {
-      const s = storage || safeStorage();
-      if (!s) return null;
-      const raw = s.getItem(DRAFT_KEY);
-      if (!raw || raw.length > 20000) return null;
-      const value = JSON.parse(raw);
-      if (!value || value.version !== VERSION) return null;
-      const answers = sanitizeAnswers(value.answers);
-      const questions = getQuestions(answers);
-      const index = questions.findIndex(q => q.id === value.questionId);
-      return { answers, questionId: questions[Math.max(0, index)].id, savedAt: typeof value.savedAt === 'string' ? value.savedAt.slice(0, 40) : '' };
-    } catch (_) { return null; }
+      const s=storage||safeStorage();if(!s)return null;
+      const raw=s.getItem(DRAFT_KEY);if(!raw||raw.length>40000)return null;
+      const value=JSON.parse(raw);if(!value||value.version!==VERSION)return null;
+      const answers=sanitizeAnswers(value.answers),questions=getQuestions(answers),index=questions.findIndex(q=>q.id===value.questionId);
+      const extra=normalizeDraftExtras(value.extra,answers),stage=['questions','extras','review'].includes(value.stage)?value.stage:'questions';
+      return {answers,questionId:questions[Math.max(0,index)].id,stage:stage==='extras'&&!extra?'questions':stage,extra,updateMicros:value.updateMicros===true,savedAt:typeof value.savedAt==='string'?value.savedAt.slice(0,40):''};
+    } catch(_){return null;}
   }
-  function saveDraft(answers, questionId, storage) {
+  // Fourth argument preserves backwards compatibility with V5 storage adapters.
+  function saveDraft(answers,questionId,storage,state={}) {
     try {
-      const s = storage || safeStorage();
-      if (!s) return false;
-      s.setItem(DRAFT_KEY, JSON.stringify({ version: VERSION, answers: sanitizeAnswers(answers), questionId, savedAt: new Date().toISOString() }));
-      return true;
-    } catch (_) { return false; }
+      const s=storage||safeStorage();if(!s)return false;const clean=sanitizeAnswers(answers);
+      s.setItem(DRAFT_KEY,JSON.stringify({version:VERSION,answers:clean,questionId,stage:['questions','extras','review'].includes(state.stage)?state.stage:'questions',extra:normalizeDraftExtras(state.extra,clean),updateMicros:state.updateMicros===true,savedAt:new Date().toISOString()}));return true;
+    } catch(_){return false;}
   }
   function clearDraft(storage) {
     try { const s = storage || safeStorage(); if (s) s.removeItem(DRAFT_KEY); return true; } catch (_) { return false; }
@@ -137,18 +135,43 @@
       focus: [labelFor('focus', a.focus), labelFor('confidence', a.confidence)].filter(Boolean).join(' · ')
     };
   }
+  // One policy for UI, local calculations and the Coach. Manual entries are never presented as recommendations.
+  function policy(input) {
+    const p=input&&typeof input==='object'?input:{},a=p.wizardV5?.answers||p;
+    const phases=[p.physiologicalState,a.physiologicalState];
+    const reasons=[];
+    const add=(code,message,organizational=false)=>reasons.push({code,message,organizational});
+    if(phases.includes('pregnant'))add('PREGNANCY','In gravidanza l’app non genera piani nutrizionali, deficit, stime TDEE o proposte di obiettivi. Puoi annotare manualmente le indicazioni del professionista.',true);
+    else if(phases.includes('lactating'))add('LACTATION','Durante l’allattamento l’app non genera piani nutrizionali, deficit, stime TDEE o proposte di obiettivi. Puoi annotare manualmente le indicazioni del professionista.',true);
+    else if(phases.includes('unknown')||(a.sex==='female'&&!phases.includes('none')))add('PHYSIOLOGY_UNSPECIFIED','Senza questo contesto manteniamo gli obiettivi manuali e non generiamo indicazioni nutrizionali personalizzate.',true);
+    const age=number(a.age),weight=number(p.weight??a.weight),height=number(a.height);
+    if(age!==null&&age<18)add('UNDERAGE','Per i minori gli obiettivi restano quelli inseriti manualmente, con riferimenti adeguati alla crescita.',true);
+    if(a.careContext==='professional')add('PROFESSIONAL_PLAN','Le indicazioni del tuo professionista hanno la precedenza: nessuna nuova proposta nutrizionale automatica.',true);
+    else if(a.careContext==='unknown')add('CARE_UNSPECIFIED','Hai scelto di mantenere gli obiettivi manuali senza condividere il contesto di cura.',true);
+    if(age!==null&&age>78)add('AGE_OUTSIDE_EQUATION','La stima automatica usa un’equazione entro il suo intervallo di età gestito (18–78 anni).');
+    if(a.sex==='manual')add('MANUAL_COEFFICIENT','Hai scelto obiettivi manuali: il percorso non seleziona un coefficiente energetico al tuo posto.');
+    const bmi=weight>0&&height>0?weight/Math.pow(height/100,2):null;
+    if(bmi!==null&&(bmi<16||bmi>=40))add('BMI_OUTSIDE_EQUATION','Per BMI inferiore a 16 o da 40 serve una valutazione individuale. Puoi registrare gli obiettivi concordati con un professionista.');
+    else if(a.goal==='lose'&&(bmi!==null&&bmi<20||age!==null&&age>=65))add('AUTO_DEFICIT_GUARD','Il percorso non propone un deficit automatico con BMI sotto 20 o da 65 anni. Puoi mantenere un riferimento di mantenimento oppure usare obiettivi manuali.');
+    else if(a.goal==='gain'&&bmi!==null&&bmi>=30)add('AUTO_GAIN_GUARD','Il percorso non propone un surplus automatico con BMI da 30. Gli obiettivi manuali restano disponibili.');
+    if(['goal','age','sex','height','weight','careContext','activity'].some(id=>!Object.prototype.hasOwnProperty.call(a,id)&&!(id==='weight'&&weight!==null)))add('INCOMPLETE_PROFILE','Per una stima automatica servono i dati essenziali del percorso. Puoi già modificare gli obiettivi manuali.');
+    const organizationalOnly=reasons.some(x=>x.organizational),first=reasons[0];
+    return {version:1,manualTargetsAllowed:true,manualDayTargetsAllowed:true,manualRedistributionAllowed:!organizationalOnly,extraActivityAllowed:!organizationalOnly,automaticNutritionAllowed:reasons.length===0,organizationalOnly,reasonCode:first?.code||null,reason:first?.message||'',reasons,reasonCodes:reasons.map(x=>x.code)};
+  }
   function calculatePlan(input) {
     const a = sanitizeAnswers(input);
     const required = ['goal', 'age', 'sex', 'height', 'weight', 'careContext', 'activity'];
     if (required.some(id => !Object.prototype.hasOwnProperty.call(a, id))) return { eligible: false, reason: 'Completa i dati necessari prima del riepilogo.', code: 'INCOMPLETE' };
     const blocked = reason => ({ eligible: false, reason, code: 'MANUAL_PLAN', sourceIds: ['energy-mifflin', 'efsa-energy'] });
+    const contextPolicy=policy(a);
+    if (contextPolicy.organizationalOnly) return {...blocked(contextPolicy.reason),restriction:contextPolicy.reasonCode};
     if (a.age < 18) return blocked('Per chi ha meno di 18 anni il percorso salva solo le preferenze. Gli obiettivi nutrizionali richiedono riferimenti adatti alla crescita.');
     if (a.age > 78) return blocked('Fuori dall’intervallo di età studiato per questa equazione, manteniamo gli obiettivi attuali.');
     if (!['female', 'male'].includes(a.sex)) return blocked('Hai scelto gli obiettivi manuali. Le tue preferenze possono comunque essere salvate.');
-    if (a.sex === 'female' && a.physiologicalState !== 'none') return blocked('Questa fase richiede riferimenti specifici. Manteniamo i tuoi obiettivi e non calcoliamo una variazione di energia.');
+    if (['pregnant','lactating','unknown'].includes(a.physiologicalState) || a.sex === 'female' && a.physiologicalState !== 'none') return blocked('Questa fase richiede riferimenti specifici. Manteniamo i tuoi obiettivi e non calcoliamo una variazione di energia.');
     if (a.careContext !== 'none') return blocked('Il tuo piano personale ha la precedenza. Salviamo le preferenze e manteniamo gli obiettivi già presenti.');
     const bmi = a.weight / Math.pow(a.height / 100, 2);
-    if (bmi < 18.5 || bmi >= 40) return blocked('I dati inseriti richiedono una valutazione più individuale di quella disponibile in questo percorso. Gli obiettivi restano invariati.');
+    if (bmi < 16 || bmi >= 40) return blocked('I dati inseriti richiedono una valutazione più individuale di quella disponibile in questo percorso. Gli obiettivi restano invariati.');
     if (a.goal === 'lose' && (bmi < 20 || a.age >= 65)) {
       const reasons = [];
       if (bmi < 20) reasons.push('il BMI calcolato è inferiore a 20');
@@ -156,7 +179,7 @@
       // Keep the existing deficit guard. A maintenance alternative is offered
       // only if that plan independently passes all the original checks.
       const alternative = calculatePlan({ ...a, goal: 'maintain' });
-      return { ...blocked('Non applichiamo automaticamente una riduzione dell’energia perché ' + reasons.join(' e ') + '. Puoi concordare un obiettivo personale con un professionista.'), restriction: 'DEFICIT_GUARD', maintenanceAvailable: alternative.eligible };
+      return { ...blocked('Non applichiamo automaticamente una riduzione dell’energia perché ' + reasons.join(' e ') + '. Puoi concordare un obiettivo personale con un professionista.'), restriction: 'DEFICIT_GUARD', maintenanceAvailable: alternative.eligible, estimatedMaintenance: alternative.maintenance ?? null };
     }
     if (a.goal === 'gain' && bmi >= 30) return blocked('Per il profilo indicato non applichiamo automaticamente un aumento dell’energia. Manteniamo i tuoi obiettivi.');
     const henry = a.age === 18;
@@ -166,7 +189,7 @@
     const maintenance = bmr * pal;
     const adjustment = a.goal === 'lose' ? -0.10 : a.goal === 'gain' ? 0.05 : 0;
     const kcal = Math.round(maintenance * (1 + adjustment));
-    if (!Number.isFinite(kcal) || kcal < 1200 || kcal > 5000) return blocked('La stima cade fuori dall’intervallo gestito automaticamente dall’app. Verifica i dati oppure mantieni un obiettivo personale.');
+    if (!Number.isFinite(kcal) || kcal < 1200 || kcal > 5000) return {...blocked('La stima cade fuori dall’intervallo gestito automaticamente dall’app. Verifica i dati oppure mantieni un obiettivo personale.'), estimatedMaintenance:Number.isFinite(maintenance)?maintenance:null};
     const protein = Math.max(kcal * 0.20 / 4, a.weight * 0.83);
     const fat = kcal * 0.30 / 9;
     const carbs = (kcal - protein * 4 - fat * 9) / 4;
@@ -195,7 +218,7 @@
     return Number.isFinite(result) ? result : null;
   }
   function referenceChanges(goals, answers, plan, references) {
-    if (!plan.eligible || !references || typeof references.referenceForGoal !== 'function') return [];
+    if (policy(answers).organizationalOnly || !plan.eligible || !references || typeof references.referenceForGoal !== 'function') return [];
     const out = [];
     for (const g of goals || []) {
       if (!g || g.group === 'Energia e macro' || g.group === 'Personalizzati' || g.customized === true || g.id !== g.name) continue;
@@ -224,7 +247,8 @@
   }
   function applyPlan(profile, goals, input, options) {
     const answers = sanitizeAnswers(input);
-    const plan = calculatePlan(answers);
+    const appliedPolicy=policy({...profile,weight:answers.weight,wizardV5:{answers}});
+    const plan = appliedPolicy.organizationalOnly?{eligible:false,reason:appliedPolicy.reason,code:'MANUAL_PLAN',restriction:appliedPolicy.reasonCode}:calculatePlan(answers);
     const opts = options || {};
     const references = opts.references || root.NutriTraceNutritionReferences;
     let nextGoals = (goals || []).map(g => ({ ...g }));
@@ -252,7 +276,7 @@
     const context = contextForCoach(answers);
     nextProfile.wizardV5 = {
       version: VERSION, completedAt: opts.now || new Date().toISOString(), answers, context,
-      calculation: { eligible: plan.eligible, reason: plan.reason, method: plan.method || null, kcal: plan.kcal || null, bmr: plan.bmr || null, pal: plan.pal || null, adjustment: plan.adjustment || 0 },
+      calculation: { eligible: plan.eligible, reason: plan.reason, method: plan.method || null, kcal: plan.kcal || null, estimatedMaintenance: plan.estimatedMaintenance ?? plan.maintenance ?? null, bmr: plan.bmr || null, pal: plan.pal || null, adjustment: plan.adjustment || 0 },
       nutritionReferencesVersion: references && (references.version || references.VERSION) || null
     };
     return { profile: nextProfile, goals: nextGoals, context, summary: plan, updatedMicronutrients: changes.map(x => x.id), meals: mealPlan(answers, opts.meals) };
@@ -270,7 +294,8 @@
     const [error, setError] = R.useState('');
     const [applying, setApplying] = R.useState(false);
     const [updateMicros, setUpdateMicros] = R.useState(false);
-    const [extra,setExtra]=R.useState(()=>({distribution:props.profile?.weeklyStrategyV64?.enabled?'variable':'uniform',days:props.profile?.weeklyStrategyV64?.days||[5,6],percent:props.profile?.weeklyStrategyV64?.percent??5,average:'',preferences:props.profile?.advancedV64||{}}));
+    const initialExtra=()=>({distribution:props.profile?.weeklyStrategyV64?.enabled?'variable':'uniform',days:props.profile?.weeklyStrategyV64?.days||[5,6],percent:props.profile?.weeklyStrategyV64?.percent??5,average:'',preferences:root.NutriTraceStrategy?.preferences(props.profile?.advancedV64)||{},allergens:props.allergens||[],allergenChoice:'unchanged',navigation:{phase:'choice',questionId:'steps'},optionalAnswered:[]});
+    const [extra,setExtra]=R.useState(initialExtra);
     const backdropRef = R.useRef(null);
     const dialogRef = R.useRef(null);
     const headingRef = R.useRef(null);
@@ -282,7 +307,8 @@
     const index = Math.max(0, questions.findIndex(q => q.id === questionId));
     const question = questions[index];
     const answered = questions.filter(q => validateAnswer(q, answers[q.id])).length;
-    const plan = calculatePlan(answers);
+    const contextPolicy=policy({...props.profile,weight:answers.weight,wizardV5:{answers}});
+    const plan=contextPolicy.organizationalOnly?{eligible:false,reason:contextPolicy.reason,code:'MANUAL_PLAN',restriction:contextPolicy.reasonCode}:calculatePlan(answers);
     const references = root.NutriTraceNutritionReferences;
     let referencePlan=plan;try{if(plan.eligible&&extra.distribution==='variable'&&root.NutriTraceStrategy)referencePlan={...plan,kcal:root.NutriTraceStrategy.adjustedBase({...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},extra.average).kcal};}catch{}
     const microChanges = referenceChanges(props.goals, answers, referencePlan, references);
@@ -290,6 +316,18 @@
     exitRef.current = exitOpen;
     applyingRef.current = applying;
 
+    const extraProgress=root.NutriTraceStrategy?.optionalProgressV73?.(extra,answers);
+    const showingOptional=stage==='extras'&&extraProgress?.phase==='question';
+    const progressTotal=showingOptional?extraProgress.total:questions.length;
+    const progressAnswered=showingOptional?extraProgress.answered:answered;
+    const progressTitle=stage==='review'?'Riepilogo finale':showingOptional?'Facoltativa '+extraProgress.indexLabel+' di '+extraProgress.total:stage==='extras'?({choice:'Organizzazione settimanale',weekly:'Personalizza la settimana',allergies:'Allergeni da evidenziare',optional:'Preferenze facoltative'}[extraProgress?.phase]||'Preferenze'):('Domanda '+(index+1)+' di '+questions.length);
+    R.useEffect(()=>{
+      if(stage==='resume'||applyingRef.current||(!answered&&stage==='questions'))return;
+      saveDraft(answers,question.id,undefined,{stage,extra,updateMicros});
+    },[answers,question.id,stage,extra,updateMicros]);
+    R.useEffect(()=>{
+      if(stage==='extras'&&contentRef.current){contentRef.current.scrollTop=0;const title=contentRef.current.querySelector?.('h2');if(title){title.setAttribute('tabindex','-1');title.focus?.({preventScroll:true});}}
+    },[stage,extraProgress?.phase,extraProgress?.questionId]);
     R.useEffect(() => {
       const previousFocus = root.document.activeElement;
       const body = root.document.body;
@@ -409,19 +447,20 @@
     function renderReview() {
       const plannedMeals = mealPlan(answers, props.meals);
       let weeklyPreview=null, weeklySchedule=null, weeklyError='';
-      if(plan.eligible&&extra.distribution==='variable'&&root.NutriTraceStrategy){try{weeklyPreview=root.NutriTraceStrategy.adjustedBase({...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},extra.average);weeklySchedule=root.NutriTraceStrategy.buildSchedule(weeklyPreview,extra.days,extra.percent);}catch(e){weeklyError=e.message;}}
+      const distributionPlan=root.NutriTraceStrategy?.weeklyPlanV732(props.profile,props.goals,answers,{...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20});
+      if(distributionPlan?.eligible&&extra.distribution==='variable'&&root.NutriTraceStrategy){try{weeklyPreview=root.NutriTraceStrategy.adjustedBase(distributionPlan,distributionPlan.manualDistribution?'':extra.average);weeklySchedule=root.NutriTraceStrategy.buildSchedule(weeklyPreview,extra.days,extra.percent);}catch(e){weeklyError=e.message;}}
       const names = { kcal: ['Energia', 'kcal'], protein: ['Proteine', 'g'], carbs: ['Carboidrati', 'g'], fat: ['Grassi', 'g'], fiber: ['Fibre', 'g'] };
       return h('div', { className: 'v5-wizard-review' },
         h('p', { className: 'v5-wizard-kicker' }, 'PRONTO/A A PARTIRE'),
         h('h2', { ref: headingRef, tabIndex: -1 }, plan.eligible ? 'I tuoi riferimenti iniziali' : 'Le tue preferenze, il tuo piano'),
         h('p', { className: 'v5-wizard-description' }, plan.eligible ? 'Controlla il riepilogo. Puoi tornare alle risposte oppure applicare gli obiettivi e modificarli in qualsiasi momento.' : plan.reason),
-        plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, 'Gli obiettivi attuali restano invariati'), h('p', null, 'Salviamo le risposte e le preferenze del percorso; puoi anche aggiornare l’organizzazione dei pasti. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
+        plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, weeklySchedule&&distributionPlan?.manualDistribution?'La media dei tuoi obiettivi resta invariata':'Nessun nuovo obiettivo automatico'), Number.isFinite(plan.estimatedMaintenance)&&h('p',null,'Fabbisogno di mantenimento stimato (non applicato): '+displayNumber(plan.estimatedMaintenance,0)+' kcal/giorno.'), h('p', null, 'Il valore salvato in precedenza non è una nuova stima. Salviamo le risposte e le preferenze del percorso; puoi anche aggiornare l’organizzazione dei pasti. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
         !plan.eligible && plan.maintenanceAvailable ? h('div', { className: 'v5-wizard-notice' },
           h('strong', null, 'Vuoi calcolare invece gli obiettivi di mantenimento?'),
           h('p', null, 'Non prevede una riduzione dell’energia. Ti mostreremo la stima di calorie e macro prima di applicarla. Le altre risposte rimangono uguali.'),
           h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setAnswers(a => ({ ...a, goal: 'maintain' })); setUpdateMicros(false); setError(''); } }, 'Calcola mantenimento')
         ) : null,
-        weeklyError&&h('p',{role:'alert'},weeklyError), weeklySchedule&&h('div',{className:'v5-wizard-notice'},h('strong',null,'Obiettivo medio scelto: '+displayNumber(weeklyPreview.kcal,0)+' kcal/giorno'),h('p',null,'Budget: '+displayNumber(weeklyPreview.kcal*7,0)+' kcal/settimana'),h('div',{className:'v64-week-grid'},...weeklySchedule.map((d,i)=>h('div',{key:i},root.NutriTraceStrategy.days[i],h('b',null,displayNumber(d.kcal,0)+' kcal'))))),
+        weeklyError&&h('p',{role:'alert'},weeklyError), weeklySchedule&&h('div',{className:'v5-wizard-notice'},h('strong',null,(distributionPlan?.manualDistribution?'Media attuale invariata: ':'Obiettivo medio scelto: ')+displayNumber(weeklyPreview.kcal,0)+' kcal/giorno'),distributionPlan?.manualDistribution&&h('p',null,'Con la conferma cambierà solo la distribuzione settimanale, dalla prossima decorrenza prevista. Non viene calcolato un nuovo fabbisogno.'),h('p',null,'Budget: '+displayNumber(weeklyPreview.kcal*7,0)+' kcal/settimana'),h('div',{className:'v64-week-grid'},...weeklySchedule.map((d,i)=>h('div',{key:i},root.NutriTraceStrategy.days[i],h('b',null,displayNumber(d.kcal,0)+' kcal'))))),
         plan.eligible ? h('div', { className: 'v5-wizard-targets' }, Object.entries(names).map(([id, meta]) => {
           const old = (props.goals || []).find(g => g.id === id);
           let oldValue = numericGoal(old, props.profile && props.profile.weight);
@@ -435,7 +474,7 @@
           h('p', null, 'Fonti: ', h('a', { href: 'https://pubmed.ncbi.nlm.nih.gov/2305711/', target: '_blank', rel: 'noopener noreferrer' }, 'Mifflin 1990'), plan.method.startsWith('Henry') && h('a', { href: 'https://www.healthcouncil.nl/site/binaries/site-content/collections/documents/2022/08/16/dietary-reference-values-for-energy/Background-document_%2BDRVs-for-energy.pdf', target: '_blank', rel: 'noopener noreferrer' }, ' · Henry 2005 (tabella A1)'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/efsajournal/pub/3005', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA energia'), ' · ', h('a', { href: 'https://www.efsa.europa.eu/en/press/news/nda100326', target: '_blank', rel: 'noopener noreferrer' }, 'EFSA carboidrati, grassi e fibre'), '. I dettagli sono anche in Dati → Fonti scientifiche.')
         ) : null,
         plan.eligible && microChanges.length ? h('section', { className: 'v5-wizard-micros' },
-          h('label', { className: 'v5-wizard-toggle' }, h('input', { type: 'checkbox', checked: updateMicros, onChange: event => setUpdateMicros(event.target.checked) }), h('span', null, h('strong', null, 'Aggiorna anche i riferimenti dei micronutrienti'), h('small', null, 'Riferimenti compatibili: ', microChanges.length, ' · diversi dai precedenti: ',microChanges.filter(x=>x.changed).length,' · già uguali: ',microChanges.filter(x=>!x.changed).length,'. Gli obiettivi personalizzati restano invariati.'))),
+          h('label', { className: 'v5-wizard-toggle v731-micro-toggle' }, h('input', { type: 'checkbox', checked: updateMicros, onChange: event => setUpdateMicros(event.target.checked) }), h('span', null, h('strong', null, 'Configura i micronutrienti (consigliato)'), h('small', null, 'Riferimenti compatibili: ', microChanges.length, ' · diversi dai precedenti: ',microChanges.filter(x=>x.changed).length,' · già uguali: ',microChanges.filter(x=>!x.changed).length,'. Gli obiettivi personalizzati restano invariati.'))),
           updateMicros ? h('details', { open: true, className: 'v5-wizard-explanation' }, h('summary', null, 'Valori che verranno applicati'), h('ul', { className: 'v5-wizard-micro-list' }, microChanges.map(change => h('li', { key: change.id }, h('span', null, change.name), h('strong', null, displayNumber(change.previousDaily), ' → ',displayNumber(change.daily), ' ', change.unit, '/giorno',change.changed?' · aggiornato':' · invariato')))), h('p', { className: 'v5-wizard-footnote' }, 'I riferimenti EFSA descrivono popolazioni sane, non una prescrizione individuale. I target settimanali vengono convertiti in 7 giorni; i limiti superiori non diventano obiettivi.')) : null
         ) : null,
         plannedMeals ? h('div', { className: 'v5-wizard-notice' },
@@ -443,20 +482,28 @@
           h('p', null, plannedMeals.map(m => m.name).join(' · ')),
           h('p', null, 'Orari: ' + (labelFor('schedule', answers.schedule) || 'Non indicati') + '. Nessun orario obbligatorio.'),
           h('p', null, 'I pasti non inclusi verranno rimossi dalla configurazione attiva. Le loro registrazioni restano nel diario come Senza pasto; i preferiti restano salvati. Puoi ripristinare la configurazione precedente insieme agli obiettivi.')) : null,
+        h('details',{className:'v5-wizard-explanation v73-answer-review',open:true},h('summary',null,'Riepilogo risposte'),
+          h('dl',null,...completedAnswers({wizardV5:{completedAt:'review',answers}}).map(row=>h('div',{key:row.id},h('dt',null,row.question),h('dd',null,row.answer),h('button',{type:'button',className:'v5-wizard-text-button',onClick:()=>{setQuestionId(row.id);setStage('questions');}},'Modifica risposta')))),
+          h('h3',null,'Preferenze facoltative'),
+          ...(root.NutriTraceStrategy?.optionalAnswerSummaryV73?.({wizardV5:{answers},advancedV64:extra.preferences},extra)||[]).map(row=>h('div',{key:row.id,className:'v73-answer-row'},h('strong',null,row.question),h('p',null,row.answer),!row.id.endsWith('-legacy')&&h('button',{type:'button',className:'v5-wizard-text-button',onClick:()=>{setExtra(v=>({...v,navigation:{phase:'question',questionId:row.id.replace(/^advanced-/,'')}}));setStage('extras');}},'Modifica risposta'))),
+          !(root.NutriTraceStrategy?.optionalAnswerSummaryV73?.({wizardV5:{answers},advancedV64:extra.preferences},extra)||[]).length&&h('p',null,'Nessuna preferenza facoltativa indicata.'),
+          h('h3',null,'Allergeni'),h('p',null,extra.allergenChoice==='none'?'Nessun allergene da segnalare':extra.allergenChoice==='selected'?(extra.allergens||[]).map(id=>root.NutriTraceIntelligence?.ALLERGENS?.[id]||id).join(' · ')||'Nessun allergene selezionato':'Mantieni le impostazioni attuali'),
+          root.NutriTraceStrategy?.WizardExtras&&h('button',{type:'button',className:'v5-wizard-text-button',onClick:()=>{setExtra(v=>({...v,navigation:{...v.navigation,phase:'allergies'}}));setStage('extras');}},'Rivedi allergeni')),
+        h('aside',{className:'v731-coach-tip'},h('strong',null,'Hai bisogno di aiuto? Prova il Coach AI'),h('p',null,'Dopo aver salvato, apri Coach AI e chiedi “Cosa puoi fare per me?” per scoprire come usare NutriTrace e le sue funzioni.')),
         h('div', { className: 'v5-wizard-privacy' }, h('strong', null, 'Le risposte restano in questo browser'), h('p', null, 'Il percorso non invia risposte al Coach. Nella chat puoi scegliere separatamente se condividere le preferenze e le informazioni nutrizionali.')),
-        h('div', { className: 'v5-wizard-question-actions' }, h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setStage(root.NutriTraceStrategy?.WizardExtras?'extras':'questions'); setQuestionId(questions[questions.length - 1].id); setError(''); } }, '← Rivedi le risposte'), h('button', { type: 'button', className: 'v5-wizard-primary', disabled: applying||!!weeklyError, onClick: apply }, applying ? 'Salvataggio…' : plan.eligible ? 'Applica obiettivi' : 'Salva le preferenze'))
+        h('div', { className: 'v5-wizard-question-actions' }, h('button', { type: 'button', className: 'v5-wizard-secondary', disabled: applying, onClick: () => { setStage(root.NutriTraceStrategy?.WizardExtras?'extras':'questions'); setQuestionId(questions[questions.length - 1].id); setError(''); } }, '← Rivedi le risposte'), h('button', { type: 'button', className: 'v5-wizard-primary', disabled: applying||!!weeklyError, onClick: apply }, applying ? 'Salvataggio…' : plan.eligible ? 'Applica obiettivi' : weeklySchedule&&distributionPlan?.manualDistribution ? 'Salva preferenze e distribuzione' : 'Salva le preferenze'))
       );
     }
     function renderExit() {
-      return h('div', { className: 'v5-wizard-exit' }, h('span', { className: 'v5-wizard-hero-mark', 'aria-hidden': true }, '↗'), h('h2', { ref: headingRef, tabIndex: -1 }, 'Riprendi quando vuoi'), h('p', { className: 'v5-wizard-description' }, 'I tuoi obiettivi non sono stati modificati. Puoi tenere una bozza in questo browser e completarla più avanti.'), h('div', { className: 'v5-wizard-stack' }, h('button', { type: 'button', className: 'v5-wizard-primary', onClick: () => { if (saveDraft(stage === 'resume' && draft ? draft.answers : answers, stage === 'resume' && draft ? draft.questionId : question.id)) close(); else setError('Non è stato possibile salvare la bozza nel browser. Puoi continuare o uscire senza salvarla.'); } }, 'Salva bozza ed esci'), h('button', { type: 'button', className: 'v5-wizard-secondary', onClick: () => { clearDraft(); close(); } }, 'Esci senza salvare'), h('button', { type: 'button', className: 'v5-wizard-text-button', onClick: () => { setError(''); setExitOpen(false); } }, 'Continua il percorso')));
+      return h('div', { className: 'v5-wizard-exit' }, h('span', { className: 'v5-wizard-hero-mark', 'aria-hidden': true }, '↗'), h('h2', { ref: headingRef, tabIndex: -1 }, 'Riprendi quando vuoi'), h('p', { className: 'v5-wizard-description' }, 'I tuoi obiettivi non sono stati modificati. Puoi tenere una bozza in questo browser e completarla più avanti.'), h('div', { className: 'v5-wizard-stack' }, h('button', { type: 'button', className: 'v5-wizard-primary', onClick: () => { if (saveDraft(stage==='resume'&&draft?draft.answers:answers,stage==='resume'&&draft?draft.questionId:question.id,undefined,stage==='resume'&&draft?draft:{stage,extra,updateMicros})) close(); else setError('Non è stato possibile salvare la bozza nel browser. Puoi continuare o uscire senza salvarla.'); } }, 'Salva bozza ed esci'), h('button', { type: 'button', className: 'v5-wizard-secondary', onClick: () => { clearDraft(); close(); } }, 'Esci senza salvare'), h('button', { type: 'button', className: 'v5-wizard-text-button', onClick: () => { setError(''); setExitOpen(false); } }, 'Riprendi percorso')));
     }
     function renderResume() {
-      return h('div', { className: 'v5-wizard-resume' }, h('span', { className: 'v5-wizard-hero-mark', 'aria-hidden': true }, '↗'), h('p', { className: 'v5-wizard-kicker' }, 'BENTORNATO/A'), h('h2', { ref: headingRef, tabIndex: -1 }, 'Ripartiamo dalla tua bozza?'), h('p', { className: 'v5-wizard-description' }, 'Hai un percorso salvato in questo browser. Nessun obiettivo è stato cambiato.'), h('div', { className: 'v5-wizard-stack' }, h('button', { type: 'button', className: 'v5-wizard-primary', onClick: () => { setAnswers(draft.answers); setQuestionId(draft.questionId); setStage('questions'); } }, 'Riprendi il percorso'), h('button', { type: 'button', className: 'v5-wizard-secondary', onClick: () => { clearDraft(); setAnswers(initialAnswers(props.profile)); setQuestionId('goal'); setStage('questions'); } }, 'Ricomincia dall’inizio')));
+      return h('div', { className: 'v5-wizard-resume' }, h('span', { className: 'v5-wizard-hero-mark', 'aria-hidden': true }, '↗'), h('p', { className: 'v5-wizard-kicker' }, 'BENTORNATO/A'), h('h2', { ref: headingRef, tabIndex: -1 }, 'Ripartiamo dalla tua bozza?'), h('p', { className: 'v5-wizard-description' }, 'Hai un percorso salvato in questo browser. Nessun obiettivo è stato cambiato.'), h('div', { className: 'v5-wizard-stack' }, h('button', { type: 'button', className: 'v5-wizard-primary', onClick: () => { setAnswers(draft.answers); setQuestionId(draft.questionId); setExtra(draft.extra?{...draft.extra,allergens:draft.extra.allergenChoice==='unchanged'?(props.allergens||[]):draft.extra.allergens}:initialExtra()); setUpdateMicros(draft.updateMicros===true); setStage(draft.stage||'questions'); } }, 'Riprendi percorso'), h('button', { type: 'button', className: 'v5-wizard-secondary', onClick: () => { clearDraft(); setAnswers(initialAnswers(props.profile)); setQuestionId('goal'); setExtra(initialExtra()); setUpdateMicros(false); setStage('questions'); } }, 'Ricomincia dall’inizio')));
     }
     const content = h('div', { className: 'v5-wizard-backdrop', ref: backdropRef }, h('section', { className: 'v5-wizard-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Personalizza i miei obiettivi', ref: dialogRef, tabIndex: -1 },
       h('header', { className: 'v5-wizard-header' }, h('div', { className: 'v5-wizard-brand' }, h('span', { 'aria-hidden': true }, '◒'), h('div', null, h('strong', null, 'NutriTrace'), h('small', null, 'Personalizza i miei obiettivi'))), h('button', { type: 'button', className: 'v5-wizard-close', 'aria-label': exitOpen ? 'Torna al percorso' : 'Esci dal percorso', disabled: applying, onClick: () => { setError(''); setExitOpen(!exitOpen); } }, '×')),
-      !exitOpen && stage !== 'resume' ? h('div', { className: 'v5-wizard-progress-area' }, h('div', { className: 'v5-wizard-progress-label', 'aria-live': 'polite' }, h('strong', null, stage === 'review' ? 'Riepilogo finale' : 'Domanda ' + (index + 1) + ' di ' + questions.length), h('span', null, answered + ' risposte · ' + (questions.length - answered) + ' da completare')), h('div', { className: 'v5-wizard-progress', role: 'progressbar', 'aria-label': 'Risposte completate', 'aria-valuemin': 0, 'aria-valuemax': questions.length, 'aria-valuenow': answered }, h('span', { style: { width: (100 * answered / questions.length) + '%' } }))) : null,
-      h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : stage === 'extras' ? h(root.NutriTraceStrategy.WizardExtras,{value:extra,onChange:setExtra,answers,plan:{...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},onBack:()=>{setStage('questions');setQuestionId(questions[questions.length-1].id);},onNext:()=>setStage('review')}) : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
+      !exitOpen && stage !== 'resume' ? h('div', { className: 'v5-wizard-progress-area' }, h('div', { className: 'v5-wizard-progress-label', 'aria-live': 'polite' }, h('strong', null, progressTitle), h('span', null, progressAnswered + ' risposte · ' + (progressTotal - progressAnswered) + ' da completare' + (showingOptional?' · tutte facoltative':''))), h('div', { className: 'v5-wizard-progress', role: 'progressbar', 'aria-label': showingOptional?'Domande facoltative completate':'Risposte essenziali completate', 'aria-valuemin': 0, 'aria-valuemax': progressTotal, 'aria-valuenow': progressAnswered }, h('span', { style: { width: (100 * progressAnswered / progressTotal) + '%' } }))) : null,
+      h('div', { className: 'v5-wizard-content', ref: contentRef }, exitOpen ? renderExit() : stage === 'resume' ? renderResume() : stage === 'review' ? renderReview() : stage === 'extras' ? h(root.NutriTraceStrategy.WizardExtras,{value:extra,onChange:setExtra,answers,profile:props.profile,goals:props.goals,plan:{...plan,allowReduction:answers.age<65&&answers.weight/((answers.height/100)**2)>=20},onBack:()=>{setStage('questions');setQuestionId(questions[questions.length-1].id);},onNext:()=>setStage('review')}) : renderQuestion(), error ? h('p', { className: 'v5-wizard-error', role: 'alert' }, error) : null),
       !exitOpen && stage === 'questions' ? h('footer', { className: 'v5-wizard-footer v58-wizard-footer' },
         h('div', { className: 'v58-wizard-actions' },
           h('button', { type: 'button', className: 'v5-wizard-secondary v58-back', disabled: index === 0, onClick: () => { setError(''); setQuestionId(questions[index - 1].id); } }, '← Indietro'),
@@ -465,5 +512,5 @@
     ));
     return root.ReactDOM && root.ReactDOM.createPortal ? root.ReactDOM.createPortal(content, root.document.body) : content;
   }
-  return Object.freeze({ View, VERSION, DRAFT_KEY, MAX_QUESTIONS, QUESTIONS, getQuestions, validateAnswer, sanitizeAnswers, initialAnswers, calculatePlan, mealPlan, referenceChanges, applyPlan, contextForCoach, readDraft, saveDraft, clearDraft, displayNumber, completedAnswers, answerWith, nextStep });
+  return Object.freeze({ View, VERSION, DRAFT_KEY, MAX_QUESTIONS, QUESTIONS, getQuestions, validateAnswer, sanitizeAnswers, initialAnswers, calculatePlan, mealPlan, referenceChanges, applyPlan, contextForCoach, policy, readDraft, saveDraft, clearDraft, displayNumber, completedAnswers, answerWith, nextStep });
 });
