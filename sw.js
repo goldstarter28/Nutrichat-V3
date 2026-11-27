@@ -1,7 +1,7 @@
 
 'use strict';
 
-const CACHE = 'nutritrace-v7-20261127-v732';
+const CACHE = 'nutritrace-v7-20261127-v733';
 // Replaces nutritrace-v7-20261126-v72; immutable source DB caches are preserved.
 
 const CORE = [

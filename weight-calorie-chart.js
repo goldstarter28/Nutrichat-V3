@@ -58,6 +58,7 @@
     const [period, setPeriod] = useState('90');
     const [revision, refresh] = useState(0);
     const [selected, setSelected] = useState(null);
+    const [view,setView]=useState(null);
 
     const weights = useMemo(
       () => readWeights(),
@@ -69,16 +70,17 @@
       today.getTime() - today.getTimezoneOffset() * 60000
     ).toISOString().slice(0, 10);
 
-    const end = timestamp(localToday);
+    const endAll = timestamp(localToday);
 
-    const start = period === 'all'
+    const startAll = period === 'all'
       ? Math.min(
-          end,
-          ...weights.map(e => timestamp(e.date)),
-          ...logs.map(e => timestamp(e.date))
-            .filter(t => t !== null)
+          weights.reduce((v,e)=>Math.min(v,timestamp(e.date)),endAll),
+          logs.reduce((v,e)=>{const t=timestamp(e.date);return t===null?v:Math.min(v,t);},endAll)
         )
-      : end - (Number(period) - 1) * DAY;
+      : endAll - (Number(period) - 1) * DAY;
+    const spanAll=Math.max(DAY,endAll-startAll),size=Math.min(spanAll,Math.max(DAY,view?.size??spanAll)),start=Math.max(startAll,Math.min(endAll-size,view?.start??startAll)),end=Math.min(endAll,start+size);
+    const move=(s,n)=>{setView({start:Math.max(startAll,Math.min(endAll-n,s)),size:n});setSelected(null);};
+    const zoom=f=>{const n=Math.min(spanAll,Math.max(DAY,Math.round(size*f/DAY)*DAY));move(Math.round((start+(size-n)/2-startAll)/DAY)*DAY+startAll,n);};
 
     const visibleWeights = weights.filter(e => {
       const t = timestamp(e.date);
@@ -121,7 +123,7 @@
       (a, b) => a.date.localeCompare(b.date)
     );
 
-    const W = 900, H = 340;
+    const W = 900, H = 500;
     const L = 55, R = 64, T = 22, B = 52;
     const plotW = W - L - R, plotH = H - T - B;
     const span = Math.max(DAY, end - start);
@@ -131,16 +133,13 @@
 
     const kgValues = visibleWeights.map(e => e.kg);
     const kgMin = kgValues.length
-      ? Math.max(0, Math.min(...kgValues) - 1)
+      ? Math.max(0, kgValues.reduce((a,b)=>Math.min(a,b),Infinity) - 1)
       : 0;
     const kgMax = kgValues.length
-      ? Math.max(...kgValues) + 1
+      ? kgValues.reduce((a,b)=>Math.max(a,b),-Infinity) + 1
       : 100;
 
-    const kcalMax = Math.max(
-      100,
-      ...days.map(d => d.kcal)
-    ) * 1.1;
+    const kcalMax = days.reduce((a,d)=>Math.max(a,d.kcal),100) * 1.1;
 
     const weightY = kg => T + plotH -
       (kg - kgMin) / Math.max(1, kgMax - kgMin) * plotH;
@@ -210,6 +209,7 @@
             className: period === id ? 'cta' : 'ghost',
             onClick: () => {
               setPeriod(id);
+              setView(null);
               setSelected(null);
             }
           }, label)
@@ -224,6 +224,7 @@
           }
         }, 'Aggiorna dati')
       ),
+      h('div',{className:'v733-chart-tools'},h('button',{className:'ghost',type:'button',disabled:size<=DAY,onClick:()=>zoom(.5)},'+ Zoom'),h('button',{className:'ghost',type:'button',disabled:size>=spanAll,onClick:()=>zoom(2)},'− Zoom'),h('button',{className:'ghost',type:'button',disabled:start<=startAll,onClick:()=>move(start-Math.max(DAY,Math.round(size*.7/DAY)*DAY),size)},'←'),h('button',{className:'ghost',type:'button',disabled:end>=endAll,onClick:()=>move(start+Math.max(DAY,Math.round(size*.7/DAY)*DAY),size)},'→'),h('button',{className:'ghost',type:'button',onClick:()=>{setView(null);setSelected(null);}},'Tutto'),h('small',{className:'muted'},new Date(start).toISOString().slice(0,10)+' → '+new Date(end).toISOString().slice(0,10))),
 
       !visibleWeights.length && !days.length
         ? h('p', { className: 'empty' },
@@ -271,7 +272,7 @@
                   );
                 }),
 
-                ...days.map(row => {
+                ...(days.length>180?[true,false].map(complete=>{const width=Math.max(.15,Math.min(13,plotW/Math.max(1,span/DAY)*.7)),d=days.filter(row=>(row.knownGrams===row.totalGrams)===complete).map(row=>{const a=x(row.date)-width/2,b=calorieY(row.kcal),bottom=T+plotH;return `M${a} ${bottom}V${b}h${width}V${bottom}Z`;}).join(' ');return h('path',{key:String(complete),d,fill:complete?'#b67a2a':'#e2ac6a',opacity:.8});}):days.map(row => {
                   const barW = Math.max(
                     1.5,
                     Math.min(13, plotW / Math.max(1, span / DAY) * .7)
@@ -289,7 +290,7 @@
                       : '#e2ac6a',
                     opacity: .8
                   });
-                }),
+                })),
 
                 h('path', {
                   d: weightPath,
@@ -300,7 +301,7 @@
                   strokeLinecap: 'round'
                 }),
 
-                ...visibleWeights.map((e, i) =>
+                ...visibleWeights.map((e,i)=>({e,i})).filter(({e,i})=>visibleWeights.length<=180||i===0||i===visibleWeights.length-1||e.date===selected||i%Math.ceil(visibleWeights.length/180)===0).map(({e,i})=>
                   h('circle', {
                     key: e.id || i,
                     cx: x(e.date),

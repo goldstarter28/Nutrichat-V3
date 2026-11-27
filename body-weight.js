@@ -89,6 +89,11 @@
 
   function WeightChart({ entries, target, showTrend, targetHistory=[] }) {
     const [selected, setSelected] = useState(null);
+    const [windowState,setWindowState]=useState({start:0,count:null});
+    const full=entries, count=Math.min(full.length,Math.max(2,windowState.count??full.length)), start=Math.min(Math.max(0,windowState.start),Math.max(0,full.length-count));
+    const change=(s,c)=>{setWindowState({start:Math.max(0,Math.min(full.length-c,s)),count:c});setSelected(null);};
+    const zoom=factor=>{const n=Math.min(full.length,Math.max(2,Math.round(count*factor)));change(Math.round(start+(count-n)/2),n);};
+    entries=full.slice(start,start+count);
 
     if (!entries.length) {
       return h('p', { className: 'muted' },
@@ -109,12 +114,12 @@
       new Date(x.date + 'T12:00:00Z').getTime()
     );
 
-    const minDate = Math.min(...dates);
-    const maxDate = Math.max(...dates);
+    const minDate = dates.reduce((a,b)=>Math.min(a,b),Infinity);
+    const maxDate = dates.reduce((a,b)=>Math.max(a,b),-Infinity);
     const span = Math.max(maxDate - minDate, 86400000);
 
     const trends = entries.map((_, index) =>
-      movingAverage(entries, index, 7)
+      movingAverage(full, start+index, 7)
     );
 
     const history=targetHistory.filter(x=>validDate(x.date)).sort((a,b)=>a.date.localeCompare(b.date));const startDay=entries[0].date,endDay=entries.at(-1).date,prior=history.filter(x=>x.date<=startDay).at(-1);const visibleTargets=[...(prior?[{...prior,date:startDay}]:[]),...history.filter(x=>x.date>startDay&&x.date<=endDay)];
@@ -124,8 +129,8 @@
       ...(visibleTargets.length?visibleTargets.map(x=>x.kg):target !== null ? [target] : [])
     ];
 
-    const minValue = Math.min(...allWeights);
-    const maxValue = Math.max(...allWeights);
+    const minValue = allWeights.reduce((a,b)=>Math.min(a,b),Infinity);
+    const maxValue = allWeights.reduce((a,b)=>Math.max(a,b),-Infinity);
     const padding = Math.max(0.8, (maxValue - minValue) * .15);
     const yMin = Math.max(0, minValue - padding);
     const yMax = maxValue + padding;
@@ -148,7 +153,7 @@
     const trendPath = trends.map((value, index) =>
       value === null
         ? ''
-        : `${index === 6 ? 'M' : 'L'}` +
+        : `${index === 0 || trends[index-1] === null ? 'M' : 'L'}` +
           `${xPos(dates[index])} ${yPos(value)}`
     ).join(' ');
 
@@ -156,6 +161,7 @@
     const targetPath=visibleTargets.map((v,i)=>{const end=visibleTargets[i+1]?.date||endDay;return (i?'L':'M')+xPos(Date.parse(v.date+'T12:00:00Z'))+' '+yPos(v.kg)+' H'+xPos(Date.parse(end+'T12:00:00Z'));}).join(' ');
 
     return h('div', null,
+      h('div',{className:'v733-chart-tools'},h('button',{type:'button',className:'ghost',disabled:count<=2,onClick:()=>zoom(.5)},'+ Zoom'),h('button',{type:'button',className:'ghost',disabled:count>=full.length,onClick:()=>zoom(2)},'− Zoom'),h('button',{type:'button',className:'ghost',disabled:start<=0,onClick:()=>change(start-Math.max(1,Math.floor(count*.7)),count)},'←'),h('button',{type:'button',className:'ghost',disabled:start+count>=full.length,onClick:()=>change(start+Math.max(1,Math.floor(count*.7)),count)},'→'),h('button',{type:'button',className:'ghost',onClick:()=>change(0,full.length)},'Tutto'),h('small',{className:'muted'},entries[0].date+' → '+entries.at(-1).date)),
       h('div', {
         style: { overflowX: 'auto' }
       },
@@ -235,7 +241,7 @@
             strokeLinejoin: 'round'
           }),
 
-          showTrend && trends.length >= 7 &&
+          showTrend && trends.some(v=>v!==null) &&
           h('path', {
             d: trendPath,
             fill: 'none',
@@ -245,7 +251,7 @@
             strokeLinejoin: 'round'
           }),
 
-          ...points.map((point, index) =>
+          ...points.map((point,index)=>({point,index})).filter(({index})=>points.length<=180||index===0||index===points.length-1||index===selected||index%Math.ceil(points.length/180)===0).map(({point,index})=>
             h('circle', {
               key: entries[index].id,
               cx: point.x,
@@ -370,6 +376,7 @@
     const [range, setRange] = useState('90');
     const [showTrend, setShowTrend] = useState(true);
     const [message, setMessage] = useState('');
+    const [historyPage,setHistoryPage]=useState(0);
 
     useEffect(() => {
       try {
@@ -397,6 +404,8 @@
       return entries.filter(x => x.date >= from && x.date <= end);
     }, [entries, range]);
 
+    const historyPages=Math.max(1,Math.ceil(entries.length/50)),page=Math.min(historyPage,historyPages-1);
+    const historyRows=entries.slice().reverse().slice(page*50,(page+1)*50);
     const last = entries[entries.length - 1] || null;
     const firstInRange = visible[0] || null;
     const lastInRange = visible[visible.length - 1] || null;
@@ -674,6 +683,7 @@
       h('article', { className: 'card', 'data-v732-weight-history': true },
 
         h('h2', null, `Storico (${entries.length})`),
+        entries.length>50&&h('div',{className:'v733-chart-tools'},h('button',{className:'ghost',type:'button',disabled:page===0,onClick:()=>setHistoryPage(page-1)},'← Precedenti'),h('small',null,(page*50+1)+'–'+Math.min(entries.length,(page+1)*50)+' / '+entries.length),h('button',{className:'ghost',type:'button',disabled:page>=historyPages-1,onClick:()=>setHistoryPage(page+1)},'Successive →')),
 
         !entries.length
           ? h('p', { className: 'muted' },
@@ -709,7 +719,7 @@
                 ),
 
                 h('tbody', null,
-                  ...[...entries].reverse().map(entry =>
+                  ...historyRows.map(entry =>
                     h('tr', { key: entry.id },
 
                       h('td', {
