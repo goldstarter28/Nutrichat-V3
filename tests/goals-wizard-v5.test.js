@@ -161,3 +161,16 @@ test('live scientific references can be consumed without changing unknown or cus
   assert.deepEqual(result.goals.find(x => x.id === 'custom-id'), goals.find(x => x.id === 'custom-id'));
   assert.ok(result.goals.find(x => x.id === 'Calcio').target > 0);
 });
+
+
+test('V734 estimates and saves a below-default maintenance target without changing the formulas',()=>{
+ const a={...adult,age:30,sex:'female',physiologicalState:'none',height:170,weight:50,activity:'light',goal:'maintain'};
+ const result=wizard.applyPlan(profile,goals,a);
+ assert.equal(result.summary.eligible,true);assert.equal(result.summary.kcal,2002);
+ assert.equal(result.profile.macroPlan.kcal,2002);assert.equal(result.goals.find(g=>g.id==='kcal').target,2002);
+ assert.equal(result.profile.wizardV5.calculation.kcal,2002);assert.equal(wizard.policy(a).automaticNutritionAllowed,true);
+ const low=wizard.calculatePlan({...a,goal:'lose'});assert.equal(low.eligible,false);assert.equal(low.maintenanceAvailable,true);assert.equal(Math.round(low.estimatedMaintenance),2002);
+ const severe=wizard.applyPlan(profile,goals,{...a,weight:40,goal:'lose'});assert.equal(severe.summary.eligible,false);assert.deepEqual(severe.goals,goals);
+ const normal=wizard.calculatePlan({...a,weight:65,goal:'lose'});assert.equal(normal.eligible,true);assert.ok(normal.kcal<2350);
+ const higher=wizard.calculatePlan({...a,goal:'gain'});assert.equal(higher.eligible,true);assert.ok(higher.kcal>result.summary.kcal);
+});

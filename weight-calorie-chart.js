@@ -54,7 +54,47 @@
     }
   }
 
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
   function WeightCalorieChart({ logs = [], foods = [] }) {
+    const expansion=v734Expansion(root.React,h,'Grafico confronto peso e alimentazione'),gesture=v734Ref(root.React);
     const [period, setPeriod] = useState('90');
     const [revision, refresh] = useState(0);
     const [selected, setSelected] = useState(null);
@@ -178,11 +218,11 @@
     }
 
     return h('article', {
-      className: 'card',
-      style: { marginTop: '16px' }
+      ...expansion.props, className: 'card'+(expansion.expanded?' v734-chart-fullscreen':''),
+      style: { marginTop: expansion.expanded?'0':'16px' }
     },
 
-      h('h2', null, 'Confronto peso ed alimentazione'),
+      h('h2', null, 'Confronto peso ed alimentazione'), expansion.button, expansion.hint,
 
       h('p', { className: 'muted tiny' },
         'Confronto delle misurazioni corporee con le calorie ' +
@@ -241,9 +281,9 @@
                   display: 'block',
                   width: '100%',
                   minWidth: '350px',
-                  touchAction: 'pan-y'
+                  touchAction: 'pan-y pinch-zoom'
                 },
-                onPointerDown: selectNearest
+                ...v734Gesture(gesture,selectNearest)
               },
 
                 ...[0, .25, .5, .75, 1].map(f => {

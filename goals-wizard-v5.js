@@ -151,7 +151,7 @@
     if(age!==null&&age>78)add('AGE_OUTSIDE_EQUATION','La stima automatica usa un’equazione entro il suo intervallo di età gestito (18–78 anni).');
     if(a.sex==='manual')add('MANUAL_COEFFICIENT','Hai scelto obiettivi manuali: il percorso non seleziona un coefficiente energetico al tuo posto.');
     const bmi=weight>0&&height>0?weight/Math.pow(height/100,2):null;
-    if(bmi!==null&&(bmi<18.5||bmi>=40))add('BMI_OUTSIDE_EQUATION','La generazione automatica è disponibile solo per BMI da 18,5 a meno di 40. Questa scelta dell’app non limita l’inserimento manuale degli obiettivi.');
+    if(bmi!==null&&(bmi<16||bmi>=40))add('BMI_OUTSIDE_EQUATION','Per BMI inferiore a 16 o da 40 serve una valutazione individuale. Puoi registrare gli obiettivi concordati con un professionista.');
     else if(a.goal==='lose'&&(bmi!==null&&bmi<20||age!==null&&age>=65))add('AUTO_DEFICIT_GUARD','Il percorso non propone un deficit automatico con BMI sotto 20 o da 65 anni. Puoi mantenere un riferimento di mantenimento oppure usare obiettivi manuali.');
     else if(a.goal==='gain'&&bmi!==null&&bmi>=30)add('AUTO_GAIN_GUARD','Il percorso non propone un surplus automatico con BMI da 30. Gli obiettivi manuali restano disponibili.');
     if(['goal','age','sex','height','weight','careContext','activity'].some(id=>!Object.prototype.hasOwnProperty.call(a,id)&&!(id==='weight'&&weight!==null)))add('INCOMPLETE_PROFILE','Per una stima automatica servono i dati essenziali del percorso. Puoi già modificare gli obiettivi manuali.');
@@ -171,7 +171,7 @@
     if (['pregnant','lactating','unknown'].includes(a.physiologicalState) || a.sex === 'female' && a.physiologicalState !== 'none') return blocked('Questa fase richiede riferimenti specifici. Manteniamo i tuoi obiettivi e non calcoliamo una variazione di energia.');
     if (a.careContext !== 'none') return blocked('Il tuo piano personale ha la precedenza. Salviamo le preferenze e manteniamo gli obiettivi già presenti.');
     const bmi = a.weight / Math.pow(a.height / 100, 2);
-    if (bmi < 18.5 || bmi >= 40) return blocked('I dati inseriti richiedono una valutazione più individuale di quella disponibile in questo percorso. Gli obiettivi restano invariati.');
+    if (bmi < 16 || bmi >= 40) return blocked('I dati inseriti richiedono una valutazione più individuale di quella disponibile in questo percorso. Gli obiettivi restano invariati.');
     if (a.goal === 'lose' && (bmi < 20 || a.age >= 65)) {
       const reasons = [];
       if (bmi < 20) reasons.push('il BMI calcolato è inferiore a 20');
@@ -179,7 +179,7 @@
       // Keep the existing deficit guard. A maintenance alternative is offered
       // only if that plan independently passes all the original checks.
       const alternative = calculatePlan({ ...a, goal: 'maintain' });
-      return { ...blocked('Non applichiamo automaticamente una riduzione dell’energia perché ' + reasons.join(' e ') + '. Puoi concordare un obiettivo personale con un professionista.'), restriction: 'DEFICIT_GUARD', maintenanceAvailable: alternative.eligible };
+      return { ...blocked('Non applichiamo automaticamente una riduzione dell’energia perché ' + reasons.join(' e ') + '. Puoi concordare un obiettivo personale con un professionista.'), restriction: 'DEFICIT_GUARD', maintenanceAvailable: alternative.eligible, estimatedMaintenance: alternative.maintenance ?? null };
     }
     if (a.goal === 'gain' && bmi >= 30) return blocked('Per il profilo indicato non applichiamo automaticamente un aumento dell’energia. Manteniamo i tuoi obiettivi.');
     const henry = a.age === 18;
@@ -189,7 +189,7 @@
     const maintenance = bmr * pal;
     const adjustment = a.goal === 'lose' ? -0.10 : a.goal === 'gain' ? 0.05 : 0;
     const kcal = Math.round(maintenance * (1 + adjustment));
-    if (!Number.isFinite(kcal) || kcal < 1200 || kcal > 5000) return blocked('La stima cade fuori dall’intervallo gestito automaticamente dall’app. Verifica i dati oppure mantieni un obiettivo personale.');
+    if (!Number.isFinite(kcal) || kcal < 1200 || kcal > 5000) return {...blocked('La stima cade fuori dall’intervallo gestito automaticamente dall’app. Verifica i dati oppure mantieni un obiettivo personale.'), estimatedMaintenance:Number.isFinite(maintenance)?maintenance:null};
     const protein = Math.max(kcal * 0.20 / 4, a.weight * 0.83);
     const fat = kcal * 0.30 / 9;
     const carbs = (kcal - protein * 4 - fat * 9) / 4;
@@ -276,7 +276,7 @@
     const context = contextForCoach(answers);
     nextProfile.wizardV5 = {
       version: VERSION, completedAt: opts.now || new Date().toISOString(), answers, context,
-      calculation: { eligible: plan.eligible, reason: plan.reason, method: plan.method || null, kcal: plan.kcal || null, bmr: plan.bmr || null, pal: plan.pal || null, adjustment: plan.adjustment || 0 },
+      calculation: { eligible: plan.eligible, reason: plan.reason, method: plan.method || null, kcal: plan.kcal || null, estimatedMaintenance: plan.estimatedMaintenance ?? plan.maintenance ?? null, bmr: plan.bmr || null, pal: plan.pal || null, adjustment: plan.adjustment || 0 },
       nutritionReferencesVersion: references && (references.version || references.VERSION) || null
     };
     return { profile: nextProfile, goals: nextGoals, context, summary: plan, updatedMicronutrients: changes.map(x => x.id), meals: mealPlan(answers, opts.meals) };
@@ -454,7 +454,7 @@
         h('p', { className: 'v5-wizard-kicker' }, 'PRONTO/A A PARTIRE'),
         h('h2', { ref: headingRef, tabIndex: -1 }, plan.eligible ? 'I tuoi riferimenti iniziali' : 'Le tue preferenze, il tuo piano'),
         h('p', { className: 'v5-wizard-description' }, plan.eligible ? 'Controlla il riepilogo. Puoi tornare alle risposte oppure applicare gli obiettivi e modificarli in qualsiasi momento.' : plan.reason),
-        plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, weeklySchedule&&distributionPlan?.manualDistribution?'La media dei tuoi obiettivi resta invariata':'Gli obiettivi attuali restano invariati'), h('p', null, 'Salviamo le risposte e le preferenze del percorso; puoi anche aggiornare l’organizzazione dei pasti. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
+        plan.eligible ? h('div', { className: 'v5-wizard-energy' }, h('span', null, 'Energia stimata al giorno'), h('strong', null, displayNumber(plan.kcal, 0), h('small', null, ' kcal')), h('p', null, labelFor('goal', answers.goal))) : h('div', { className: 'v5-wizard-notice' }, h('strong', null, weeklySchedule&&distributionPlan?.manualDistribution?'La media dei tuoi obiettivi resta invariata':'Nessun nuovo obiettivo automatico'), Number.isFinite(plan.estimatedMaintenance)&&h('p',null,'Fabbisogno di mantenimento stimato (non applicato): '+displayNumber(plan.estimatedMaintenance,0)+' kcal/giorno.'), h('p', null, 'Il valore salvato in precedenza non è una nuova stima. Salviamo le risposte e le preferenze del percorso; puoi anche aggiornare l’organizzazione dei pasti. Puoi continuare a modificare i tuoi obiettivi dalla schermata abituale.')),
         !plan.eligible && plan.maintenanceAvailable ? h('div', { className: 'v5-wizard-notice' },
           h('strong', null, 'Vuoi calcolare invece gli obiettivi di mantenimento?'),
           h('p', null, 'Non prevede una riduzione dell’energia. Ti mostreremo la stima di calorie e macro prima di applicarla. Le altre risposte rimangono uguali.'),

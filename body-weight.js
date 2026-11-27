@@ -87,7 +87,47 @@
       slice.length;
   }
 
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
   function WeightChart({ entries, target, showTrend, targetHistory=[] }) {
+    const expansion=v734Expansion(root.React,h,'Grafico andamento peso'),gesture=v734Ref(root.React);
     const [selected, setSelected] = useState(null);
     const [windowState,setWindowState]=useState({start:0,count:null});
     const full=entries, count=Math.min(full.length,Math.max(2,windowState.count??full.length)), start=Math.min(Math.max(0,windowState.start),Math.max(0,full.length-count));
@@ -160,7 +200,7 @@
     const selectedEntry=Number.isInteger(selected)&&selected>=0&&selected<entries.length?entries[selected]:null;
     const targetPath=visibleTargets.map((v,i)=>{const end=visibleTargets[i+1]?.date||endDay;return (i?'L':'M')+xPos(Date.parse(v.date+'T12:00:00Z'))+' '+yPos(v.kg)+' H'+xPos(Date.parse(end+'T12:00:00Z'));}).join(' ');
 
-    return h('div', null,
+    return h('div', expansion.props, expansion.button, expansion.hint,
       h('div',{className:'v733-chart-tools'},h('button',{type:'button',className:'ghost',disabled:count<=2,onClick:()=>zoom(.5)},'+ Zoom'),h('button',{type:'button',className:'ghost',disabled:count>=full.length,onClick:()=>zoom(2)},'− Zoom'),h('button',{type:'button',className:'ghost',disabled:start<=0,onClick:()=>change(start-Math.max(1,Math.floor(count*.7)),count)},'←'),h('button',{type:'button',className:'ghost',disabled:start+count>=full.length,onClick:()=>change(start+Math.max(1,Math.floor(count*.7)),count)},'→'),h('button',{type:'button',className:'ghost',onClick:()=>change(0,full.length)},'Tutto'),h('small',{className:'muted'},entries[0].date+' → '+entries.at(-1).date)),
       h('div', {
         style: { overflowX: 'auto' }
@@ -173,9 +213,9 @@
             display: 'block',
             width: '100%',
             minWidth: '340px',
-            touchAction: 'pan-y'
+            touchAction: 'pan-y pinch-zoom'
           },
-          onPointerDown: event => {
+          ...v734Gesture(gesture,event => {
             const rect = event.currentTarget
               .getBoundingClientRect();
 
@@ -196,7 +236,7 @@
             });
 
             setSelected(best);
-          }
+          })
         },
 
           ...[0, .25, .5, .75, 1].map(fraction => {

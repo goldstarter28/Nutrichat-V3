@@ -324,15 +324,56 @@ api.MealBadge=function MealBadge({logs,foods,includeEstimates=false}){
  const s=useMemo(()=>summarize(logs,foods,{includeEstimates}),[logs,foods,includeEstimates]);
  return h('span',{className:'q73-meal-summary',title:'Media delle lettere ponderata per le kcal classificate. Indicatore NutriTrace, non Nutri-Score del pasto.'},h(api.GradeBadge,{grade:s.grade}),h('span',null,'Media ',h('strong',null,s.grade||'N/D'),h('small',null,s.index===null?'Dati incompleti':fmt(s.index,1)+'/100 · copertura '+pct(s.coverage))));
 };
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
 function Chart({points,label}){
+ const expansion=v734Expansion(root.React,h,label),gesture=v734Ref(root.React),[selected,setSelected]=useState(null);
  const id=useId?useId():'q73-chart',width=720,height=220,pad={l:38,r:18,t:18,b:38},plotW=width-pad.l-pad.r,plotH=height-pad.t-pad.b;
  const x=i=>pad.l+(points.length>1?i*plotW/(points.length-1):plotW/2),y=v=>pad.t+(100-v)*plotH/99;
  const segments=[];let line=[];points.forEach((p,i)=>{if(p.index===null){if(line.length)segments.push(line);line=[];}else line.push([x(i),y(p.index)]);});if(line.length)segments.push(line);
- return h('figure',{className:'q73-chart'},h('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-labelledby':id+'-title','aria-describedby':id+'-desc'},h('title',{id:id+'-title'},label),h('desc',{id:id+'-desc'},'Indice interno da 1 a 100, ponderato per energia classificata. Le interruzioni sono periodi senza dati comparabili; tabella dettagliata disponibile sotto il grafico.'),...[1,25,50,75,100].map(v=>h('g',{key:'grid'+v},h('line',{x1:pad.l,x2:width-pad.r,y1:y(v),y2:y(v),className:'q73-gridline'}),h('text',{x:pad.l-8,y:y(v)+4,textAnchor:'end'},v))),...segments.map((s,i)=>h('polyline',{key:'line'+i,points:s.map(p=>p.join(',')).join(' '),className:'q73-line',fill:'none'})),...points.map((p,i)=>h('g',{key:p.start},p.index!==null&&h('circle',{cx:x(i),cy:y(p.index),r:4.5,className:'q73-point q73-point-'+p.grade},h('title',null,p.label+': '+fmt(p.index,1)+'/100, media '+p.grade+', copertura '+pct(p.coverage))),((points.length<=12||i%5===0||i===points.length-1)&&h('text',{x:x(i),y:height-13,textAnchor:'middle'},p.label))))),h('figcaption',null,'I vuoti restano vuoti. La media del periodo usa tutte le registrazioni, senza fare la media delle medie.'));
+ const pick=e=>{const rect=e.currentTarget.getBoundingClientRect();if(!rect.width||!points.length)return;const pos=(e.clientX-rect.left)/rect.width*width;let i=0;for(let j=1;j<points.length;j++)if(Math.abs(x(j)-pos)<Math.abs(x(i)-pos))i=j;setSelected(points[i].start);};const chosen=points.find(p=>p.start===selected);return h('figure',{...expansion.props,className:'q73-chart'+(expansion.expanded?' v734-chart-fullscreen':'')},expansion.button,expansion.hint,h('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-labelledby':id+'-title','aria-describedby':id+'-desc',style:{width:'100%',touchAction:'pan-y pinch-zoom'},...v734Gesture(gesture,pick)},h('title',{id:id+'-title'},label),h('desc',{id:id+'-desc'},'Indice interno da 1 a 100, ponderato per energia classificata. Le interruzioni sono periodi senza dati comparabili; tabella dettagliata disponibile sotto il grafico.'),...[1,25,50,75,100].map(v=>h('g',{key:'grid'+v},h('line',{x1:pad.l,x2:width-pad.r,y1:y(v),y2:y(v),className:'q73-gridline'}),h('text',{x:pad.l-8,y:y(v)+4,textAnchor:'end'},v))),...segments.map((s,i)=>h('polyline',{key:'line'+i,points:s.map(p=>p.join(',')).join(' '),className:'q73-line',fill:'none'})),...points.map((p,i)=>h('g',{key:p.start},p.index!==null&&h('circle',{cx:x(i),cy:y(p.index),r:4.5,className:'q73-point q73-point-'+p.grade},h('title',null,p.label+': '+fmt(p.index,1)+'/100, media '+p.grade+', copertura '+pct(p.coverage))),((points.length<=12||i%5===0||i===points.length-1)&&h('text',{x:x(i),y:height-13,textAnchor:'middle'},p.label))))),h('p',{role:'status'},chosen?chosen.label+' · '+(chosen.index===null?'Dati non disponibili':fmt(chosen.index,1)+'/100 · media '+chosen.grade+' · copertura '+pct(chosen.coverage)):'Tocca o scorri orizzontalmente per consultare i dati.'),h('figcaption',null,'I vuoti restano vuoti. La media del periodo usa tutte le registrazioni, senza fare la media delle medie.'));
 }
 function Distribution({summary:s}){
+ const expansion=v734Expansion(root.React,h,'Distribuzione qualità A–E');
  const items=[...GRADES.map(g=>[g,s.byGrade[g]]),['unknown',s.unknownGradeKcal]];
- return h('div',{className:'q73-distribution'},h('div',{className:'q73-distribution-bar','aria-hidden':'true'},...items.filter(x=>x[1]>0).map(([g,n])=>h('span',{key:g,className:'q73-fill-'+g,style:{width:(s.knownKcal?n/s.knownKcal*100:0)+'%'}}))),h('ul',{className:'q73-distribution-list'},...items.map(([g,n])=>h('li',{key:g},h('span',{className:'q73-dot q73-fill-'+g}),h('span',null,g==='unknown'?'Non classificato':g),h('strong',null,fmt(n)+' kcal'),h('small',null,s.knownKcal?pct(n/s.knownKcal):'N/D')))));
+ return h('div',{...expansion.props,className:'q73-distribution'+(expansion.expanded?' v734-chart-fullscreen':'')},expansion.button,h('div',{className:'q73-distribution-bar','aria-hidden':'true'},...items.filter(x=>x[1]>0).map(([g,n])=>h('span',{key:g,className:'q73-fill-'+g,style:{width:(s.knownKcal?n/s.knownKcal*100:0)+'%'}}))),h('ul',{className:'q73-distribution-list'},...items.map(([g,n])=>h('li',{key:g},h('span',{className:'q73-dot q73-fill-'+g}),h('span',null,g==='unknown'?'Non classificato':g),h('strong',null,fmt(n)+' kcal'),h('small',null,s.knownKcal?pct(n/s.knownKcal):'N/D')))));
 }
 api.QualityHistoryPanel=function QualityHistoryPanel({logs=[],foods=[],today=dateKey(new Date()),initialPeriod='week'}){
  const [period,setPeriod]=useState(initialPeriod),[anchor,setAnchor]=useState(validDate(today)?today:dateKey(new Date())),[includeEstimates,setIncludeEstimates]=useState(false);

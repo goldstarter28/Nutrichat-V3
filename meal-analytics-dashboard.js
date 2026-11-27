@@ -269,6 +269,45 @@ if (base !== null && base > 0 && value !== null) {
     });
   }
 
+
+/* V7.3.4: direction-locked chart scrubbing; native vertical scrolling remains available. */
+function v734Gesture(ref, pick) {
+  const step = (e, finish) => {
+    const g=ref.current;
+    if(!g||g.id!==e.pointerId)return;
+    const dx=Math.abs(e.clientX-g.x),dy=Math.abs(e.clientY-g.y);
+    if(!g.axis&&Math.max(dx,dy)>=8)g.axis=dx>dy?'x':'y';
+    if(g.axis==='x'||(finish&&!g.axis))pick(e);
+    if(finish)ref.current=null;
+  };
+  return {
+    onPointerDown(e){
+      if(e.isPrimary===false){ref.current=null;return;}
+      if(e.pointerType==='mouse'&&e.button!==undefined&&e.button!==0)return;
+      ref.current={id:e.pointerId,x:e.clientX,y:e.clientY,axis:null};
+      try{e.currentTarget.setPointerCapture?.(e.pointerId);}catch(_){}
+    },
+    onPointerMove(e){step(e,false);},onPointerUp(e){step(e,true);},
+    onPointerCancel(){ref.current=null;},onLostPointerCapture(){ref.current=null;},
+    onPointerLeave(e){if(!e.currentTarget.hasPointerCapture?.(e.pointerId))ref.current=null;}
+  };
+}
+function v734Expansion(React, h, label) {
+  const [expanded,setExpanded]=React.useState(false);
+  React.useEffect?.(()=>{
+    if(!expanded||typeof document==='undefined'||!document.body?.style)return;
+    const before=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const close=e=>{if(e.key==='Escape')setExpanded(false);};
+    document.addEventListener?.('keydown',close);
+    return()=>{document.body.style.overflow=before;document.removeEventListener?.('keydown',close);};
+  },[expanded]);
+  return {expanded,props:{className:expanded?'v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?label:undefined},
+    button:h('button',{type:'button',className:'ghost v734-expand',onClick:()=>setExpanded(v=>!v),'aria-expanded':expanded},expanded?'Chiudi grafico':'Espandi grafico'),
+    hint:expanded?h('p',{className:'muted v734-chart-hint'},'Ruota il dispositivo in orizzontale per più spazio. Scorri sul grafico per leggere i dati.'):null};
+}
+function v734Ref(React){return React.useRef?React.useRef(null):React.useState({current:null})[0];}
+
 function InteractiveChart({
   labels, series, chartType, comparisonMode, limit
 }) {
@@ -615,7 +654,7 @@ function handleTouchEnd(event) {
     );
   }
 
-  return h('div', {className:expanded?'v733-meal-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?'Grafico analisi pasti esteso':undefined},
+  return h('div', {className:expanded?'v733-meal-fullscreen v734-chart-fullscreen':undefined,role:expanded?'dialog':undefined,'aria-modal':expanded||undefined,'aria-label':expanded?'Grafico analisi pasti esteso':undefined},
     h('button',{type:'button',className:'ghost',onClick:()=>setExpanded(v=>!v)},expanded?'Chiudi grafico':'Espandi grafico'),expanded&&h('p',{className:'muted'},'Sul telefono ruota il dispositivo in orizzontale per più spazio.'),
     h('div', {
       style: {
@@ -697,10 +736,7 @@ function handleTouchEnd(event) {
   display: 'block',
   touchAction: 'pan-y pinch-zoom'
 },
-onPointerDown:event=>{gestureRef.current={x:event.clientX,y:event.clientY,id:event.pointerId};},
-onPointerUp:event=>{const g=gestureRef.current;gestureRef.current=null;if(g&&g.id===event.pointerId&&Math.hypot(event.clientX-g.x,event.clientY-g.y)<=12)pickPoint(event);},
-onPointerCancel:()=>{gestureRef.current=null;},
-onPointerLeave:()=>{gestureRef.current=null;}
+...v734Gesture(gestureRef,pickPoint)
 },
           ...[0, .25, .5, .75, 1].map(fraction =>
             h('g', { key: fraction },
